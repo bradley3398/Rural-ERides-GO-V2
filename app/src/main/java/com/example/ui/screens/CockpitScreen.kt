@@ -208,9 +208,11 @@ fun CockpitScreen(
   val liveChargers by radarVm.liveChargers.collectAsStateWithLifecycle()
   val isClassic = isWindowsClassicActive(settings)
 
-  val packWhTotal = (activeVehicle?.batteryWh ?: 1500L).toDouble()
+  val packWhTotal = (activeVehicle?.batteryWh?.takeIf { it >= 180L } ?: 960L).toDouble()
   val remWhEst = (packWhTotal * (telemetry.batteryPct / 100.0)).coerceAtLeast(0.0)
-  val estRemRangeKm = (remWhEst / 24.0).coerceAtLeast(0.0)
+  val totalMassKg = (effectiveRiderWeightLbs + (activeVehicle?.vehicleWeightLbs?.takeIf { it > 10.0 } ?: 58.0)) * 0.45359237
+  val estWhPerKm = (18.5 * (totalMassKg / 105.0).coerceIn(0.65, 1.85)).coerceAtLeast(12.0)
+  val estRemRangeKm = (remWhEst / estWhPerKm).coerceAtLeast(0.0)
   val rtbVector =
     remember(telemetry.lat, telemetry.lng, telemetry.launchLat, telemetry.launchLng, telemetry.bearingDeg, estRemRangeKm) {
       val bLat = telemetry.launchLat
@@ -336,8 +338,24 @@ fun CockpitScreen(
     }
   }
 
-  LaunchedEffect(telemetry.lat, telemetry.lng, activeVehicle, settings.batteryChemistry, effectiveRiderWeightLbs) {
+  // Continuously recompute HUD resting/loaded pack voltage whenever rig, chemistry, SoC, trip, climb, or speed changes
+  LaunchedEffect(
+    activeVehicle,
+    settings.batteryChemistry,
+    settings.rideMode,
+    effectiveRiderWeightLbs,
+    activeRideStartBatteryPct,
+    telemetry.tripDistanceKm,
+    telemetry.elevationGainM,
+    telemetry.speedKmh,
+    telemetry.avgSpeedKmh,
+    telemetry.pitchDeg,
+    telemetry.ambientTempC,
+  ) {
     cockpitVm.applyTelemetryConfig(settings, activeVehicle, effectiveRiderWeightLbs)
+  }
+
+  LaunchedEffect(telemetry.lat, telemetry.lng, settings.autoWeatherSync) {
     if (telemetry.lat != 0.0) {
       if (settings.autoWeatherSync) {
         sessionVm.refreshWeatherIfNeeded(telemetry.lat, telemetry.lng)

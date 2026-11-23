@@ -27,9 +27,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.FlashlightOn
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -61,12 +63,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -109,7 +115,7 @@ private val PEV_COMPONENT_PARTS = listOf(
     icon = Icons.Default.ElectricBolt,
     accent = Color(0xFF22C55E),
     summary = "Grade-A lithium cells with intelligent cell balancing and over-current protection.",
-    deepDescription = "Constructed using high-density 21700 or 18650 lithium-ion cells configured in massive high-voltage matrices (up to 151V+). Features a Bluetooth Smart BMS that monitors individual cell groups, temperature thresholds, short-circuit protection, and voltage sag compensation under steep rural hill climbs.",
+    deepDescription = "Constructed using high-density 21700 or 18650 lithium-ion cells configured in high-voltage matrices (48V–151V+). Features a Bluetooth Smart BMS that monitors individual cell groups, thermal limits, short-circuit protection, and voltage sag compensation under steep rural hill climbs.",
     specs = "Cells: 21700 Li-Ion | BMS: Smart Bluetooth 200A | Thermal Rating: IP67 Sealed",
   ),
   PevComponentPart(
@@ -180,7 +186,7 @@ private fun groupCatFor(cat: String): String {
     c.contains("unicycle") -> "EUC"
     c.contains("scooter") -> "Hyper-Scooter"
     c.contains("dirt") || c.contains("moto") || c.contains("utility moto") -> "e-Moto & Dirt"
-    c.contains("bike") || c.contains("moped") -> "e-Bike & Moped"
+    c.contains("bike") || c.contains("moped") || c.contains("scrambler") || c.contains("folding") -> "e-Bike & Moped"
     else -> "Specialty"
   }
 }
@@ -195,6 +201,7 @@ private fun model(
   description: String,
 ) = RealWorldPevModel(name, category, groupCatFor(category), topSpeedMph, voltage, rangeMiles, powerKw, description)
 
+// Complete 58-rig real-world PEV catalog mapped to Vulkan Filament .glb archetypes & dynamic PBR MaterialInstance overrides
 private val AAA_PEV_MODELS =
   listOf(
     model("Sur-Ron Ultra Bee eMoto", "Electric Dirt Moped", 56, 74, 85, "12.5 kW Peak", "Heavy-duty off-road e-moto featuring adjustable suspension, forged aluminum frame, and instant high-torque brushless drive."),
@@ -238,11 +245,29 @@ private val AAA_PEV_MODELS =
     model("Begode T4 Pro Suspension EUC", "Electric Unicycle", 45, 100, 55, "2500W Nom", "Compact 16-inch suspension wheel with air shock and snappy torque response."),
     model("Dualtron Thunder 3", "Hyper-Scooter", 60, 72, 70, "10.0 kW Peak", "Racing hyperscooter with IPX5 deck waterproofing and NUTT 4-piston hydraulics."),
     model("EMove Cruiser V2", "Commuter Scooter", 35, 52, 100, "1000W Nom", "Long-range commuter with massive 30Ah battery and tubeless tires."),
+    model("E-Ride Pro SS 2.0 72V", "Electric Dirt Bike", 60, 72, 65, "12.0 kW Peak", "72V 40Ah trail slayer with forged 6061 frame, turbo button, and rapid regen braking."),
+    model("Talaria XXX Black Edition", "Electric Dirt Moped", 47, 60, 50, "6.5 kW Peak", "Nimble belt-and-chain urban & dirt e-moto with supermoto agility."),
+    model("Altis Sigma 98V Hyper-Moto", "Electric Dirt Bike", 75, 98, 70, "22.0 kW Peak", "98V hairpin-motor electric motocross machine with forged linkage suspension."),
+    model("Talaria Komodo Enduro", "Electric Dirt Bike", 65, 72, 75, "16.0 kW Peak", "Long-travel enduro electric dirt bike tuned for technical rocky backcountry climbs."),
+    model("Segway Dirt eBike X260", "Electric Dirt Moped", 46, 60, 74, "5.0 kW Peak", "Lightweight aluminum-frame electric trail bike with mobile telemetry tuning."),
+    model("Dualtron Storm Limited", "Hyper-Scooter", 62, 84, 110, "11.5 kW Peak", "84V 45Ah long-haul hyper-scooter with removable battery pack and dual 60A controllers."),
+    model("Kaabo Wolf Warrior X GT", "Hyper-Scooter", 44, 60, 62, "4.2 kW Peak", "Compact dual-fork off-road scooter with sinewave controllers and knobby tires."),
+    model("VSETT 10+ Apex", "Hyper-Scooter", 50, 60, 65, "5.2 kW Peak", "Dual-motor removable-battery scooter with hydraulic brakes and sport boost mode."),
+    model("Teverun Fighter Supreme 7260R", "Hyper-Scooter", 75, 72, 120, "15.0 kW Peak", "13-inch tire 72V 60Ah apex hyper-scooter with smart TFT and dual steering dampers."),
+    model("Segway Ninebot GT1", "Hyper-Scooter", 37, 52, 43, "3.0 kW Peak", "Rear-wheel-drive superscooter with aircraft-grade aluminum chassis and hydraulic damping."),
+    model("Super73-S2 Adventure", "Scrambler e-Bike", 28, 48, 60, "2.0 kW Peak", "Iconic café-style fat-tire scrambler e-bike with air suspension front fork."),
+    model("Lectric XP 3.0 Fat-Tire", "Folding e-Bike", 28, 48, 65, "1.0 kW Peak", "Compact 20x3 fat-tire folding utility e-bike with hydraulic brakes and rear rack."),
+    model("Aventon Aventure.2 Fat-Tire", "Off-Road e-Bike", 28, 48, 60, "1.1 kW Peak", "Torque-sensor 4-inch fat-tire all-terrain e-bike built for gravel, sand, and snow."),
+    model("Ride1UP Revv 1 DRT", "Scrambler e-Bike", 35, 52, 55, "1.8 kW Peak", "Off-road scrambler moped e-bike with full-suspension frame and 52V 20Ah pack."),
+    model("Begode Extreme 134V EUC", "Electric Unicycle", 56, 134, 70, "3500W Nom", "High-torque 16-inch trail suspension EUC with 130mm DS200 shock travel."),
+    model("LeaperKim Sherman-L 151V", "Electric Unicycle", 68, 151, 135, "3200W Nom", "Long-range 4000Wh 151.2V touring & backcountry suspension flagship EUC."),
+    model("InMotion V14 Adventure EUC", "Electric Unicycle", 44, 134, 75, "4000W Nom", "Modular quick-swap 50S cell pack off-road EUC with progressive coil linkage."),
   )
 
 /**
- * Interactive Real-Time 3D PEV CAD & Dyno Lab with categorized models, 360° touch orbit + pinch zoom,
- * clickable 3D part hotspots, exploded-view 3D disassembly slider, X-Ray/Wireframe modes, and live throttle dyno.
+ * Interactive Native Vulkan 3D PEV CAD & Dyno Lab powered by Google Filament 1.81.0.
+ * Loads real .glb models from app/src/main/assets/models/ with dynamic per-model PBR overrides
+ * for all 58 PEV rigs, 360° touch orbit, fling inertia, pinch zoom, camera presets, and teardown HUD.
  */
 @Composable
 fun Pev3dGarageViewer(
@@ -263,13 +288,15 @@ fun Pev3dGarageViewer(
   var lightingPreset by remember { mutableStateOf(Pev3dLightingPreset.STUDIO) }
   var autoSpin by remember { mutableStateOf(false) }
   var lightsOn by remember { mutableStateOf(true) }
+  var ssaoEnabled by remember { mutableStateOf(true) }
   var turnSignalMode by remember { mutableStateOf(Pev3dTurnSignalMode.OFF) }
   var wheelSpinDeg by remember { mutableFloatStateOf(0f) }
   var yawVelocityDegPerSec by remember { mutableFloatStateOf(0f) }
   var targetCameraPreset by remember { mutableStateOf<Pair<Float, Float>?>(null) }
   var viewportSize by remember { mutableStateOf(IntSize.Zero) }
-  var gpuBackendLabel by remember { mutableStateOf("UE5 VULKAN PBR") }
+  var gpuBackendLabel by remember { mutableStateOf("VULKAN • FILAMENT PBR") }
   var cachedWireGroups by remember { mutableStateOf<List<PevWireGroup>>(emptyList()) }
+  var assetLoadState by remember { mutableStateOf<Pev3dAssetLoadState>(Pev3dAssetLoadState.Loading) }
 
   // Interactive Part Selection
   var selectedPart by remember { mutableStateOf<PevComponentPart?>(PEV_COMPONENT_PARTS[0]) }
@@ -338,10 +365,9 @@ fun Pev3dGarageViewer(
   val liveMph = (currentModel.topSpeedMph * motorThrottlePct).roundToInt()
   val liveRpm = (liveMph * 26.5).roundToInt()
   val primaryCol = MaterialTheme.colorScheme.primary
-  val secondaryCol = MaterialTheme.colorScheme.secondary
 
   Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-    TacticalCard(highlight = true, title = "INTERACTIVE 3D PEV CAD & DYNO LAB (${AAA_PEV_MODELS.size} MODELS)") {
+    TacticalCard(highlight = true, title = "VULKAN 3D RIG LAB (${AAA_PEV_MODELS.size} MODELS)") {
       // Category Filter Strip
       LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items(modelCategories) { cat ->
@@ -373,7 +399,7 @@ fun Pev3dGarageViewer(
               val matchedIdx =
                 AAA_PEV_MODELS.indexOfFirst { m -> tokens.any { t -> m.name.lowercase().contains(t) } }
                   .takeIf { it >= 0 }
-                  ?: AAA_PEV_MODELS.indices.minByOrNull { kotlin.math.abs(AAA_PEV_MODELS[it].voltage - activeVoltage.toInt()) }
+                  ?: AAA_PEV_MODELS.indices.minByOrNull { abs(AAA_PEV_MODELS[it].voltage - activeVoltage.toInt()) }
                   ?: 0
               selectedCategory = "All"
               selectedModelIdx = matchedIdx
@@ -399,7 +425,7 @@ fun Pev3dGarageViewer(
 
       Spacer(Modifier.height(6.dp))
 
-      // Render Mode + Quick Camera Preset Chips
+      // Render Mode + Lighting + Optics Controls
       LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items(Pev3dRenderMode.entries) { mode ->
           FilterChip(
@@ -425,6 +451,28 @@ fun Pev3dGarageViewer(
             leadingIcon = { Icon(Icons.Default.FlashlightOn, null, Modifier.size(14.dp)) },
             label = { Text(if (lightsOn) "Head/Tail ON" else "Lights OFF", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
             modifier = Modifier.testTag("3d_lights_toggle_chip"),
+          )
+        }
+        item {
+          FilterChip(
+            selected = ssaoEnabled,
+            onClick = { ssaoEnabled = !ssaoEnabled },
+            leadingIcon = {
+              Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = stringResource(R.string.rig_lab_ssao_toggle_desc),
+                modifier = Modifier.size(14.dp),
+              )
+            },
+            label = {
+              Text(
+                text = stringResource(if (ssaoEnabled) R.string.rig_lab_ssao_on else R.string.rig_lab_ssao_off),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                softWrap = false,
+              )
+            },
+            modifier = Modifier.testTag("3d_ssao_toggle_chip"),
           )
         }
         items(listOf(Pev3dTurnSignalMode.LEFT, Pev3dTurnSignalMode.HAZARD, Pev3dTurnSignalMode.RIGHT)) { sig ->
@@ -472,17 +520,16 @@ fun Pev3dGarageViewer(
 
       Spacer(Modifier.height(8.dp))
 
-      // TRUE HARDWARE-ACCELERATED 3D VULKAN PBR MODEL VIEWPORT (HIGH-RES TEXTURES + SHADERS + IBL)
+      // NATIVE ANDROID VULKAN PBR VIEWPORT (GOOGLE FILAMENT 1.81.0 • ACES • 4x MSAA • SSAO • PCF SHADOWS)
       Box(
         modifier =
           Modifier
             .fillMaxWidth()
-            .height(330.dp)
+            .height(340.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF070D1A), Color(0xFF0B1426), Color(0xFF050811))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF0E1117), Color(0xFF141820), Color(0xFF0A0C10))))
             .onSizeChanged { viewportSize = it }
             .pointerInput(selectedModelIdx, renderMode) {
-              // Consume gestures on Initial pass inside the 3D box so LazyColumn never steals vertical orbit drags!
               awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 val downPos = down.position
@@ -526,8 +573,7 @@ fun Pev3dGarageViewer(
                 if (totalMoved >= 16f && abs(lastDragSpeedYaw) > 25f) {
                   yawVelocityDegPerSec = lastDragSpeedYaw
                 }
-                // Treat clean tap as direct 3D Hotspot hit-test on textured GLSL/Vulkan model parts
-                if (totalMoved < 16f) {
+                if (totalMoved < 16f && assetLoadState is Pev3dAssetLoadState.Loaded) {
                   val hit =
                     latestHotspots
                       .map { it to hypot(it.screenPos.x - downPos.x, it.screenPos.y - downPos.y) }
@@ -558,119 +604,250 @@ fun Pev3dGarageViewer(
           explodePct = explodePct,
           wheelSpinDeg = wheelSpinDeg,
           lightsOn = lightsOn,
+          ssaoEnabled = ssaoEnabled,
           turnSignalMode = turnSignalMode,
           selectedPartKey = selectedPart?.key,
           accentRgb = finish.accentRgb,
           onBackendChanged = { gpuBackendLabel = it },
           onWireframeLinesReady = { cachedWireGroups = it },
+          onAssetStateChanged = { assetLoadState = it },
           modifier = Modifier.fillMaxSize().testTag("pev_3d_interactive_canvas"),
         )
 
-        // Transparent HUD overlay drawing interactive glowing 3D hotspot nodes (+ CAD Wire overlay in Wireframe mode)
-        Canvas(modifier = Modifier.fillMaxSize()) {
-          if (renderMode == Pev3dRenderMode.WIREFRAME && cachedWireGroups.isNotEmpty()) {
-            val (baseSegs, selSegs) = Pev3dEngine.projectWireframeGroups(
-              wireGroups = cachedWireGroups,
-              widthPx = size.width,
-              heightPx = size.height,
-              yawDeg = modelYawDeg,
-              pitchDeg = modelPitchDeg,
-              zoom = modelZoomScale,
-              explodePct = explodePct,
-              wheelSpinDeg = wheelSpinDeg,
-              selectedPartKey = selectedPart?.key,
-            )
-            val lineCol = Color(finish.accentRgb[0], finish.accentRgb[1], finish.accentRgb[2], 0.72f)
-            var idx = 0
-            while (idx + 3 < baseSegs.size) {
-              drawLine(
-                color = lineCol,
-                start = Offset(baseSegs[idx], baseSegs[idx + 1]),
-                end = Offset(baseSegs[idx + 2], baseSegs[idx + 3]),
-                strokeWidth = 1.5f,
+        // Draw interactive 3D hotspot pins only when a real .glb model is loaded
+        if (assetLoadState is Pev3dAssetLoadState.Loaded) {
+          Canvas(modifier = Modifier.fillMaxSize()) {
+            if (renderMode == Pev3dRenderMode.WIREFRAME && cachedWireGroups.isNotEmpty()) {
+              val (baseSegs, selSegs) = Pev3dEngine.projectWireframeGroups(
+                wireGroups = cachedWireGroups,
+                widthPx = size.width,
+                heightPx = size.height,
+                yawDeg = modelYawDeg,
+                pitchDeg = modelPitchDeg,
+                zoom = modelZoomScale,
+                explodePct = explodePct,
+                wheelSpinDeg = wheelSpinDeg,
+                selectedPartKey = selectedPart?.key,
               )
-              idx += 4
+              val lineCol = Color(finish.accentRgb[0], finish.accentRgb[1], finish.accentRgb[2], 0.72f)
+              var idx = 0
+              while (idx + 3 < baseSegs.size) {
+                drawLine(
+                  color = lineCol,
+                  start = Offset(baseSegs[idx], baseSegs[idx + 1]),
+                  end = Offset(baseSegs[idx + 2], baseSegs[idx + 3]),
+                  strokeWidth = 1.5f,
+                )
+                idx += 4
+              }
+              var sIdx = 0
+              while (sIdx + 3 < selSegs.size) {
+                drawLine(
+                  color = Color.White.copy(alpha = 0.92f),
+                  start = Offset(selSegs[sIdx], selSegs[sIdx + 1]),
+                  end = Offset(selSegs[sIdx + 2], selSegs[sIdx + 3]),
+                  strokeWidth = 2.6f,
+                )
+                sIdx += 4
+              }
             }
-            var sIdx = 0
-            while (sIdx + 3 < selSegs.size) {
-              drawLine(
-                color = Color.White.copy(alpha = 0.92f),
-                start = Offset(selSegs[sIdx], selSegs[sIdx + 1]),
-                end = Offset(selSegs[sIdx + 2], selSegs[sIdx + 3]),
-                strokeWidth = 2.6f,
+            projectedHotspots.forEach { hs ->
+              val active = selectedPart?.key == hs.partKey
+              drawCircle(
+                color = hs.accent.copy(alpha = if (active) 0.92f else 0.50f),
+                radius = if (active) 13f else 9f,
+                center = hs.screenPos,
               )
-              sIdx += 4
+              drawCircle(
+                color = Color.White.copy(alpha = if (active) 1f else 0.72f),
+                radius = if (active) 16.5f else 11.5f,
+                center = hs.screenPos,
+                style = Stroke(width = if (active) 3.2f else 1.5f),
+              )
             }
-          }
-          projectedHotspots.forEach { hs ->
-            val active = selectedPart?.key == hs.partKey
-            drawCircle(
-              color = hs.accent.copy(alpha = if (active) 0.92f else 0.50f),
-              radius = if (active) 13f else 9f,
-              center = hs.screenPos,
-            )
-            drawCircle(
-              color = Color.White.copy(alpha = if (active) 1f else 0.72f),
-              radius = if (active) 16.5f else 11.5f,
-              center = hs.screenPos,
-              style = Stroke(width = if (active) 3.2f else 1.5f),
-            )
           }
         }
 
-        // Top-left live Vulkan / PBR 3D engine & orientation badge
-        Surface(
-          shape = RoundedCornerShape(10.dp),
-          color = Color(0xCC0A101D),
-          border = BorderStroke(1.dp, primaryCol.copy(alpha = 0.6f)),
-          modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
-        ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-          ) {
-            Icon(Icons.Default.ViewInAr, contentDescription = null, tint = primaryCol, modifier = Modifier.size(15.dp))
-            Text(
-              text = "UE5 PBR • $gpuBackendLabel • ${renderMode.label.uppercase()} • ${modelYawDeg.toInt()}°",
-              color = Color.White,
-              fontSize = 10.sp,
-              fontWeight = FontWeight.Bold,
-              maxLines = 1,
-              softWrap = false,
-            )
+        // Clean in-viewport prompt when a real .glb asset hasn't been dropped into app/src/main/assets/models/ yet
+        when (val loadState = assetLoadState) {
+          is Pev3dAssetLoadState.MissingGlb -> {
+            Surface(
+              shape = RoundedCornerShape(14.dp),
+              color = Color(0xDC0B101A),
+              border = BorderStroke(1.dp, primaryCol.copy(alpha = 0.65f)),
+              modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 16.dp)
+                .fillMaxWidth()
+                .testTag("glb_missing_prompt_card"),
+            ) {
+              Column(
+                modifier = Modifier.padding(14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                  Icon(Icons.Default.FolderOpen, contentDescription = null, tint = primaryCol, modifier = Modifier.size(18.dp))
+                  Text(
+                    "DROP REAL .GLB MESH TO RENDER",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                  )
+                }
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = Color(0xFF162033),
+                  border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f)),
+                ) {
+                  Text(
+                    text = loadState.expectedAssetPath,
+                    color = Color(0xFF38BDF8),
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                  )
+                }
+                Text(
+                  "Vulkan PBR Showroom Ready (${loadState.envSource}). Add this .glb file for ${currentModel.name} — per-model metallic paint, Carbon Gloss & LED overrides apply automatically.",
+                  color = Color(0xFFCBD5E1),
+                  fontSize = 10.sp,
+                  lineHeight = 13.sp,
+                  textAlign = TextAlign.Center,
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                  val coreFiles = listOf("emoto.glb", "hyperscooter.glb", "ebike_fat.glb", "euc.glb")
+                  items(coreFiles) { fn ->
+                    val present = fn in loadState.presentGlbFiles
+                    val isCurrent = fn == loadState.expectedFileName
+                    Surface(
+                      shape = RoundedCornerShape(6.dp),
+                      color = if (present) Color(0x3322C55E) else if (isCurrent) Color(0x3338BDF8) else Color(0xFF1E293B),
+                      border = BorderStroke(
+                        1.dp,
+                        if (present) Color(0xFF22C55E) else if (isCurrent) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.18f),
+                      ),
+                    ) {
+                      Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                      ) {
+                        if (present) {
+                          Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF22C55E), modifier = Modifier.size(11.dp))
+                        }
+                        Text(
+                          text = fn,
+                          color = if (present) Color(0xFF86EFAC) else if (isCurrent) Color(0xFF7DD3FC) else Color(0xFF94A3B8),
+                          fontSize = 9.sp,
+                          fontFamily = FontFamily.Monospace,
+                          fontWeight = FontWeight.Bold,
+                          maxLines = 1,
+                          softWrap = false,
+                        )
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
+          is Pev3dAssetLoadState.VulkanUnavailable -> {
+            Surface(
+              shape = RoundedCornerShape(14.dp),
+              color = Color(0xE6140C12),
+              border = BorderStroke(1.dp, Color(0xFFEF4444)),
+              modifier = Modifier.align(Alignment.Center).padding(16.dp).fillMaxWidth(),
+            ) {
+              Column(
+                modifier = Modifier.padding(14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+              ) {
+                Text("VULKAN 1.1+ GPU REQUIRED", color = Color(0xFFFCA5A5), fontSize = 12.sp, fontWeight = FontWeight.Black)
+                Text(
+                  loadState.reason,
+                  color = Color(0xFFE2E8F0),
+                  fontSize = 10.sp,
+                  textAlign = TextAlign.Center,
+                )
+              }
+            }
+          }
+          else -> Unit
         }
 
-        // Top-right Reset Camera button
-        Surface(
-          shape = RoundedCornerShape(10.dp),
-          color = Color(0xCC0A101D),
-          border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+        // Top non-overlapping bar: Left "VULKAN • FILAMENT PBR" badge + Right "RESET" pill
+        Row(
           modifier = Modifier
-            .align(Alignment.TopEnd)
-            .padding(10.dp)
-            .clickable {
-              autoSpin = false
-              yawVelocityDegPerSec = 0f
-              targetCameraPreset = -28f to 16f
-              modelZoomScale = 1.05f
-              explodePct = 0f
-            },
+            .align(Alignment.TopCenter)
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
         ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = Color(0xCC0A101D),
+            border = BorderStroke(1.dp, primaryCol.copy(alpha = 0.65f)),
+            modifier = Modifier.weight(1f, fill = false).testTag("vulkan_pbr_badge"),
           ) {
-            Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-            Text("RESET", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Row(
+              modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+              Icon(Icons.Default.ViewInAr, contentDescription = null, tint = primaryCol, modifier = Modifier.size(14.dp))
+              Text(
+                text = gpuBackendLabel,
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+          }
+
+          Spacer(Modifier.width(8.dp))
+
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = Color(0xCC0A101D),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+            modifier = Modifier
+              .clickable {
+                autoSpin = false
+                yawVelocityDegPerSec = 0f
+                targetCameraPreset = -28f to 16f
+                modelZoomScale = 1.05f
+                explodePct = 0f
+              }
+              .testTag("3d_reset_camera_btn"),
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+              Icon(Icons.Default.Refresh, contentDescription = "Reset Camera", tint = Color.White, modifier = Modifier.size(14.dp))
+              Text("RESET", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            }
           }
         }
 
-        // Bottom live rig & selected hotspot pill overlay
+        // Bottom live rig title & spec pills
         Column(
-          modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
+          modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(10.dp),
           verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
           Text(
@@ -682,16 +859,23 @@ fun Pev3dGarageViewer(
             overflow = TextOverflow.Ellipsis,
           )
           Text(
-            "Drag to orbit 360° • Fling to spin • Pinch to zoom • Tap 3D hotspots",
+            "Orbit 360° • Fling • Pinch Zoom • ${Pev3dEngine.glbAssetFileName(archetype)}",
             style = MaterialTheme.typography.labelSmall,
             color = Color(0xFF93C5FD),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
           )
-          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            PevSpecPills("DYNO", "$liveMph MPH ($liveRpm RPM)", primaryCol)
-            PevSpecPills("FULL V", "${"%.1f".format(packSpec.fullChargeV)}V", Color(0xFF22C55E))
-            PevSpecPills("POWER", currentModel.powerKw, Color(0xFFFF6B35))
+          LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            item { PevSpecPills("DYNO", "$liveMph MPH ($liveRpm RPM)", primaryCol) }
+            item { PevSpecPills("FULL V", "${"%.1f".format(packSpec.fullChargeV)}V", Color(0xFF22C55E)) }
+            item { PevSpecPills("POWER", currentModel.powerKw, Color(0xFFFF6B35)) }
+            item {
+              PevSpecPills(
+                label = "SSAO",
+                value = if (ssaoEnabled) "HIGH • ON" else "OFF",
+                accent = if (ssaoEnabled) Color(0xFF38BDF8) else Color(0xFF94A3B8),
+              )
+            }
           }
         }
       }
@@ -706,7 +890,7 @@ fun Pev3dGarageViewer(
             "Side" to (0f to 4f),
             "Front" to (90f to 8f),
             "Top" to (0f to 68f),
-            "Low Angle" to (-42f to 4f),
+            "Low" to (-42f to 4f),
           )
         ) { (lbl, angles) ->
           val activeAngles = targetCameraPreset ?: (modelYawDeg to modelPitchDeg)
@@ -725,7 +909,7 @@ fun Pev3dGarageViewer(
 
       Spacer(Modifier.height(8.dp))
 
-      // INTERACTIVE 3D PART TEARDOWN MATRIX
+      // INTERACTIVE 3D SUBSYSTEM TEARDOWN MATRIX (fixed horizontal layout — zero 1-char vertical wrapping!)
       Surface(
         shape = RoundedCornerShape(12.dp),
         color = Color(0xFF0F172A),
@@ -735,19 +919,31 @@ fun Pev3dGarageViewer(
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
           ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-              Icon(Icons.Default.TouchApp, contentDescription = null, tint = primaryCol, modifier = Modifier.size(18.dp))
+            Row(
+              modifier = Modifier.weight(1f),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              Icon(Icons.Default.TouchApp, contentDescription = null, tint = primaryCol, modifier = Modifier.size(16.dp))
               Text(
-                "3D SUBSYSTEM TEARDOWN (TAP MODEL OR CHIP)",
+                "3D SUBSYSTEM TEARDOWN",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = primaryCol,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
               )
             }
-            Text("${PEV_COMPONENT_PARTS.size} Systems", fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f))
+            Text(
+              "${PEV_COMPONENT_PARTS.size} Systems",
+              fontSize = 10.sp,
+              color = Color.White.copy(alpha = 0.65f),
+              maxLines = 1,
+              softWrap = false,
+            )
           }
 
           LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -766,7 +962,14 @@ fun Pev3dGarageViewer(
                   horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                   Icon(part.icon, contentDescription = null, tint = part.accent, modifier = Modifier.size(16.dp))
-                  Text(part.name.split(" ").take(2).joinToString(" "), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                  Text(
+                    part.name.split(" ").take(2).joinToString(" "),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    softWrap = false,
+                  )
                 }
               }
             }
@@ -782,22 +985,48 @@ fun Pev3dGarageViewer(
               Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
                   modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.SpaceBetween,
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
                   verticalAlignment = Alignment.CenterVertically,
                 ) {
-                  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f),
+                  ) {
                     Surface(shape = CircleShape, color = part.accent.copy(alpha = 0.2f), modifier = Modifier.size(32.dp)) {
                       Box(contentAlignment = Alignment.Center) {
                         Icon(part.icon, contentDescription = null, tint = part.accent, modifier = Modifier.size(18.dp))
                       }
                     }
-                    Column {
-                      Text(part.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = Color.White)
-                      Text(part.category.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = part.accent)
+                    Column(modifier = Modifier.weight(1f)) {
+                      Text(
+                        part.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                      )
+                      Text(
+                        part.category.uppercase(),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = part.accent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                      )
                     }
                   }
                   Surface(shape = RoundedCornerShape(6.dp), color = part.accent.copy(alpha = 0.2f)) {
-                    Text("HIGHLIGHTED IN 3D", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = part.accent, modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
+                    Text(
+                      "ACTIVE",
+                      fontSize = 8.sp,
+                      fontWeight = FontWeight.Bold,
+                      color = part.accent,
+                      maxLines = 1,
+                      softWrap = false,
+                      modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                    )
                   }
                 }
                 Text(part.summary, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = Color.White)
@@ -860,7 +1089,7 @@ private fun PevSpecPills(label: String, value: String, accent: Color) {
     border = BorderStroke(1.dp, accent.copy(alpha = 0.6f)),
   ) {
     Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-      Text(label, fontSize = 9.sp, color = Color.White.copy(alpha = 0.7f))
+      Text(label, fontSize = 9.sp, color = Color.White.copy(alpha = 0.7f), maxLines = 1, softWrap = false)
       Text(value, fontSize = 11.sp, fontWeight = FontWeight.Black, color = accent, maxLines = 1, softWrap = false)
     }
   }

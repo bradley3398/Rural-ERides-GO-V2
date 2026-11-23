@@ -708,6 +708,122 @@ object PevBatteryPhysics {
     return if (miles > 0.03 && whUsed > 0.0) whUsed / miles else 0.0
   }
 
+  /**
+   * Authoritative live HUD pack state computation combining:
+   * - Exact series-cell resting OCV curve (e.g. 48V 13S NMC = 54.6V @ 100%, 48.1V nom, 39.0V empty)
+   * - Continuous trip energy depletion (rolling + speed-dependent aero + gravitational climb Wh)
+   * - Real-time under-load internal resistance voltage sag (I * R_pack(SoC, Temp)) when moving
+   */
+  data class LiveHudPackState(
+    val profile: BatteryPackProfile,
+    val socPctExact: Double,
+    val socPctInt: Int,
+    val restingVoltageV: Double,
+    val underLoadVoltageV: Double,
+    val sagVolts: Double,
+    val estLoadWatts: Double,
+    val estLoadAmps: Double,
+    val usedWh: Double,
+    val remainingWh: Double,
+  )
+
+  fun computeLiveHudPackState(
+    ratedVoltage: Double,
+    packWh: Double,
+    chemistry: String = "NMC",
+    startBatteryPct: Int = 100,
+    tripDistanceKm: Double = 0.0,
+    elevationGainM: Double = 0.0,
+    speedKmh: Double = 0.0,
+    avgSpeedKmh: Double = 0.0,
+    pitchDeg: Double = 0.0,
+    riderWeightLbs: Double = 175.0,
+    vehicleWeightLbs: Double = 58.0,
+    rideMode: String = "SPORT",
+    ambientTempC: Double = 22.0,
+    motorWatts: Int = 0,
+  ): LiveHudPackState {
+    val cleanNomV = ratedVoltage.coerceIn(12.0, 420.0)
+    val profile = packProfile(cleanNomV, chemistry)
+    val cleanWh = packWh.coerceAtLeast(180.0)
+    val packAh = computePackAh(cleanWh, cleanNomV, chemistry).coerceAtLeast(4.0)
+    val startPct = startBatteryPct.coerceIn(0, 100)
+    val startWh = cleanWh * (startPct / 100.0)
+
+    val riderKg = riderWeightLbs.coerceIn(70.0, 420.0) * 0.45359237
+    val vehKg = (if (vehicleWeightLbs > 10.0) vehicleWeightLbs else 58.0).coerceIn(15.0, 300.0) * 0.45359237
+    val totalKg = riderKg + vehKg
+
+    val modeMultiplier =
+      when (rideMode.trim().uppercase()) {
+        "ECO" -> 0.72
+        "STREET" -> 0.90
+        "SEND", "TURBO", "RACE" -> 1.22
+        else -> 1.0
+      }
+
+    // Distance Wh: mass-scaled rolling + speed-adjusted aerodynamic drag
+    val refCruiseKmh = maxOf(avgSpeedKmh, speedKmh * 0.75, 22.0).coerceIn(15.0, 95.0)
+    val aeroSpeedFactor = 1.0 + 0.0115 * (refCruiseKmh - 22.0).coerceAtLeast(0.0)
+    val baseWhPerKm = 18.5 * (totalKg / 105.0).coerceIn(0.65, 1.85) * aeroSpeedFactor * (0.85 + 0.15 * modeMultiplier)
+    val rollingAeroWh = tripDistanceKm.coerceAtLeast(0.0) * baseWhPerKm
+
+    // Gravitational potential energy climbing Wh: (m * g * h) / (3600 * drivetrainEff)
+    val climbWh = (totalKg * 9.81 * elevationGainM.coerceAtLeast(0.0)) / (3600.0 * 0.80)
+    val usedWh = (rollingAeroWh + climbWh).coerceAtLeast(0.0)
+
+    val remainingWh = (startWh - usedWh).coerceIn(0.0, cleanWh)
+    val socExact = ((remainingWh / cleanWh) * 100.0).coerceIn(0.0, startPct.toDouble())
+    val socInt = socExact.roundToInt().coerceIn(0, startPct)
+
+    val restingV = voltageForSeriesSoc(profile.seriesCells, socExact, chemistry)
+
+    // Real-time under-load power draw & IR voltage sag when rolling (>= 1.5 km/h)
+    val estWatts: Double
+    val estAmps: Double
+    val sagV: Double
+    val loadedV: Double
+    if (speedKmh >= 1.5) {
+      val vMs = speedKmh / 3.6
+      val pitchRad = Math.toRadians(pitchDeg.coerceIn(-25.0, 30.0))
+      val aeroW = 0.5 * 1.225 * 0.65 * vMs * vMs * vMs
+      val rollW = 0.015 * totalKg * 9.81 * kotlin.math.cos(pitchRad) * vMs
+      val gradeW = (totalKg * 9.81 * kotlin.math.sin(pitchRad) * vMs).coerceAtLeast(0.0)
+      val peakCapW = if (motorWatts > 250) (motorWatts * 1.8).coerceIn(600.0, 14000.0) else 6500.0
+      estWatts = (((aeroW + rollW + gradeW) / 0.84) * modeMultiplier).coerceIn(25.0, peakCapW)
+      estAmps = (estWatts / restingV.coerceAtLeast(12.0)).coerceAtLeast(0.0)
+      val parallelCells = (packAh / 4.5).roundToInt().coerceIn(2, 16)
+      sagV = estimateVoltageSagVolts(
+        loadAmps = estAmps,
+        ratedVoltage = cleanNomV,
+        parallelCells = parallelCells,
+        chemistry = chemistry,
+        cellInternalResistanceMohm = if (isLfp(chemistry)) 18.0 else 22.0,
+        socPct = socExact,
+        ambientTempC = ambientTempC,
+      )
+      loadedV = round2((restingV - sagV).coerceAtLeast(profile.cutoffEmptyV * 0.90))
+    } else {
+      estWatts = 0.0
+      estAmps = 0.0
+      sagV = 0.0
+      loadedV = restingV
+    }
+
+    return LiveHudPackState(
+      profile = profile,
+      socPctExact = round2(socExact),
+      socPctInt = socInt,
+      restingVoltageV = restingV,
+      underLoadVoltageV = loadedV,
+      sagVolts = sagV,
+      estLoadWatts = round2(estWatts),
+      estLoadAmps = round2(estAmps),
+      usedWh = round2(usedWh),
+      remainingWh = round2(remainingWh),
+    )
+  }
+
   /** Standard 10-step SoC -> Voltage lookup table for the active pack (100% down to 0%). */
   fun socVoltageTable(ratedVoltage: Double, chemistry: String = "NMC"): List<Pair<Int, Double>> =
     listOf(100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0).map { pct ->

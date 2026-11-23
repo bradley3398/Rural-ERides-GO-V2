@@ -873,10 +873,11 @@ fun PevTacticalPowerStripCard(
       else -> "Crisp Throttle • Active Regen"
     }
 
-  val nomV = (vehicle?.voltage ?: 60.0).coerceAtLeast(24.0)
-  val packProf = remember(nomV, settings.batteryChemistry) { PevBatteryPhysics.packProfile(nomV, settings.batteryChemistry) }
-  val packWh = (vehicle?.batteryWh ?: 1800L).toDouble().coerceAtLeast(200.0)
-  val packAh = PevBatteryPhysics.computePackAh(packWh, nomV, settings.batteryChemistry).coerceAtLeast(5.0)
+  val nomV = (vehicle?.voltage?.takeIf { it >= 12.0 } ?: 48.0).coerceAtLeast(24.0)
+  val packChem = vehicle?.batteryChemistry?.ifBlank { settings.batteryChemistry } ?: settings.batteryChemistry
+  val packProf = remember(nomV, packChem) { PevBatteryPhysics.packProfile(nomV, packChem) }
+  val packWh = (vehicle?.batteryWh?.takeIf { it >= 180L } ?: 960L).toDouble().coerceAtLeast(200.0)
+  val packAh = PevBatteryPhysics.computePackAh(packWh, nomV, packChem).coerceAtLeast(5.0)
   val seriesCount = packProf.seriesCount
   val storageVolts = packProf.storageV
 

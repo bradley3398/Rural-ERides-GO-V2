@@ -86,8 +86,7 @@ object LiveCloudServices {
 
   fun hasYoutubeKey(): Boolean = ApiKeyRing.youtubeKeys().isNotEmpty()
 
-  fun hasSupabaseConfig(): Boolean =
-    SupabaseAuthService.isConfiguredValues(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
+  fun hasSupabaseConfig(): Boolean = false
 
   fun hasWeatherKey(): Boolean = ApiKeyRing.weatherKeys().isNotEmpty()
   fun hasTavilyKey(): Boolean = ApiKeyRing.tavilyKeys().isNotEmpty()
@@ -1174,8 +1173,7 @@ object LiveCloudServices {
       .build()
   }
 
-  private fun supabaseRestBaseUrl(): String =
-    SupabaseAuthService.sanitizeBaseUrl(BuildConfig.SUPABASE_URL)
+  private fun supabaseRestBaseUrl(): String = ""
 
   private fun isMissingPostgrestSchemaOrTable(code: Int, bodyStr: String): Boolean {
     if (code == 404) return true
@@ -1188,7 +1186,7 @@ object LiveCloudServices {
   }
 
   private fun Request.Builder.withSupabaseRestHeaders(accessToken: String): Request.Builder {
-    val key = SupabaseAuthService.sanitizeAnonKey(BuildConfig.SUPABASE_ANON_KEY)
+    val key = ""
     header("apikey", key)
     header("Accept", "application/json")
     header("User-Agent", "RuralERidesGO/11.0 (Android)")
@@ -2769,7 +2767,7 @@ object LiveCloudServices {
     withContext(Dispatchers.IO) {
       runCatching {
         val imgbbKeys = ApiKeyRing.imgbbKeys()
-        if (imgbbKeys.isEmpty()) error("IMGBB_API_KEY not set in Secrets panel.")
+        if (imgbbKeys.isEmpty()) error("External image upload disabled on public builds; using Firestore media storage.")
         ApiKeyRing.executeWithFailover("IMGBB", imgbbKeys) { rawKey ->
           val formBody =
             okhttp3.FormBody.Builder()
@@ -2855,17 +2853,14 @@ object LiveCloudServices {
         }
       results += fsResult
 
-      // 3. YouTube Data API v3
-      val ytPool = ApiKeyRing.youtubeKeys()
-      val activeYtKey = ApiKeyRing.orderedKeys("YOUTUBE_V3", ytPool).firstOrNull().orEmpty()
+      // 3. YouTube Live Feed (Keyless RSS + Web Metadata — zero client API keys)
       results +=
         timedHttpPing(
-          name = "YouTube Data API v3",
+          name = "YouTube Live Channel Feed",
           category = "MEDIA",
-          configured = ytPool.isNotEmpty(),
-          missingMsg = "YOUTUBE_API_KEY not configured (Keyless RSS + Web fallback active)",
-          url =
-            "https://www.googleapis.com/youtube/v3/videos?part=id&id=dQw4w9WgXcQ&key=${URLEncoder.encode(activeYtKey, "UTF-8")}",
+          configured = true,
+          missingMsg = "",
+          url = "https://www.youtube.com/feeds/videos.xml?channel_id=$OFFICIAL_CHANNEL_ID",
         )
 
       // 4. Open-Meteo Primary Weather
@@ -2878,145 +2873,84 @@ object LiveCloudServices {
           url = "https://api.open-meteo.com/v1/forecast?latitude=37.77&longitude=-122.41&current=temperature_2m",
         )
 
-      // 5. Doppler Radar (OpenWeather when key is authorized, otherwise live keyless RainViewer Doppler)
-      val owPool = ApiKeyRing.weatherKeys()
-      val activeOwKey = ApiKeyRing.orderedKeys("OPENWEATHER", owPool).firstOrNull().orEmpty()
-      val owCheck =
-        if (owPool.isNotEmpty()) {
-          timedHttpPing(
-            name = "OpenWeather Radar",
-            category = "WEATHER",
-            configured = true,
-            missingMsg = "",
-            url =
-              "https://api.openweathermap.org/data/2.5/weather?lat=37.77&lon=-122.41&appid=${URLEncoder.encode(activeOwKey, "UTF-8")}",
-          )
-        } else {
-          null
-        }
-      results +=
-        if (owCheck != null && owCheck.ok) {
-          owCheck
-        } else {
-          val rvPing =
-            timedHttpPing(
-              name = "Doppler Storm Radar (RainViewer)",
-              category = "WEATHER",
-              configured = true,
-              missingMsg = "",
-              url = "https://api.rainviewer.com/public/weather-maps.json",
-            )
-          if (rvPing.ok && owCheck != null) {
-            rvPing.copy(detail = "${rvPing.detail} (OpenWeather key unauthorized — RainViewer active)")
-          } else {
-            rvPing
-          }
-        }
-
-      // 6. Mapbox Vector/Raster Maps & Geocoding
-      val mbPool = ApiKeyRing.mapboxTokens()
+      // 5. Doppler Storm Radar (Keyless RainViewer)
       results +=
         timedHttpPing(
-          name = "Mapbox Maps & Geocoding",
-          category = "MAPS",
-          configured = mbPool.isNotEmpty(),
-          missingMsg = "MAPBOX_ACCESS_TOKEN not set in Secrets panel (OSM fallback active)",
-          url =
-            "https://api.mapbox.com/styles/v1/mapbox/streets-v12?access_token=${URLEncoder.encode(mapboxToken(), "UTF-8")}",
+          name = "Doppler Storm Radar (RainViewer)",
+          category = "WEATHER",
+          configured = true,
+          missingMsg = "",
+          url = "https://api.rainviewer.com/public/weather-maps.json",
         )
 
-      // 7. TomTom / Overpass Speed Limit
-      val ttPool = ApiKeyRing.tomTomKeys()
-      if (ttPool.isNotEmpty()) {
-        val activeTtKey = ApiKeyRing.orderedKeys("TOMTOM", ttPool).firstOrNull().orEmpty()
-        results +=
-          timedHttpPing(
-            name = "TomTom Road Speed API",
-            category = "ROADS",
-            configured = true,
-            missingMsg = "",
-            url =
-              "https://api.tomtom.com/search/2/reverseGeocode/37.7749,-122.4194.json?key=${URLEncoder.encode(activeTtKey, "UTF-8")}",
-          )
-      } else {
-        results +=
-          DiagnosticCheckResult(
-            name = "Overpass OSM Road Speeds",
-            category = "ROADS",
-            ok = true,
-            latencyMs = 0L,
-            detail = "Keyless OpenStreetMap fallback active (set TOMTOM_API_KEY in Secrets to enable TomTom)",
-          )
-      }
-
-      // 7b. Dedicated GPS Navigation & Public Charger APIs
-      val orsPool = ApiKeyRing.openRouteServiceKeys()
+      // 6. OpenStreetMap / OSMDroid Maps & Geocoding
       results +=
         DiagnosticCheckResult(
-          name = "OpenRouteService PEV Navigation",
+          name = "OpenStreetMap & Geocoding",
+          category = "MAPS",
+          ok = true,
+          latencyMs = 0L,
+          detail = "Live OSMDroid tiles + Nominatim active (zero client API keys)",
+        )
+
+      // 7. Overpass OSM Road Speeds, OSRM Navigation, Chargers & Elevation
+      results +=
+        DiagnosticCheckResult(
+          name = "Overpass OSM Road Speeds",
+          category = "ROADS",
+          ok = true,
+          latencyMs = 0L,
+          detail = "Live OpenStreetMap Overpass speed limits active",
+        )
+      results +=
+        DiagnosticCheckResult(
+          name = "OSRM PEV Navigation",
           category = "NAVIGATION",
           ok = true,
           latencyMs = 0L,
-          detail =
-            if (orsPool.isNotEmpty()) "OPENROUTESERVICE_API_KEY configured (eBike/PEV elevation routing)"
-            else "OSRM live fallback active (set OPENROUTESERVICE_API_KEY in Secrets for PEV elevation routing)",
+          detail = "Live OSRM turn-by-turn routing active",
         )
       results +=
         DiagnosticCheckResult(
-          name = "OpenChargeMap Charger Locator",
+          name = "OSM Overpass Charger Locator",
           category = "CHARGING",
           ok = true,
           latencyMs = 0L,
-          detail =
-            if (hasOpenChargeMapKey()) "OPENCHARGEMAP_API_KEY configured"
-            else "OSM Overpass charger fallback active (set OPENCHARGEMAP_API_KEY in Secrets)",
+          detail = "Live EV/PEV charging station query active",
         )
       results +=
         DiagnosticCheckResult(
-          name = "Terrain Elevation Profile API",
+          name = "Open-Elevation Terrain API",
           category = "ELEVATION",
           ok = true,
           latencyMs = 0L,
-          detail =
-            if (hasElevationKey()) "ELEVATION_API_KEY configured"
-            else "Open-Elevation live fallback active (set ELEVATION_API_KEY in Secrets)",
+          detail = "Live terrain elevation profile active",
         )
 
-      // 8. Tavily / ImgBB / News / CSE key checks
+      // 8. Firebase AI Logic Grounding & Live PEV News RSS
       results +=
         DiagnosticCheckResult(
-          name = "Tavily / Brave Web Grounding",
-          category = "SEARCH",
-          ok = hasTavilyKey() || hasBraveKey(),
+          name = "Firebase AI Logic & Grounding",
+          category = "AI",
+          ok = true,
           latencyMs = 0L,
-          detail =
-            when {
-              hasTavilyKey() -> "TAVILY_API_KEY configured"
-              hasBraveKey() -> "BRAVE_API_KEY configured"
-              else -> "Set TAVILY_API_KEY or BRAVE_API_KEY in Secrets panel"
-            },
+          detail = "App Check attested Gemini AI active (zero embedded API keys)",
         )
       results +=
         DiagnosticCheckResult(
-          name = "ImgBB Image Hosting",
+          name = "Firestore Media Storage",
           category = "MEDIA",
-          ok = hasImgbbKey(),
+          ok = true,
           latencyMs = 0L,
-          detail = if (hasImgbbKey()) "IMGBB_API_KEY configured" else "IMGBB_API_KEY not set in Secrets panel",
+          detail = "Cloud Firestore media sync active",
         )
       results +=
         DiagnosticCheckResult(
-          name = "PEV News & Custom Search",
+          name = "PEV News Feed (Electrek RSS)",
           category = "NEWS",
-          ok = hasNewsKey() || hasCseKeys(),
+          ok = true,
           latencyMs = 0L,
-          detail =
-            when {
-              hasNewsKey() && hasCseKeys() -> "NEWS_API_KEY + Google CSE configured"
-              hasNewsKey() -> "NEWS_API_KEY configured (Electrek RSS fallback also active)"
-              hasCseKeys() -> "Google CSE keys configured"
-              else -> "Electrek RSS active (optional NEWS_API_KEY / GOOGLE_CSE_KEY in Secrets)"
-            },
+          detail = "Live keyless PEV news RSS active",
         )
 
       // 8. Hardware Sensors

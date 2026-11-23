@@ -99,33 +99,32 @@ object ApiKeyRing {
     }
   }
 
-  fun youtubeKeys(): List<String> = collectPool(BuildConfig.YOUTUBE_API_KEY)
+  // Public release safety: private third-party API keys are intentionally excluded from
+  // the Android client APK/BuildConfig so they cannot be extracted by decompilation.
+  // Live features operate via keyless public endpoints + Firebase AI Logic + App Check + Firestore.
+  fun youtubeKeys(): List<String> = emptyList()
 
-  fun mapboxTokens(): List<String> = collectPool(BuildConfig.MAPBOX_ACCESS_TOKEN)
+  fun mapboxTokens(): List<String> = emptyList()
 
-  fun openRouteServiceKeys(): List<String> = collectPool(BuildConfig.OPENROUTESERVICE_API_KEY)
+  fun openRouteServiceKeys(): List<String> = emptyList()
 
-  fun tomTomKeys(): List<String> = collectPool(BuildConfig.TOMTOM_API_KEY)
+  fun tomTomKeys(): List<String> = emptyList()
 
-  fun openChargeMapKeys(): List<String> = collectPool(BuildConfig.OPENCHARGEMAP_API_KEY)
+  fun openChargeMapKeys(): List<String> = emptyList()
 
-  fun elevationKeys(): List<String> = collectPool(BuildConfig.ELEVATION_API_KEY)
+  fun elevationKeys(): List<String> = emptyList()
 
-  fun weatherKeys(): List<String> = collectPool(BuildConfig.WEATHER_API_KEY)
+  fun weatherKeys(): List<String> = emptyList()
 
-  fun tavilyKeys(): List<String> = collectPool(BuildConfig.TAVILY_API_KEY)
+  fun tavilyKeys(): List<String> = emptyList()
 
-  fun braveKeys(): List<String> = collectPool(BuildConfig.BRAVE_API_KEY)
+  fun braveKeys(): List<String> = emptyList()
 
-  fun newsKeys(): List<String> = collectPool(BuildConfig.NEWS_API_KEY)
+  fun newsKeys(): List<String> = emptyList()
 
-  fun imgbbKeys(): List<String> = collectPool(BuildConfig.IMGBB_API_KEY)
+  fun imgbbKeys(): List<String> = emptyList()
 
-  fun googleCsePairs(): List<Pair<String, String>> {
-    val key = BuildConfig.GOOGLE_CSE_KEY.trim()
-    val cx = BuildConfig.GOOGLE_CSE_CX.trim()
-    return if (isRealKey(key) && isRealKey(cx)) listOf(key to cx) else emptyList()
-  }
+  fun googleCsePairs(): List<Pair<String, String>> = emptyList()
 
   private fun cooldownId(service: String, key: String): String = "$service:${key.hashCode()}"
 }

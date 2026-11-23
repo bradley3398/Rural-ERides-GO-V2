@@ -1,11 +1,12 @@
 package com.example.ui.screens
 
-import android.opengl.Matrix
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
+import kotlin.math.tan
 
 enum class Pev3dArchetype {
   EMOTO,
@@ -57,7 +58,127 @@ data class Pev3dModelFinish(
   val caliperRgb: FloatArray,
   val wheelScale: Float = 1.0f,
   val bodyLengthScale: Float = 1.0f,
+  val secondaryRgb: FloatArray = floatArrayOf(0.24f, 0.26f, 0.29f),
+  val paintMetallic: Float = 0.52f,
 )
+
+/**
+ * Pure Kotlin column-major 4x4 matrix math (zero android.opengl dependencies)
+ * matching Filament's right-handed camera and transform conventions.
+ */
+internal object Mat4Math {
+  fun setIdentity(m: FloatArray) {
+    m.fill(0f)
+    m[0] = 1f; m[5] = 1f; m[10] = 1f; m[15] = 1f
+  }
+
+  fun translate(m: FloatArray, tx: Float, ty: Float, tz: Float) {
+    for (i in 0 until 4) {
+      m[12 + i] += m[i] * tx + m[4 + i] * ty + m[8 + i] * tz
+    }
+  }
+
+  fun scale(m: FloatArray, sx: Float, sy: Float, sz: Float) {
+    for (i in 0 until 4) {
+      m[i] *= sx
+      m[4 + i] *= sy
+      m[8 + i] *= sz
+    }
+  }
+
+  fun rotateAxis(m: FloatArray, angleDeg: Float, ax: Float, ay: Float, az: Float) {
+    val len = sqrt(ax * ax + ay * ay + az * az)
+    if (len < 1e-6f) return
+    val x = ax / len
+    val y = ay / len
+    val z = az / len
+    val rad = (angleDeg * PI / 180.0).toFloat()
+    val c = cos(rad)
+    val s = sin(rad)
+    val nc = 1f - c
+    val r = FloatArray(16)
+    r[0] = x * x * nc + c
+    r[1] = y * x * nc + z * s
+    r[2] = x * z * nc - y * s
+    r[3] = 0f
+    r[4] = x * y * nc - z * s
+    r[5] = y * y * nc + c
+    r[6] = y * z * nc + x * s
+    r[7] = 0f
+    r[8] = x * z * nc + y * s
+    r[9] = y * z * nc - x * s
+    r[10] = z * z * nc + c
+    r[11] = 0f
+    r[15] = 1f
+    val tmp = FloatArray(16)
+    multiplyMM(tmp, m, r)
+    System.arraycopy(tmp, 0, m, 0, 16)
+  }
+
+  fun perspective(out: FloatArray, fovYDeg: Float, aspect: Float, near: Float, far: Float) {
+    val f = 1f / tan((fovYDeg * PI / 360.0).toFloat())
+    val rangeInv = 1f / (near - far)
+    out.fill(0f)
+    out[0] = f / aspect
+    out[5] = f
+    out[10] = (far + near) * rangeInv
+    out[11] = -1f
+    out[14] = 2f * far * near * rangeInv
+  }
+
+  fun lookAt(
+    out: FloatArray,
+    eyeX: Float, eyeY: Float, eyeZ: Float,
+    centerX: Float, centerY: Float, centerZ: Float,
+    upX: Float, upY: Float, upZ: Float,
+  ) {
+    var fx = centerX - eyeX
+    var fy = centerY - eyeY
+    var fz = centerZ - eyeZ
+    val rlf = 1f / sqrt(fx * fx + fy * fy + fz * fz).coerceAtLeast(1e-6f)
+    fx *= rlf; fy *= rlf; fz *= rlf
+
+    var sx = fy * upZ - fz * upY
+    var sy = fz * upX - fx * upZ
+    var sz = fx * upY - fy * upX
+    val rls = 1f / sqrt(sx * sx + sy * sy + sz * sz).coerceAtLeast(1e-6f)
+    sx *= rls; sy *= rls; sz *= rls
+
+    val ux = sy * fz - sz * fy
+    val uy = sz * fx - sx * fz
+    val uz = sx * fy - sy * fx
+
+    out[0] = sx; out[4] = sy; out[8] = sz; out[12] = -(sx * eyeX + sy * eyeY + sz * eyeZ)
+    out[1] = ux; out[5] = uy; out[9] = uz; out[13] = -(ux * eyeX + uy * eyeY + uz * eyeZ)
+    out[2] = -fx; out[6] = -fy; out[10] = -fz; out[14] = fx * eyeX + fy * eyeY + fz * eyeZ
+    out[3] = 0f; out[7] = 0f; out[11] = 0f; out[15] = 1f
+  }
+
+  fun multiplyMM(out: FloatArray, lhs: FloatArray, rhs: FloatArray) {
+    for (col in 0 until 4) {
+      val c = col * 4
+      val r0 = rhs[c]
+      val r1 = rhs[c + 1]
+      val r2 = rhs[c + 2]
+      val r3 = rhs[c + 3]
+      for (row in 0 until 4) {
+        out[c + row] =
+          lhs[row] * r0 +
+          lhs[4 + row] * r1 +
+          lhs[8 + row] * r2 +
+          lhs[12 + row] * r3
+      }
+    }
+  }
+
+  fun multiplyMV(out: FloatArray, m: FloatArray, v: FloatArray) {
+    val x = v[0]; val y = v[1]; val z = v[2]; val w = v[3]
+    out[0] = m[0] * x + m[4] * y + m[8] * z + m[12] * w
+    out[1] = m[1] * x + m[5] * y + m[9] * z + m[13] * w
+    out[2] = m[2] * x + m[6] * y + m[10] * z + m[14] * w
+    out[3] = m[3] * x + m[7] * y + m[11] * z + m[15] * w
+  }
+}
 
 internal object Pev3dEngine {
   fun archetypeForCategory(category: String): Pev3dArchetype {
@@ -66,40 +187,87 @@ internal object Pev3dEngine {
       c.contains("unicycle") || c.contains("euc") -> Pev3dArchetype.EUC
       c.contains("scooter") -> Pev3dArchetype.SCOOTER
       c.contains("hydrofoil") || c.contains("efoil") -> Pev3dArchetype.HYDROFOIL
-      c.contains("e-bike") || c.contains("moped") -> Pev3dArchetype.EBIKE
+      c.contains("e-bike") || c.contains("moped") || c.contains("scrambler") || c.contains("folding") -> Pev3dArchetype.EBIKE
       else -> Pev3dArchetype.EMOTO
     }
   }
 
+  fun glbAssetFileName(archetype: Pev3dArchetype): String =
+    when (archetype) {
+      Pev3dArchetype.EMOTO -> "emoto.glb"
+      Pev3dArchetype.SCOOTER -> "hyperscooter.glb"
+      Pev3dArchetype.EBIKE -> "ebike_fat.glb"
+      Pev3dArchetype.EUC -> "euc.glb"
+      Pev3dArchetype.HYDROFOIL -> "hydrofoil.glb"
+    }
+
   fun finishForModel(name: String, category: String, voltage: Int): Pev3dModelFinish {
     val n = name.lowercase()
     val c = category.lowercase()
+    // Authentic OEM automotive/motorcycle sRGB paint palettes (converted to linear for Filament PBR)
     val bodyRgb =
       when {
-        n.contains("rion") || n.contains("stealth") || n.contains("black") -> floatArrayOf(0.11f, 0.13f, 0.17f)
-        n.contains("stark") || n.contains("red") || n.contains("ducati") -> floatArrayOf(0.84f, 0.14f, 0.16f)
-        n.contains("bmw") || n.contains("ryvid") || n.contains("apollo") -> floatArrayOf(0.85f, 0.89f, 0.94f)
-        n.contains("ultra bee") || n.contains("kaabo") || n.contains("green") -> floatArrayOf(0.16f, 0.72f, 0.34f)
-        n.contains("storm bee") || n.contains("talaria") || n.contains("amber") -> floatArrayOf(0.92f, 0.45f, 0.12f)
-        n.contains("fliteboard") || n.contains("inmotion") -> floatArrayOf(0.08f, 0.54f, 0.78f)
-        n.contains("sherman") || n.contains("patton") || n.contains("lynx") -> floatArrayOf(0.24f, 0.27f, 0.33f)
-        n.contains("onyx") || n.contains("cake") || n.contains("volcon") -> floatArrayOf(0.74f, 0.56f, 0.24f)
-        voltage >= 100 -> floatArrayOf(0.18f, 0.22f, 0.30f)
-        else -> floatArrayOf(0.22f, 0.32f, 0.46f)
+        n.contains("rion") || n.contains("stealth") || n.contains("black") || n.contains("dualtron") || n.contains("nami") ->
+          floatArrayOf(0.18f, 0.19f, 0.22f) // Obsidian Metallic Carbon
+        n.contains("stark") || n.contains("red") || n.contains("ducati") || n.contains("zero") || n.contains("altis") ->
+          floatArrayOf(0.70f, 0.10f, 0.11f) // Factory Corsa Metallic Red
+        n.contains("bmw") || n.contains("ryvid") || n.contains("apollo") || n.contains("white") || n.contains("lectric") ->
+          floatArrayOf(0.84f, 0.85f, 0.87f) // Mineral Pearl White
+        n.contains("ultra bee") || n.contains("kaabo") || n.contains("green") || n.contains("aventon") || n.contains("vsett") ->
+          floatArrayOf(0.20f, 0.34f, 0.23f) // Satin Forest Olive Metallic
+        n.contains("storm bee") || n.contains("talaria") || n.contains("amber") || n.contains("ktm") || n.contains("komodo") ->
+          floatArrayOf(0.82f, 0.31f, 0.09f) // Factory Moto Burnt Orange
+        n.contains("fliteboard") || n.contains("inmotion") || n.contains("blue") || n.contains("eride") || n.contains("e-ride") ->
+          floatArrayOf(0.11f, 0.27f, 0.44f) // Deep Marine Metallic Navy
+        n.contains("sherman") || n.contains("patton") || n.contains("lynx") || n.contains("veteran") || n.contains("teverun") ->
+          floatArrayOf(0.26f, 0.28f, 0.32f) // Forged Titanium Graphite
+        n.contains("onyx") || n.contains("cake") || n.contains("volcon") || n.contains("super73") || n.contains("revv") ->
+          floatArrayOf(0.56f, 0.44f, 0.28f) // Matte Desert Bronze
+        n.contains("light bee") || n.contains("sur-ron") || n.contains("surron") || n.contains("segway") ->
+          floatArrayOf(0.24f, 0.27f, 0.31f) // Satin Gunmetal Slate
+        n.contains("begode") || n.contains("kingsong") ->
+          floatArrayOf(0.22f, 0.24f, 0.28f) // Forged Basalt Slate
+        voltage >= 100 ->
+          floatArrayOf(0.21f, 0.24f, 0.29f) // Anthracite Metallic
+        else ->
+          floatArrayOf(0.22f, 0.30f, 0.40f) // Deep Steel Metallic Blue
       }
+    // Realistic anodized CNC forks, shock springs, triple clamps, and hub trim
     val accentRgb =
       when {
-        n.contains("ultra bee") || n.contains("kaabo") -> floatArrayOf(0.45f, 0.95f, 0.22f)
-        n.contains("lynx") || n.contains("sherman") || n.contains("cake") -> floatArrayOf(0.92f, 0.72f, 0.24f)
-        n.contains("stark") || n.contains("dualtron") || n.contains("nami") -> floatArrayOf(0.96f, 0.28f, 0.26f)
-        n.contains("fliteboard") || n.contains("segway") -> floatArrayOf(0.18f, 0.86f, 0.96f)
-        else -> floatArrayOf(0.22f, 0.78f, 0.98f)
+        n.contains("ultra bee") || n.contains("lynx") || n.contains("sherman") || n.contains("patton") || n.contains("cake") || n.contains("sur-ron") || n.contains("vsett") ->
+          floatArrayOf(0.80f, 0.64f, 0.28f) // Ohlins Champagne Anodized Gold
+        n.contains("stark") || n.contains("dualtron") || n.contains("nami") || n.contains("kaabo") || n.contains("altis") || n.contains("teverun") ->
+          floatArrayOf(0.74f, 0.16f, 0.16f) // Anodized Factory Crimson
+        n.contains("bmw") || n.contains("ryvid") || n.contains("storm") || n.contains("talaria") || n.contains("inmotion") ->
+          floatArrayOf(0.82f, 0.40f, 0.14f) // Anodized Burnt Copper
+        n.contains("fliteboard") || n.contains("segway") || n.contains("lectric") || n.contains("aventon") ->
+          floatArrayOf(0.74f, 0.78f, 0.82f) // Brushed Marine Aluminum
+        else ->
+          floatArrayOf(0.76f, 0.62f, 0.30f) // CNC Titanium Gold
       }
     val caliperRgb =
       when {
-        n.contains("stark") || n.contains("dualtron") -> floatArrayOf(0.94f, 0.18f, 0.22f)
-        n.contains("lynx") || n.contains("storm") -> floatArrayOf(0.96f, 0.74f, 0.18f)
-        else -> floatArrayOf(0.20f, 0.74f, 0.98f)
+        n.contains("stark") || n.contains("dualtron") || n.contains("nami") || n.contains("rion") || n.contains("altis") ->
+          floatArrayOf(0.78f, 0.12f, 0.14f) // Brembo Racing Red
+        n.contains("lynx") || n.contains("storm") || n.contains("ultra bee") || n.contains("sherman") || n.contains("eride") ->
+          floatArrayOf(0.80f, 0.63f, 0.24f) // Brembo Anodized Gold
+        n.contains("bmw") || n.contains("fliteboard") || n.contains("lectric") ->
+          floatArrayOf(0.32f, 0.35f, 0.40f) // Billet Titanium Slate
+        else ->
+          floatArrayOf(0.74f, 0.14f, 0.15f) // Anodized Red Caliper
+      }
+    val secondaryRgb =
+      when {
+        n.contains("bmw") || n.contains("ryvid") || n.contains("lectric") -> floatArrayOf(0.22f, 0.24f, 0.28f)
+        n.contains("stark") || n.contains("talaria") -> floatArrayOf(0.20f, 0.21f, 0.24f)
+        else -> floatArrayOf(0.25f, 0.27f, 0.30f)
+      }
+    val paintMetallic =
+      when {
+        n.contains("onyx") || n.contains("cake") || n.contains("volcon") || n.contains("revv") -> 0.34f
+        n.contains("bmw") || n.contains("stark") || n.contains("fliteboard") || n.contains("altis") -> 0.68f
+        else -> 0.54f
       }
     val wheelScale =
       when {
@@ -111,10 +279,10 @@ internal object Pev3dEngine {
     val bodyLengthScale =
       when {
         n.contains("storm") || n.contains("stark") || n.contains("metacycle") -> 1.06f
-        n.contains("climber") -> 0.92f
+        n.contains("climber") || n.contains("lectric") -> 0.92f
         else -> 1.0f
       }
-    return Pev3dModelFinish(bodyRgb, accentRgb, caliperRgb, wheelScale, bodyLengthScale)
+    return Pev3dModelFinish(bodyRgb, accentRgb, caliperRgb, wheelScale, bodyLengthScale, secondaryRgb, paintMetallic)
   }
 
   fun hotspotsForArchetype(archetype: Pev3dArchetype): List<Pev3dHotspot> =
@@ -162,8 +330,8 @@ internal object Pev3dEngine {
     }
 
   /**
-   * Computes OpenGL camera position & ViewProjection matrix matching Pev3dGlRenderer
-   * so 2D screen hotspots and touch hit-testing align pixel-for-pixel with the 3D shaders.
+   * Computes camera position & ViewProjection matrix matching Filament Vulkan Camera.lookAt
+   * so 2D screen hotspots and touch hit-testing align pixel-for-pixel with the 3D scene.
    */
   fun buildCameraViewProjection(
     widthPx: Float,
@@ -177,7 +345,7 @@ internal object Pev3dEngine {
     val aspect = (widthPx / heightPx.coerceAtLeast(1f)).coerceAtLeast(0.4f)
     val proj = FloatArray(16)
     val view = FloatArray(16)
-    Matrix.perspectiveM(proj, 0, 38f, aspect, 0.25f, 40f)
+    Mat4Math.perspective(proj, 38f, aspect, 0.25f, 40f)
 
     val dist = (4.65f / zoom.coerceIn(0.6f, 2.4f)).coerceIn(1.8f, 8.5f)
     val yr = (yawDeg * PI / 180.0).toFloat()
@@ -193,20 +361,13 @@ internal object Pev3dEngine {
       it[1] = camY
       it[2] = camZ
     }
-    Matrix.setLookAtM(
+    Mat4Math.lookAt(
       view,
-      0,
-      camX,
-      camY,
-      camZ,
-      0f,
-      -0.05f,
-      0f,
-      0f,
-      1f,
-      0f,
+      camX, camY, camZ,
+      0f, -0.05f, 0f,
+      0f, 1f, 0f,
     )
-    Matrix.multiplyMM(outVpMatrix, 0, proj, 0, view, 0)
+    Mat4Math.multiplyMM(outVpMatrix, proj, view)
   }
 
   fun projectHotspots(
@@ -229,7 +390,7 @@ internal object Pev3dEngine {
       inVec[1] = wp.y
       inVec[2] = wp.z
       inVec[3] = 1f
-      Matrix.multiplyMV(outVec, 0, vp, 0, inVec, 0)
+      Mat4Math.multiplyMV(outVec, vp, inVec)
       val w = outVec[3].coerceAtLeast(0.01f)
       val ndcX = outVec[0] / w
       val ndcY = outVec[1] / w
@@ -267,8 +428,8 @@ internal object Pev3dEngine {
       val bi = i * 6
       inA[0] = wireframeLines[bi]; inA[1] = wireframeLines[bi + 1]; inA[2] = wireframeLines[bi + 2]; inA[3] = 1f
       inB[0] = wireframeLines[bi + 3]; inB[1] = wireframeLines[bi + 4]; inB[2] = wireframeLines[bi + 5]; inB[3] = 1f
-      Matrix.multiplyMV(outA, 0, vp, 0, inA, 0)
-      Matrix.multiplyMV(outB, 0, vp, 0, inB, 0)
+      Mat4Math.multiplyMV(outA, vp, inA)
+      Mat4Math.multiplyMV(outB, vp, inB)
       if (outA[3] <= 0.1f || outB[3] <= 0.1f) continue
       out[oi++] = ((outA[0] / outA[3]) * 0.5f + 0.5f) * widthPx
       out[oi++] = (0.5f - (outA[1] / outA[3]) * 0.5f) * heightPx
@@ -303,16 +464,16 @@ internal object Pev3dEngine {
     val outB = FloatArray(4)
 
     for (g in wireGroups) {
-      Matrix.setIdentityM(modelMat, 0)
+      Mat4Math.setIdentity(modelMat)
       if (explodePct > 0.005f && g.partKey != "floor") {
-        Matrix.translateM(modelMat, 0, g.explodeDir.x * explodePct, g.explodeDir.y * explodePct, g.explodeDir.z * explodePct)
+        Mat4Math.translate(modelMat, g.explodeDir.x * explodePct, g.explodeDir.y * explodePct, g.explodeDir.z * explodePct)
       }
       g.axleCenter?.let { c ->
-        Matrix.translateM(modelMat, 0, c.x, c.y, c.z)
-        Matrix.rotateM(modelMat, 0, -wheelSpinDeg, 0f, 0f, 1f)
-        Matrix.translateM(modelMat, 0, -c.x, -c.y, -c.z)
+        Mat4Math.translate(modelMat, c.x, c.y, c.z)
+        Mat4Math.rotateAxis(modelMat, -wheelSpinDeg, 0f, 0f, 1f)
+        Mat4Math.translate(modelMat, -c.x, -c.y, -c.z)
       }
-      Matrix.multiplyMM(mvp, 0, vp, 0, modelMat, 0)
+      Mat4Math.multiplyMM(mvp, vp, modelMat)
 
       val target = if (selectedPartKey != null && g.partKey == selectedPartKey && g.partKey != "floor") selectedOut else normalOut
       val lines = g.lines
@@ -321,8 +482,8 @@ internal object Pev3dEngine {
         val bi = i * 6
         inA[0] = lines[bi]; inA[1] = lines[bi + 1]; inA[2] = lines[bi + 2]; inA[3] = 1f
         inB[0] = lines[bi + 3]; inB[1] = lines[bi + 4]; inB[2] = lines[bi + 5]; inB[3] = 1f
-        Matrix.multiplyMV(outA, 0, mvp, 0, inA, 0)
-        Matrix.multiplyMV(outB, 0, mvp, 0, inB, 0)
+        Mat4Math.multiplyMV(outA, mvp, inA)
+        Mat4Math.multiplyMV(outB, mvp, inB)
         if (outA[3] <= 0.1f || outB[3] <= 0.1f) continue
         target += ((outA[0] / outA[3]) * 0.5f + 0.5f) * widthPx
         target += (0.5f - (outA[1] / outA[3]) * 0.5f) * heightPx

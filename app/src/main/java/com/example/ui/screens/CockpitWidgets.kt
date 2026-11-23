@@ -736,8 +736,8 @@ fun VehicleSetupDialog(
 ) {
   var name by remember { mutableStateOf(initial?.name ?: "") }
   var category by remember { mutableStateOf(initial?.category ?: "SCOOTER") }
-  var whStr by remember { mutableStateOf((initial?.batteryWh ?: 1500L).toString()) }
-  var voltStr by remember { mutableStateOf((initial?.voltage ?: 60.0).toInt().toString()) }
+  var whStr by remember { mutableStateOf((initial?.batteryWh ?: 960L).toString()) }
+  var voltStr by remember { mutableStateOf((initial?.voltage ?: 48.0).toInt().toString()) }
   var psiStr by remember { mutableStateOf((initial?.targetPsi ?: 36.0).toInt().toString()) }
   var tireSize by remember { mutableStateOf(initial?.tireSize ?: "11x3.5") }
   var intervalStr by remember { mutableStateOf((initial?.serviceIntervalKm ?: 500.0).toInt().toString()) }
@@ -759,8 +759,8 @@ fun VehicleSetupDialog(
           (initial ?: PevVehicle()).copy(
             name = name.ifBlank { "Custom PEV" },
             category = category,
-            batteryWh = whStr.toLongOrNull() ?: 1500L,
-            voltage = voltStr.toDoubleOrNull() ?: 60.0,
+            batteryWh = whStr.toLongOrNull() ?: 960L,
+            voltage = voltStr.toDoubleOrNull() ?: 48.0,
             targetPsi = psiStr.toDoubleOrNull() ?: 36.0,
             serviceIntervalKm = intervalStr.toDoubleOrNull() ?: 500.0,
             tireSize = tireSize,

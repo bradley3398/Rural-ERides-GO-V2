@@ -59,17 +59,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -193,9 +189,11 @@ fun GravelVoltGameScreen(
   var hitstopTimer by remember { mutableFloatStateOf(0f) }
   var hitFlash by remember { mutableFloatStateOf(0f) }
   var roadScroll by remember { mutableFloatStateOf(0f) }
+  var wheelSpinDeg by remember { mutableFloatStateOf(0f) }
   var worldClock by remember { mutableFloatStateOf(0f) }
   var spawnTimer by remember { mutableFloatStateOf(0.8f) }
   var nextEntityId by remember { mutableIntStateOf(1) }
+  var gameAssetState by remember { mutableStateOf<Pev3dAssetLoadState>(Pev3dAssetLoadState.Loading) }
 
   val entities = remember { mutableStateListOf<TrackEntity>() }
   val intersections = remember { mutableStateListOf<RoadIntersection>() }
@@ -351,6 +349,7 @@ fun GravelVoltGameScreen(
 
         if (phase == VoltGamePhase.TITLE) {
           roadScroll = (roadScroll + dt * 0.55f) % 1f
+          wheelSpinDeg = (wheelSpinDeg + dt * 360f) % 360f
           return@withFrameNanos
         }
         if (phase != VoltGamePhase.PLAYING) return@withFrameNanos
@@ -363,6 +362,7 @@ fun GravelVoltGameScreen(
         val difficultyRamp = (1f + distanceMiles * 0.14f).coerceAtMost(2.35f)
         val speedFactor = difficultyRamp * (if (boostTimer > 0f) 1.55f else 1f)
         roadScroll = (roadScroll + dt * 1.18f * speedFactor) % 1f
+        wheelSpinDeg = (wheelSpinDeg + dt * 620f * speedFactor) % 360f
         distanceMiles += dt * 0.042f * speedFactor
         score += (dt * 42f * speedFactor * (1f + comboCount * 0.08f)).toInt()
 
@@ -545,266 +545,39 @@ fun GravelVoltGameScreen(
         }
         .testTag("gravel_volt_game_viewport"),
   ) {
-    // 60FPS UNREAL-STYLED VOLUMETRIC TWILIGHT & WET SPECULAR BACKROAD CANVAS
+    // NATIVE ANDROID VULKAN 3D PBR GAME ENGINE (GOOGLE FILAMENT 1.81.0 • ACES • 4x MSAA • SSAO • PCF SHADOWS)
+    val renderEntities = entities.map { e ->
+      val code = when (e.kind) {
+        TrackEntityKind.HAY_BALE -> 0
+        TrackEntityKind.CREEK_WASHOUT -> 1
+        TrackEntityKind.TRACTOR -> 2
+        TrackEntityKind.VOLT_CELL -> 3
+        TrackEntityKind.SOLAR_ORB -> 4
+      }
+      GameEntityRenderItem(e.lane, e.z, code)
+    }
+    GravelVoltVulkanViewport(
+      vehicleName = vehicleName,
+      lanePos = lanePos,
+      jumpHeight = jumpHeight,
+      turnBankDeg = turnBankDeg,
+      roadScroll = roadScroll,
+      boostActive = boostTimer > 0f,
+      shakeAmount = (shakeTimer / 0.35f).coerceIn(0f, 1f),
+      turnSignalDir = turnSignalDir,
+      turnSignalActive = turnSignalTimer > 0f && sin(worldClock * 16f) > 0f,
+      wheelSpinDeg = wheelSpinDeg,
+      intersectionZs = FloatArray(intersections.size) { intersections[it].z },
+      entities = renderEntities,
+      onAssetStateChanged = { gameAssetState = it },
+      modifier = Modifier.fillMaxSize(),
+    )
+
+    // Transparent HUD FX layer (particles, 72V Boost speedlines, and collision impact flash)
     Canvas(modifier = Modifier.fillMaxSize()) {
-      val shakeX = if (shakeTimer > 0f) (Random.nextFloat() - 0.5f) * 18f * (shakeTimer / 0.35f) else 0f
-      val shakeY = if (shakeTimer > 0f) (Random.nextFloat() - 0.5f) * 14f * (shakeTimer / 0.35f) else 0f
       val w = size.width
       val h = size.height
-      val horizonY = h * 0.38f + shakeY + turnBankDeg * 0.45f
-      val roadTopW = w * 0.13f
-      val roadBotW = w * 0.98f
-      val cx = w * 0.5f + shakeX - turnBankDeg * 4.5f
-
-      // 1) Volumetric Twilight Sky Shader
-      drawRect(
-        brush = Brush.verticalGradient(
-          listOf(Color(0xFF020617), Color(0xFF0F172A), Color(0xFF3B1D5A), Color(0xFFC2410C), Color(0xFFF59E0B)),
-          startY = 0f,
-          endY = horizonY,
-        ),
-        size = Size(w, horizonY),
-      )
-
-      // Atmospheric bloom sun + twilight star glints
-      drawCircle(
-        brush = Brush.radialGradient(
-          listOf(Color(0xFFFEF08A), Color(0xBBFB923C), Color(0x447C3AED), Color.Transparent),
-          center = Offset(cx, horizonY - 28f),
-          radius = w * 0.34f,
-        ),
-        center = Offset(cx, horizonY - 28f),
-        radius = w * 0.34f,
-      )
-      for (s in 0..16) {
-        val sx = ((s * 97 + compassIdx * 61) % 100) / 100f * w
-        val sy = ((s * 43) % 24) / 100f * h
-        val alpha = 0.25f + 0.35f * abs(sin(worldClock * 2.2f + s))
-        drawCircle(Color.White.copy(alpha = alpha), radius = 1.6f, center = Offset(sx, sy))
-      }
-
-      // Layered Appalachian Ridges + Silhouetted Pines (depth parallax)
-      val farRidge = Path().apply {
-        moveTo(0f, horizonY)
-        lineTo(w * 0.14f, horizonY - 62f)
-        lineTo(w * 0.31f, horizonY - 26f)
-        lineTo(w * 0.52f, horizonY - 78f)
-        lineTo(w * 0.74f, horizonY - 36f)
-        lineTo(w * 0.90f, horizonY - 66f)
-        lineTo(w, horizonY)
-        close()
-      }
-      drawPath(farRidge, color = Color(0xFF1E1B3A).copy(alpha = 0.85f))
-
-      val nearRidge = Path().apply {
-        moveTo(0f, horizonY)
-        lineTo(w * 0.18f, horizonY - 34f)
-        lineTo(w * 0.38f, horizonY - 12f)
-        lineTo(w * 0.62f, horizonY - 40f)
-        lineTo(w * 0.84f, horizonY - 16f)
-        lineTo(w, horizonY - 24f)
-        lineTo(w, horizonY)
-        close()
-      }
-      drawPath(nearRidge, color = Color(0xFF0A1416))
-
-      // Volumetric Horizon Mist Band
-      drawRect(
-        brush = Brush.verticalGradient(listOf(Color.Transparent, Color(0x55F97316), Color(0x220EA5E9), Color.Transparent)),
-        topLeft = Offset(0f, horizonY - 22f),
-        size = Size(w, 44f),
-      )
-
-      // 2) Moody Wet Rural Meadow Ground
-      drawRect(
-        brush = Brush.verticalGradient(listOf(Color(0xFF0D1D1A), Color(0xFF060E0D)), startY = horizonY, endY = h),
-        topLeft = Offset(0f, horizonY),
-        size = Size(w, h - horizonY),
-      )
-
-      // 3) Wet Specular Asphalt/Gravel Roadway
-      val roadPath = Path().apply {
-        moveTo(cx - roadTopW * 0.5f, horizonY)
-        lineTo(cx + roadTopW * 0.5f, horizonY)
-        lineTo(cx + roadBotW * 0.5f, h)
-        lineTo(cx - roadBotW * 0.5f, h)
-        close()
-      }
-      drawPath(
-        roadPath,
-        brush = Brush.verticalGradient(listOf(Color(0xFF28242C), Color(0xFF171A21), Color(0xFF0D1117)), startY = horizonY, endY = h),
-      )
-
-      // Sunset Sky Reflection Pool down center of wet road (UE5 SSR effect)
-      val reflectionPath = Path().apply {
-        moveTo(cx - roadTopW * 0.18f, horizonY)
-        lineTo(cx + roadTopW * 0.18f, horizonY)
-        lineTo(cx + roadBotW * 0.16f, h)
-        lineTo(cx - roadBotW * 0.16f, h)
-        close()
-      }
-      drawPath(
-        reflectionPath,
-        brush = Brush.verticalGradient(listOf(Color(0x3AF59E0B), Color(0x1838BDF8), Color(0x08000000)), startY = horizonY, endY = h),
-      )
-
-      // Scrolling Open-Street Intersections (Crossroads!)
-      intersections.forEach { inter ->
-        val p = (inter.z * inter.z).coerceIn(0f, 1.2f)
-        val iy = horizonY + (h - horizonY) * p
-        val crossH = 12f + 78f * p
-        drawRect(
-          brush = Brush.horizontalGradient(listOf(Color(0xFF141820), Color(0xFF272B36), Color(0xFF141820))),
-          topLeft = Offset(0f, iy - crossH * 0.5f),
-          size = Size(w, crossH),
-        )
-        drawLine(Color(0x8838BDF8), Offset(0f, iy - crossH * 0.5f), Offset(w, iy - crossH * 0.5f), strokeWidth = 2f)
-        drawLine(Color(0x88FACC15), Offset(0f, iy), Offset(w, iy), strokeWidth = 1.5f + 2f * p)
-      }
-
-      // Streetlamps + Volumetric Light Cones + Dashed Lane Lines
-      for (i in 0..10) {
-        val tRaw = ((i / 11f) + roadScroll) % 1f
-        val p = tRaw * tRaw
-        val y = horizonY + (h - horizonY) * p
-        val halfW = (roadTopW + (roadBotW - roadTopW) * p) * 0.5f
-        val postH = 14f + 74f * p
-        val lx = cx - halfW - 10f * p
-        val rx = cx + halfW + 10f * p
-        drawLine(Color(0xFF475569), Offset(lx, y), Offset(lx, y - postH), strokeWidth = 2f + 4f * p)
-        drawLine(Color(0xFF475569), Offset(rx, y), Offset(rx, y - postH), strokeWidth = 2f + 4f * p)
-
-        // Glowing warm/cyan lamp heads & wet ground light pools every 2nd post
-        if (i % 2 == 0) {
-          drawCircle(Color(0xCCFFE08A), radius = 3f + 5f * p, center = Offset(lx, y - postH))
-          drawCircle(Color(0xCC38BDF8), radius = 3f + 5f * p, center = Offset(rx, y - postH))
-          drawOval(
-            brush = Brush.radialGradient(listOf(Color(0x33FDE047), Color.Transparent), center = Offset(lx + 14f * p, y), radius = 36f * p + 4f),
-            topLeft = Offset(lx - 18f * p, y - 8f * p),
-            size = Size(64f * p, 20f * p),
-          )
-        }
-
-        // Illuminated dashed highway lane markers
-        val laneOffset = halfW * 0.34f
-        drawLine(Color(0x88FBBF24), Offset(cx - laneOffset, y), Offset(cx - laneOffset * 1.06f, y + 14f * p), strokeWidth = 1.5f + 2.8f * p)
-        drawLine(Color(0x88FBBF24), Offset(cx + laneOffset, y), Offset(cx + laneOffset * 1.06f, y + 14f * p), strokeWidth = 1.5f + 2.8f * p)
-      }
-
-      // Roadside Neon Guard Rails
-      drawLine(Color(0x9922D3EE), Offset(cx - roadTopW * 0.5f, horizonY), Offset(cx - roadBotW * 0.5f, h), strokeWidth = 3f)
-      drawLine(Color(0x9939FF14), Offset(cx + roadTopW * 0.5f, horizonY), Offset(cx + roadBotW * 0.5f, h), strokeWidth = 3f)
-
-      // 4) Draw Oncoming Entities with Dynamic Ground Light/Shadow Reflections
-      entities.sortedBy { it.z }.forEach { e ->
-        val p = (e.z * e.z).coerceIn(0f, 1.3f)
-        val y = horizonY + (h - horizonY) * p
-        val halfW = (roadTopW + (roadBotW - roadTopW) * p) * 0.5f
-        val ex = cx + e.lane * halfW * 0.64f
-        val sz = (14f + 70f * p)
-
-        when (e.kind) {
-          TrackEntityKind.VOLT_CELL -> {
-            val bob = sin(worldClock * 7f + e.id) * 6f * p
-            drawOval(Color(0x4439FF14), topLeft = Offset(ex - sz * 0.6f, y - sz * 0.14f), size = Size(sz * 1.2f, sz * 0.28f))
-            drawCircle(
-              brush = Brush.radialGradient(listOf(Color(0x7739FF14), Color.Transparent), center = Offset(ex, y - sz * 0.5f + bob), radius = sz * 0.9f),
-              center = Offset(ex, y - sz * 0.5f + bob),
-              radius = sz * 0.9f,
-            )
-            drawRoundRect(
-              color = Color(0xFF16A34A),
-              topLeft = Offset(ex - sz * 0.28f, y - sz * 0.92f + bob),
-              size = Size(sz * 0.56f, sz * 0.85f),
-              cornerRadius = CornerRadius(6f, 6f),
-            )
-            drawRect(Color(0xFF39FF14), topLeft = Offset(ex - sz * 0.15f, y - sz * 1.02f + bob), size = Size(sz * 0.30f, sz * 0.12f))
-          }
-          TrackEntityKind.SOLAR_ORB -> {
-            val bob = sin(worldClock * 6f + e.id) * 7f * p
-            drawCircle(
-              brush = Brush.radialGradient(listOf(Color(0x99FDE047), Color.Transparent), center = Offset(ex, y - sz * 0.5f + bob), radius = sz * 0.85f),
-              center = Offset(ex, y - sz * 0.5f + bob),
-              radius = sz * 0.85f,
-            )
-            drawCircle(Color(0xFFFEF08A), radius = sz * 0.35f, center = Offset(ex, y - sz * 0.5f + bob))
-            drawCircle(Color(0x9938BDF8), radius = sz * 0.52f, center = Offset(ex, y - sz * 0.5f + bob), style = Stroke(2.2f))
-          }
-          TrackEntityKind.HAY_BALE -> {
-            drawOval(Color(0x77000000), topLeft = Offset(ex - sz * 0.60f, y - sz * 0.14f), size = Size(sz * 1.20f, sz * 0.28f))
-            drawRoundRect(
-              brush = Brush.verticalGradient(listOf(Color(0xFFF59E0B), Color(0xFF92400E))),
-              topLeft = Offset(ex - sz * 0.52f, y - sz * 0.72f),
-              size = Size(sz * 1.04f, sz * 0.72f),
-              cornerRadius = CornerRadius(14f, 14f),
-            )
-            drawRoundRect(
-              color = Color(0xFFFDE68A),
-              topLeft = Offset(ex - sz * 0.52f, y - sz * 0.72f),
-              size = Size(sz * 1.04f, sz * 0.72f),
-              cornerRadius = CornerRadius(14f, 14f),
-              style = Stroke(2.2f),
-            )
-          }
-          TrackEntityKind.CREEK_WASHOUT -> {
-            drawOval(Color(0xFF0369A1), topLeft = Offset(ex - sz * 0.72f, y - sz * 0.24f), size = Size(sz * 1.44f, sz * 0.40f))
-            drawOval(Color(0xBB38BDF8), topLeft = Offset(ex - sz * 0.48f, y - sz * 0.18f), size = Size(sz * 0.96f, sz * 0.18f))
-          }
-          TrackEntityKind.TRACTOR -> {
-            drawOval(Color(0x88000000), topLeft = Offset(ex - sz * 0.72f, y - sz * 0.15f), size = Size(sz * 1.44f, sz * 0.28f))
-            drawRoundRect(Color(0xFF15803D), topLeft = Offset(ex - sz * 0.55f, y - sz * 1.05f), size = Size(sz * 1.10f, sz * 0.92f), cornerRadius = CornerRadius(10f, 10f))
-            drawRect(Color(0xFFFACC15), topLeft = Offset(ex - sz * 0.44f, y - sz * 0.85f), size = Size(sz * 0.88f, sz * 0.24f))
-            // Oncoming tractor twin warm headlights!
-            drawCircle(Color(0xFFFEF08A), radius = sz * 0.12f, center = Offset(ex - sz * 0.32f, y - sz * 0.52f))
-            drawCircle(Color(0xFFFEF08A), radius = sz * 0.12f, center = Offset(ex + sz * 0.32f, y - sz * 0.52f))
-            drawCircle(Color(0xFF111827), radius = sz * 0.24f, center = Offset(ex - sz * 0.54f, y - sz * 0.24f))
-            drawCircle(Color(0xFF111827), radius = sz * 0.24f, center = Offset(ex + sz * 0.54f, y - sz * 0.24f))
-          }
-        }
-      }
-
-      // 5) Draw Player PEV with Dynamic Volumetric Headlight Beam Cone, Turn Signals & Taillight Trail
-      val playerYBase = h * 0.83f + shakeY
-      val playerX = cx + lanePos * (roadBotW * 0.28f)
-      val jumpPx = jumpHeight * h * 0.24f
-      val stretch = if (jumpHeight > 0.05f) 1.14f else 1.0f
-
-      // Forward volumetric twin headlight beam cone sweeping the road ahead
-      val beamPath = Path().apply {
-        moveTo(playerX - 18f, playerYBase - 40f - jumpPx)
-        lineTo(playerX + 18f, playerYBase - 40f - jumpPx)
-        lineTo(playerX + 135f, horizonY + 32f)
-        lineTo(playerX - 135f, horizonY + 32f)
-        close()
-      }
-      drawPath(
-        beamPath,
-        brush = Brush.verticalGradient(
-          listOf(Color(0x0538BDF8), Color(0x36FFFFFF), Color(0x55E0F2FE)),
-          startY = horizonY + 32f,
-          endY = playerYBase - 36f - jumpPx,
-        ),
-      )
-
-      // Ground contact shadow + neon underglow
-      drawOval(
-        color = Color.Black.copy(alpha = (0.68f - jumpHeight * 0.38f).coerceIn(0.15f, 0.68f)),
-        topLeft = Offset(playerX - 40f, playerYBase - 9f),
-        size = Size(80f, 20f),
-      )
-      drawOval(
-        color = if (boostTimer > 0f) Color(0x7722D3EE) else Color(0x4439FF14),
-        topLeft = Offset(playerX - 32f, playerYBase - 6f),
-        size = Size(64f, 14f),
-      )
-
       if (boostTimer > 0f) {
-        drawCircle(
-          brush = Brush.radialGradient(listOf(Color(0xAA22D3EE), Color.Transparent), center = Offset(playerX, playerYBase - 44f - jumpPx), radius = 98f),
-          center = Offset(playerX, playerYBase - 44f - jumpPx),
-          radius = 98f,
-        )
-        // Speedwarp radial lines during Boost
         for (sl in 0..7) {
           val ang = (sl / 8f) * 2f * PI.toFloat() + worldClock * 4f
           val r1 = w * 0.25f
@@ -817,43 +590,6 @@ fun GravelVoltGameScreen(
           )
         }
       }
-
-      // Taillight ribbon trails behind player
-      drawLine(Color(0x88EF4444), Offset(playerX - 12f, playerYBase - 36f - jumpPx), Offset(playerX - 18f, h), strokeWidth = 5f)
-      drawLine(Color(0x88EF4444), Offset(playerX + 12f, playerYBase - 36f - jumpPx), Offset(playerX + 18f, h), strokeWidth = 5f)
-
-      // Rear knobby tire + deck + glowing tailbar + blinking amber turn signals
-      drawRoundRect(
-        color = Color(0xFF0F172A),
-        topLeft = Offset(playerX - 16f, playerYBase - 38f * stretch - jumpPx),
-        size = Size(32f, 40f * stretch),
-        cornerRadius = CornerRadius(10f, 10f),
-      )
-      drawRoundRect(
-        color = if (boostTimer > 0f) Color(0xFF22D3EE) else Color(0xFF39FF14),
-        topLeft = Offset(playerX - 28f, playerYBase - 48f * stretch - jumpPx),
-        size = Size(56f, 14f),
-        cornerRadius = CornerRadius(6f, 6f),
-      )
-      drawRoundRect(
-        color = Color(0xFF1E293B),
-        topLeft = Offset(playerX - 18f, playerYBase - 98f * stretch - jumpPx),
-        size = Size(36f, 52f * stretch),
-        cornerRadius = CornerRadius(14f, 14f),
-      )
-      drawCircle(Color(0xFF38BDF8), radius = 16f, center = Offset(playerX, playerYBase - 112f * stretch - jumpPx))
-      drawLine(Color(0xFFFF1E1E), Offset(playerX - 15f, playerYBase - 41f * stretch - jumpPx), Offset(playerX + 15f, playerYBase - 41f * stretch - jumpPx), strokeWidth = 5.5f)
-
-      // Active Rear Turn Signal Blinkers on player PEV
-      val blinkerLit = turnSignalTimer > 0f && sin(worldClock * 16f) > 0f
-      if (blinkerLit && turnSignalDir < 0) {
-        drawCircle(Color(0xFFFFB020), radius = 7f, center = Offset(playerX - 24f, playerYBase - 41f * stretch - jumpPx))
-      }
-      if (blinkerLit && turnSignalDir > 0) {
-        drawCircle(Color(0xFFFFB020), radius = 7f, center = Offset(playerX + 24f, playerYBase - 41f * stretch - jumpPx))
-      }
-
-      // 6) Pooled particles
       particles.forEach { pt ->
         drawCircle(
           color = pt.color.copy(alpha = pt.life.coerceIn(0f, 1f)),
@@ -861,7 +597,6 @@ fun GravelVoltGameScreen(
           center = Offset(pt.x * w, pt.y * h),
         )
       }
-
       if (hitFlash > 0.01f) {
         drawRect(Color.Red.copy(alpha = hitFlash * 0.34f), size = size)
       }
@@ -892,17 +627,34 @@ fun GravelVoltGameScreen(
             shape = RoundedCornerShape(14.dp),
             color = Color(0xCC0B132B),
             border = BorderStroke(1.dp, Color(0xFF39FF14).copy(alpha = 0.55f)),
+            modifier = Modifier.weight(1f, fill = false).padding(horizontal = 6.dp),
           ) {
             Row(
               modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-              horizontalArrangement = Arrangement.spacedBy(10.dp),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
               verticalAlignment = Alignment.CenterVertically,
             ) {
-              Text("$score PTS", color = Color(0xFF39FF14), fontWeight = FontWeight.Black, fontSize = 12.sp, maxLines = 1, softWrap = false)
+              Text("$score PTS", color = Color(0xFF39FF14), fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1, softWrap = false)
               Text("${"%.2f".format(distanceMiles)} MI", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
               Text("${batteryPct.toInt()}%⚡", color = if (batteryPct < 25f) Color(0xFFEF4444) else Color(0xFF38BDF8), fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1, softWrap = false)
               Text("♥".repeat(lives.coerceAtLeast(0)), color = Color(0xFFF43F5E), fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
+          }
+        } else {
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = Color(0xCC0B132B),
+            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.65f)),
+          ) {
+            Text(
+              "VULKAN • FILAMENT PBR",
+              color = Color.White,
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Black,
+              maxLines = 1,
+              softWrap = false,
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            )
           }
         }
 
@@ -1119,11 +871,41 @@ fun GravelVoltGameScreen(
             fontWeight = FontWeight.Bold,
           )
           Text(
-            "Turn onto any rural street at intersections • Complete rotating Trail Missions • Fire 72V Boost with volumetric headlights!",
+            "Native Vulkan Filament 1.81.0 PBR • Turn onto any street • Complete rotating Trail Missions • Fire 72V Boost!",
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFFCBD5E1),
             textAlign = TextAlign.Center,
           )
+          (gameAssetState as? Pev3dAssetLoadState.MissingGlb)?.let { missing ->
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = Color(0xFF141E30),
+              border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.55f)),
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Column(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+              ) {
+                Text(
+                  "3D Player Rig: Drop .glb in assets/models/",
+                  color = Color(0xFF93C5FD),
+                  fontSize = 9.sp,
+                  fontWeight = FontWeight.Bold,
+                )
+                Text(
+                  missing.expectedAssetPath,
+                  color = Color(0xFF38BDF8),
+                  fontSize = 10.sp,
+                  fontFamily = FontFamily.Monospace,
+                  fontWeight = FontWeight.Bold,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+            }
+          }
           Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(Icons.Default.Flag, null, tint = Color(0xFFFACC15), modifier = Modifier.size(14.dp))
             Text("SELECT STARTING MISSION", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color(0xFFFACC15))

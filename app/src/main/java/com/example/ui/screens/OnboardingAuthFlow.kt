@@ -123,7 +123,7 @@ fun AuthLoginScreen(
   val ctx = LocalContext.current
   val loginPrefs = remember(ctx) { ctx.getSharedPreferences("rural_erides_login_prefs", Context.MODE_PRIVATE) }
 
-  var selectedProvider by remember { mutableIntStateOf(0) } // 0 = Supabase GoTrue, 1 = Firebase Google
+  var selectedProvider by remember(supabaseConfigured) { mutableIntStateOf(if (supabaseConfigured) 0 else 1) } // 0 = Supabase GoTrue, 1 = Firebase Google
   var authMode by remember { mutableIntStateOf(0) } // 0 = Sign In, 1 = Register
   var rememberEmail by remember { mutableStateOf(loginPrefs.getBoolean("remember_email", true)) }
   var email by remember { mutableStateOf(if (rememberEmail) loginPrefs.getString("saved_email", "").orEmpty() else "") }
@@ -395,7 +395,7 @@ fun AuthLoginScreen(
         if (selectedProvider == 0) {
           Text(
             if (supabaseConfigured) "Supabase GoTrue Connected • Email/Password + Live Board Sync"
-            else "Configure SUPABASE_URL & SUPABASE_ANON_KEY in Secrets to enable Supabase GoTrue.",
+            else "Use Google + Firebase Sign-In for cloud sync & live rider features.",
             style = MaterialTheme.typography.labelSmall,
             color = if (supabaseConfigured) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary,
           )

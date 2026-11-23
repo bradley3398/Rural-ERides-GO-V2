@@ -5,14 +5,15 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
-import android.opengl.GLES20
-import android.opengl.GLUtils
 import java.io.ByteArrayOutputStream
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.floor
+import kotlin.math.round
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -71,6 +72,27 @@ internal object Pev3dPbrTextures {
     return out.toByteArray()
   }
 
+  private fun hash2d(x: Int, y: Int): Float {
+    var n = x * 374761393 + y * 668265263
+    n = (n xor (n ushr 13)) * 1274126177
+    n = n xor (n ushr 16)
+    return (n and 0x7fffffff) / 2147483647f
+  }
+
+  private fun smoothNoise(x: Float, y: Float): Float {
+    val xi = floor(x).toInt()
+    val yi = floor(y).toInt()
+    val xf = x - xi
+    val yf = y - yi
+    val u = xf * xf * (3f - 2f * xf)
+    val v = yf * yf * (3f - 2f * yf)
+    val a = hash2d(xi, yi)
+    val b = hash2d(xi + 1, yi)
+    val c = hash2d(xi, yi + 1)
+    val d = hash2d(xi + 1, yi + 1)
+    return (a * (1f - u) + b * u) * (1f - v) + (c * (1f - u) + d * u) * v
+  }
+
   private fun heightFieldToNormalBitmap(heights: FloatArray, size: Int, strength: Float): Bitmap {
     val pixels = IntArray(size * size)
     for (y in 0 until size) {
@@ -104,7 +126,7 @@ internal object Pev3dPbrTextures {
     size: Int,
     radiusPx: Int = 3,
     strength: Float = 1.45f,
-    floorMin: Float = 0.38f,
+    floorMin: Float = 0.42f,
   ): Bitmap {
     val pixels = IntArray(size * size)
     for (y in 0 until size) {
@@ -128,7 +150,7 @@ internal object Pev3dPbrTextures {
   }
 
   private fun buildMrBitmap(size: Int, compute: (x: Int, y: Int) -> Pair<Float, Float>): Bitmap {
-    // glTF 2.0 MetallicRoughness map: G = roughness (0..1), B = metallic (0..1), R = occlusion/unused (255)
+    // glTF 2.0 MetallicRoughness map: G = roughness (0..1), B = metallic (0..1), R = 255
     val pixels = IntArray(size * size)
     for (y in 0 until size) {
       for (x in 0 until size) {
@@ -143,11 +165,15 @@ internal object Pev3dPbrTextures {
     }
   }
 
+  /**
+   * Fine 3K 2x2 diagonal twill carbon fiber (6px pitch at 512px) with realistic satin-gloss clearcoat
+   * and anisotropic strand sheen — zero blocky checkerboard artifacts.
+   */
   private fun buildCarbonPbrBundle(size: Int): PevPbrTextureBundle {
     val albedoBmp = Pev3dTextureBank.buildCarbonWeaveBitmap(size)
     val heights = FloatArray(size * size)
     val mrPixels = IntArray(size * size)
-    val cell = 16
+    val cell = 6
     for (y in 0 until size) {
       val ty = y / cell
       val fy = (y % cell) / cell.toFloat()
@@ -157,22 +183,25 @@ internal object Pev3dPbrTextures {
         val twill = (tx + ty) and 3
         val isWarp = twill < 2
         val h =
-          if (isWarp) sin(fy * PI).toFloat() * (0.75f + 0.25f * sin(fx * PI).toFloat())
-          else sin(fx * PI).toFloat() * (0.65f + 0.25f * sin(fy * PI).toFloat())
+          if (isWarp) sin(fy * PI).toFloat() * (0.76f + 0.24f * sin(fx * PI).toFloat())
+          else sin(fx * PI).toFloat() * (0.68f + 0.24f * sin(fy * PI).toFloat())
         heights[y * size + x] = h
-        val rough = if (isWarp) 0.14f + (1f - h) * 0.14f else 0.22f + (1f - h) * 0.16f
-        val metal = 0.18f
-        mrPixels[y * size + x] = Color.rgb(255, (rough * 255f).toInt().coerceIn(20, 255), (metal * 255f).toInt())
+        val rough = if (isWarp) 0.16f + (1f - h) * 0.12f else 0.24f + (1f - h) * 0.14f
+        val metal = 0.22f
+        mrPixels[y * size + x] = Color.rgb(255, (rough * 255f).toInt().coerceIn(24, 255), (metal * 255f).toInt())
       }
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.8f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 0.85f, floorMin = 0.55f)
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.0f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 2, strength = 0.72f, floorMin = 0.62f)
     val mrBmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
       setPixels(mrPixels, 0, size, 0, 0, size, size)
     }
     return PevPbrTextureBundle(bitmapToPng(albedoBmp), bitmapToPng(normalBmp), bitmapToPng(mrBmp), bitmapToPng(aoBmp))
   }
 
+  /**
+   * CNC-turned / brushed 6061-T6 aluminum & anodized titanium grain with realistic anisotropic highlights.
+   */
   private fun buildBrushedMetalPbrBundle(size: Int): PevPbrTextureBundle {
     val albedoBmp = Pev3dTextureBank.buildBrushedMetalBitmap(size)
     val heights = FloatArray(size * size)
@@ -183,96 +212,131 @@ internal object Pev3dPbrTextures {
       rowBias[y] = (seed / 2147483647f - 0.5f)
     }
     for (y in 0 until size) {
-      val seam = if (y % 128 < 3) -0.48f else 0f
+      val seam = if (y % 128 < 2) -0.35f else 0f
       for (x in 0 until size) {
-        heights[y * size + x] = rowBias[y] * 0.35f + 0.08f * sin(x * 0.14f) + seam
+        val micro = (hash2d(x, y) - 0.5f) * 0.06f
+        heights[y * size + x] = rowBias[y] * 0.28f + 0.05f * sin(x * 0.16f) + seam + micro
       }
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 2.5f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 2, strength = 1.15f, floorMin = 0.58f)
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 2.2f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 2, strength = 0.95f, floorMin = 0.68f)
     val mrBmp = buildMrBitmap(size) { x, y ->
-      val streak = abs(rowBias[y]) * 0.12f
-      val seam = if (y % 128 < 3) 0.25f else 0f
-      val metal = if (y % 128 < 3) 0.72f else 0.94f
-      val rough = (0.16f + streak + seam + 0.03f * sin(x * 0.08f)).coerceIn(0.11f, 0.55f)
+      val streak = abs(rowBias[y]) * 0.11f
+      val seam = if (y % 128 < 2) 0.22f else 0f
+      val metal = if (y % 128 < 2) 0.78f else 0.94f
+      val rough = (0.17f + streak + seam + 0.025f * sin(x * 0.09f)).coerceIn(0.12f, 0.48f)
       metal to rough
     }
     return PevPbrTextureBundle(bitmapToPng(albedoBmp), bitmapToPng(normalBmp), bitmapToPng(mrBmp), bitmapToPng(aoBmp))
   }
 
+  /**
+   * High-density vulcanized all-terrain / street-sport motorcycle tire tread:
+   * directional V-chevron tread blocks, circumferential water channels, fine sipes,
+   * and micro-rubber pebble grain in normal & roughness maps.
+   */
   private fun buildTireTreadPbrBundle(size: Int): PevPbrTextureBundle {
     val albedoBmp = Pev3dTextureBank.buildTireTreadBitmap(size)
     val heights = FloatArray(size * size)
     val mrPixels = IntArray(size * size)
-    val rows = 8
-    val cols = 6
-    val cellH = size / rows.toFloat()
-    val cellW = size / cols.toFloat()
+    val s = size.toFloat()
     for (y in 0 until size) {
-      val r = (y / cellH).toInt().coerceIn(0, rows - 1)
-      val ly = (y - r * cellH) / cellH
-      val stagger = if (r % 2 == 0) 0f else 0.5f
+      val v = y / s // across tire profile (0..1)
+      // Tire crown lives around center bands; sidewalls near 0 & 1 are smoother rubber
+      val distFromCenter = abs(v - 0.5f) * 2f // 0 at crown, 1 at bead
+      val inTreadZone = distFromCenter < 0.76f
       for (x in 0 until size) {
-        val fx = (x / cellW + stagger)
-        val lx = fx - kotlin.math.floor(fx)
-        val inKnob = lx in 0.14f..0.86f && ly in 0.14f..0.86f
-        val sipe = abs(ly - 0.5f) < 0.045f && lx in 0.2f..0.8f
-        val edgeDist = minOf(lx - 0.14f, 0.86f - lx, ly - 0.14f, 0.86f - ly)
-        val h =
-          when {
-            sipe -> 0.15f
-            inKnob -> (edgeDist * 8f).coerceIn(0.2f, 1.0f)
-            else -> 0.0f
-          }
-        val micro = (((x * 29 + y * 53) and 15) / 15f) * 0.06f
-        heights[y * size + x] = h + micro
-        val rough = if (inKnob && !sipe) 0.70f else 0.92f
-        mrPixels[y * size + x] = Color.rgb(255, (rough * 255f).toInt(), 8)
+        val u = x / s // around tire circumference
+        val microRubber = (hash2d(x, y) - 0.5f) * 0.09f + (smoothNoise(x * 0.18f, y * 0.18f) - 0.5f) * 0.08f
+        val h: Float
+        val rough: Float
+        if (inTreadZone) {
+          // Center circumferential drainage channel + 2 shoulder channels
+          val centerGroove = abs(v - 0.5f) < 0.018f
+          val midGroove = abs(abs(v - 0.5f) - 0.16f) < 0.014f
+          // Angled V-chevron tread lugs repeating 18 times around circumference
+          val chevronPhase = (u * 18f + abs(v - 0.5f) * 5.2f)
+          val chevronFrac = chevronPhase - floor(chevronPhase)
+          val lateralGroove = chevronFrac < 0.18f
+          val microSipe = abs(chevronFrac - 0.58f) < 0.028f && distFromCenter in 0.08f..0.62f
+          h =
+            when {
+              centerGroove || midGroove -> 0.05f + microRubber * 0.4f
+              lateralGroove -> 0.12f + microRubber * 0.5f
+              microSipe -> 0.42f + microRubber * 0.5f
+              else -> 0.88f + microRubber
+            }
+          rough = if (centerGroove || midGroove || lateralGroove) 0.92f else 0.78f + (microRubber * 0.35f)
+        } else {
+          // Smooth vulcanized rubber sidewall with subtle concentric rib ring
+          val rib = if (abs(distFromCenter - 0.84f) < 0.025f) 0.22f else 0.0f
+          h = 0.32f + rib + microRubber * 0.6f
+          rough = 0.82f + microRubber * 0.25f
+        }
+        heights[y * size + x] = h
+        mrPixels[y * size + x] = Color.rgb(255, (rough.coerceIn(0.62f, 0.96f) * 255f).toInt(), 6)
       }
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 5.2f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 5, strength = 1.65f, floorMin = 0.34f)
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 4.4f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 4, strength = 1.55f, floorMin = 0.36f)
     val mrBmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
       setPixels(mrPixels, 0, size, 0, 0, size, size)
     }
     return PevPbrTextureBundle(bitmapToPng(albedoBmp), bitmapToPng(normalBmp), bitmapToPng(mrBmp), bitmapToPng(aoBmp))
   }
 
+  /**
+   * Realistic OEM anodized dark-graphite extruded aluminum lithium battery enclosure
+   * with machined cooling ribs, recessed fastener bolts, and brushed metal spec plate.
+   */
   private fun buildBatteryPackPbrBundle(size: Int): PevPbrTextureBundle {
     val albedoBmp = Pev3dTextureBank.buildBatteryPackBitmap(size)
     val heights = FloatArray(size * size)
     val mrPixels = IntArray(size * size)
-    val step = size / 10f
+    val s = size.toFloat()
     for (y in 0 until size) {
-      val row = (y / (step * 0.86f)).toInt()
-      val cy = (row + 0.5f) * (step * 0.86f)
-      val offset = if (row % 2 == 0) 0f else step * 0.5f
+      val yf = y / s
       for (x in 0 until size) {
-        val col = ((x - offset) / step).toInt()
-        val cx = col * step + step * 0.5f + offset
-        val d = sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)) / (step * 0.42f)
-        val bus = abs(y - size * 0.25f) < size * 0.025f || abs(y - size * 0.75f) < size * 0.025f
+        val xf = x / s
+        // Extruded horizontal structural ribs across aluminum casing
+        val ribWave = sin(yf * PI * 24.0).toFloat()
+        val isPlate = xf in 0.14f..0.86f && yf in 0.34f..0.66f
+        val isSeam = abs(xf - 0.06f) < 0.008f || abs(xf - 0.94f) < 0.008f || abs(yf - 0.08f) < 0.008f || abs(yf - 0.92f) < 0.008f
+        val isCopperBar = yf in 0.14f..0.185f && xf in 0.16f..0.84f
+        val grain = (hash2d(x, y) - 0.5f) * 0.06f
         val h =
           when {
-            bus -> 0.85f
-            d < 0.78f -> 0.55f
-            d < 0.98f -> 0.25f
-            else -> 0.05f
+            isSeam -> -0.38f
+            isCopperBar -> 0.52f + grain * 0.4f
+            isPlate -> 0.30f + grain * 0.5f
+            else -> 0.22f + ribWave * 0.18f + grain
           }
         heights[y * size + x] = h
-        val metallic = if (bus) 0.94f else if (d < 0.95f) 0.52f else 0.20f
-        val rough = if (bus) 0.16f else if (d < 0.95f) 0.32f else 0.65f
-        mrPixels[y * size + x] = Color.rgb(255, (rough * 255f).toInt(), (metallic * 255f).toInt())
+        val metal = when {
+          isCopperBar -> 0.92f
+          isPlate -> 0.86f
+          else -> 0.72f
+        }
+        val rough = when {
+          isCopperBar -> 0.22f
+          isPlate -> 0.26f
+          isSeam -> 0.65f
+          else -> 0.38f + abs(ribWave) * 0.08f
+        }
+        mrPixels[y * size + x] = Color.rgb(255, (rough * 255f).toInt(), (metal * 255f).toInt())
       }
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 4.0f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 4, strength = 1.40f, floorMin = 0.42f)
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.0f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 1.25f, floorMin = 0.46f)
     val mrBmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
       setPixels(mrPixels, 0, size, 0, 0, size, size)
     }
     return PevPbrTextureBundle(bitmapToPng(albedoBmp), bitmapToPng(normalBmp), bitmapToPng(mrBmp), bitmapToPng(aoBmp))
   }
 
+  /**
+   * Floating slotted & cross-drilled stainless brake rotor with dark anodized inner carrier and bobbins.
+   */
   private fun buildBrakeRotorPbrBundle(size: Int): PevPbrTextureBundle {
     val albedoBmp = Pev3dTextureBank.buildBrakeRotorBitmap(size)
     val heights = FloatArray(size * size)
@@ -284,72 +348,83 @@ internal object Pev3dPbrTextures {
         val dx = x - cx
         val dy = y - cy
         val r = sqrt(dx * dx + dy * dy) / (size * 0.5f)
-        val groove = 0.08f * sin(r * 160f)
+        val groove = 0.06f * sin(r * 190f)
         val ang = kotlin.math.atan2(dy, dx)
         var hole = false
         for (band in 0..2) {
-          val rad = 0.52f + band * 0.14f
-          val phase = ((ang + band * 0.14f) / (2.0 * PI) * 24.0)
-          val nearest = kotlin.math.round(phase) * (2.0 * PI / 24.0) - band * 0.14f
+          val rad = 0.54f + band * 0.13f
+          val phase = ((ang + band * 0.13f) / (2.0 * PI) * 24.0)
+          val nearest = round(phase) * (2.0 * PI / 24.0) - band * 0.13f
           val hx = cx + (rad * size * 0.5f) * cos(nearest).toFloat()
           val hy = cy + (rad * size * 0.5f) * sin(nearest).toFloat()
-          if (sqrt((x - hx) * (x - hx) + (y - hy) * (y - hy)) < size * 0.015f) {
+          if (sqrt((x - hx) * (x - hx) + (y - hy) * (y - hy)) < size * 0.014f) {
             hole = true
             break
           }
         }
-        val carrierBand = r in 0.22f..0.44f
-        val bobbinAngle = kotlin.math.round(ang / (2.0 * PI) * 8.0) * (2.0 * PI / 8.0)
-        val bx = cx + (0.45f * size * 0.5f) * cos(bobbinAngle).toFloat()
-        val by = cy + (0.45f * size * 0.5f) * sin(bobbinAngle).toFloat()
-        val isBobbin = sqrt((x - bx) * (x - bx) + (y - by) * (y - by)) < size * 0.028f
+        val carrierBand = r in 0.20f..0.46f
+        val bobbinAngle = round(ang / (2.0 * PI) * 8.0) * (2.0 * PI / 8.0)
+        val bx = cx + (0.47f * size * 0.5f) * cos(bobbinAngle).toFloat()
+        val by = cy + (0.47f * size * 0.5f) * sin(bobbinAngle).toFloat()
+        val isBobbin = sqrt((x - bx) * (x - bx) + (y - by) * (y - by)) < size * 0.026f
         heights[y * size + x] = when {
           hole -> -0.82f
-          isBobbin -> 0.42f
-          carrierBand -> -0.18f
+          isBobbin -> 0.40f
+          carrierBand -> -0.20f
           else -> groove
         }
-        val metal = if (hole) 0.15f else if (isBobbin) 0.96f else 0.94f
-        val rough = if (hole) 0.85f else if (carrierBand) 0.24f else (0.14f + abs(groove))
+        val metal = if (hole) 0.12f else if (isBobbin) 0.95f else if (carrierBand) 0.80f else 0.95f
+        val rough = if (hole) 0.88f else if (carrierBand) 0.30f else (0.15f + abs(groove))
         mrPixels[y * size + x] = Color.rgb(255, (rough * 255f).toInt(), (metal * 255f).toInt())
       }
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.4f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 1.50f, floorMin = 0.32f)
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.2f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 1.40f, floorMin = 0.36f)
     val mrBmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
       setPixels(mrPixels, 0, size, 0, 0, size, size)
     }
     return PevPbrTextureBundle(bitmapToPng(albedoBmp), bitmapToPng(normalBmp), bitmapToPng(mrBmp), bitmapToPng(aoBmp))
   }
 
+  /**
+   * Motorsport ribbed gripper-seat vinyl / perforated Alcantara with fine pebble leather grain.
+   */
   private fun buildQuiltedLeatherPbrBundle(size: Int): PevPbrTextureBundle {
     val albedoPixels = IntArray(size * size)
     val heights = FloatArray(size * size)
     val mrPixels = IntArray(size * size)
-    val period = 36f
+    val ribPeriod = size / 14f
     for (y in 0 until size) {
+      val ribPhase = (y / ribPeriod)
+      val ribFrac = ribPhase - floor(ribPhase)
+      val ribBump = sin(ribFrac * PI).toFloat()
+      val stitchLine = abs(ribFrac - 0.05f) < 0.028f
       for (x in 0 until size) {
-        val u = (x + y) / period
-        val v = (x - y + size * 2) / period
-        val du = abs(u - kotlin.math.round(u))
-        val dv = abs(v - kotlin.math.round(v))
-        val stitch = minOf(du, dv)
-        val seam = (stitch < 0.075f)
-        val puff = sqrt((du * dv).coerceAtLeast(0f)) * 0.68f
-        val grain = (((x * 19 + y * 41) and 7) - 3) * 0.012f
-        val lum = if (seam) 0.09f else (0.15f + puff * 0.08f + grain)
-        val c = (lum.coerceIn(0.06f, 0.32f) * 255f).toInt()
-        albedoPixels[y * size + x] = Color.rgb(c, c, (c * 1.06f).toInt().coerceAtMost(255))
-        heights[y * size + x] = if (seam) 0.04f else 0.35f + puff + grain * 2f
-        val rough = if (seam) 0.88f else 0.64f
-        mrPixels[y * size + x] = Color.rgb(255, (rough * 255f).toInt(), 5)
+        val pebble = smoothNoise(x * 0.35f, y * 0.35f) * 0.14f + (hash2d(x, y) - 0.5f) * 0.04f
+        val perfHole = ((x % 14) in 5..7) && ((y % 14) in 5..7) && !stitchLine
+        val lum =
+          when {
+            stitchLine -> 0.11f
+            perfHole -> 0.09f
+            else -> 0.15f + ribBump * 0.07f + pebble * 0.25f
+          }
+        val c = (lum.coerceIn(0.06f, 0.30f) * 255f).toInt()
+        albedoPixels[y * size + x] = Color.rgb(c, c, c)
+        heights[y * size + x] =
+          when {
+            stitchLine -> 0.05f
+            perfHole -> 0.14f
+            else -> 0.32f + ribBump * 0.42f + pebble
+          }
+        val rough = if (stitchLine || perfHole) 0.90f else 0.72f - ribBump * 0.08f
+        mrPixels[y * size + x] = Color.rgb(255, (rough * 255f).toInt(), 4)
       }
     }
     val albedoBmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
       setPixels(albedoPixels, 0, size, 0, 0, size, size)
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.4f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 4, strength = 1.60f, floorMin = 0.38f)
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.2f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 1.35f, floorMin = 0.44f)
     val mrBmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
       setPixels(mrPixels, 0, size, 0, 0, size, size)
     }
@@ -359,12 +434,15 @@ internal object Pev3dPbrTextures {
   private fun buildTftPbrBundle(size: Int): PevPbrTextureBundle {
     val albedoBmp = Pev3dTextureBank.buildTftCockpitBitmap(size)
     val heights = FloatArray(size * size) { 0.5f }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 1.0f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 2, strength = 0.5f, floorMin = 0.85f)
-    val mrBmp = buildMrBitmap(size) { _, _ -> 0.08f to 0.08f }
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 0.8f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 2, strength = 0.4f, floorMin = 0.88f)
+    val mrBmp = buildMrBitmap(size) { _, _ -> 0.06f to 0.07f }
     return PevPbrTextureBundle(bitmapToPng(albedoBmp), bitmapToPng(normalBmp), bitmapToPng(mrBmp), bitmapToPng(aoBmp))
   }
 
+  /**
+   * Realistic automotive photo-studio polished dark concrete & brushed steel showroom turntable floor.
+   */
   private fun buildDynoFloorPbrBundle(size: Int): PevPbrTextureBundle {
     val albedoBmp = Pev3dTextureBank.buildDynoFloorBitmap(size)
     val heights = FloatArray(size * size)
@@ -376,180 +454,190 @@ internal object Pev3dPbrTextures {
         val dx = x - cx
         val dy = y - cy
         val r = sqrt(dx * dx + dy * dy) / (size * 0.5f)
-        val ring1 = abs(r - 0.72f) < 0.012f
-        val ring2 = abs(r - 0.88f) < 0.008f
-        val grid = (x % (size / 16) < 2) || (y % (size / 16) < 2)
-        val grain = (((x * 13 + y * 31) and 15) / 15f - 0.5f) * 0.08f
-        heights[y * size + x] = (if (ring1 || ring2 || grid) -0.25f else 0.1f) + grain
-        val rough = if (ring1 || ring2) 0.16f else if (r < 0.70f) 0.30f else 0.50f
-        val metal = if (ring1 || ring2) 0.82f else 0.24f
+        val steelRing = abs(r - 0.72f) < 0.012f
+        val innerRing = abs(r - 0.695f) < 0.004f
+        val concrete = (smoothNoise(x * 0.035f, y * 0.035f) - 0.5f) * 0.22f +
+          (smoothNoise(x * 0.14f, y * 0.14f) - 0.5f) * 0.10f +
+          (hash2d(x, y) - 0.5f) * 0.04f
+        heights[y * size + x] = if (innerRing) -0.22f else if (steelRing) 0.18f else concrete
+        val rough =
+          when {
+            steelRing -> 0.24f
+            r < 0.70f -> (0.34f + concrete * 0.35f).coerceIn(0.24f, 0.54f)
+            else -> (0.48f + concrete * 0.38f).coerceIn(0.36f, 0.68f)
+          }
+        val metal = if (steelRing) 0.86f else 0.06f
         mrPixels[y * size + x] = Color.rgb(255, (rough * 255f).toInt(), (metal * 255f).toInt())
       }
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 2.2f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 1.25f, floorMin = 0.45f)
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 1.8f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 1.0f, floorMin = 0.55f)
     val mrBmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
       setPixels(mrPixels, 0, size, 0, 0, size, size)
     }
     return PevPbrTextureBundle(bitmapToPng(albedoBmp), bitmapToPng(normalBmp), bitmapToPng(mrBmp), bitmapToPng(aoBmp))
   }
 
+  /**
+   * Photorealistic Metallic Automotive Clearcoat Paint & Molded Fairing Panel Texture.
+   * Uses a neutral high-key metallic micro-flake base so glTF linear baseColorFactor renders
+   * authentic OEM paint colors (Corsa Red, Satin Olive, Pearl White, Gunmetal, Burnt Orange)
+   * with realistic stamped vents, subtle panel seams, and precision stainless hardware.
+   */
   private fun buildRacingLiveryPbrBundle(size: Int): PevPbrTextureBundle {
-    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bmp)
-    // Satin forged-carbon & metallic clearcoat livery base
-    canvas.drawColor(Color.rgb(225, 232, 240))
-    val panelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(178, 190, 206) }
-    val darkGraphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(26, 32, 44) }
-    val accentStripePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 255, 255) }
-    val ventPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(14, 18, 26) }
-    val seamPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      color = Color.rgb(36, 44, 58)
-      style = Paint.Style.STROKE
-      strokeWidth = size / 128f
-    }
-
-    // Precision aero speed chevrons & contrast livery panels
-    val s = size.toFloat()
-    val pathDark = android.graphics.Path().apply {
-      moveTo(0f, s * 0.62f)
-      lineTo(s * 0.56f, 0f)
-      lineTo(s * 0.84f, 0f)
-      lineTo(s * 0.22f, s)
-      lineTo(0f, s)
-      close()
-    }
-    canvas.drawPath(pathDark, darkGraphPaint)
-
-    val pathAccent = android.graphics.Path().apply {
-      moveTo(s * 0.24f, s)
-      lineTo(s * 0.86f, 0f)
-      lineTo(s * 0.94f, 0f)
-      lineTo(s * 0.34f, s)
-      close()
-    }
-    canvas.drawPath(pathAccent, accentStripePaint)
-
-    // Side cooling louver slats
-    for (i in 0..4) {
-      val vx = s * (0.58f + i * 0.068f)
-      val vyTop = s * (0.42f + i * 0.03f)
-      canvas.drawRoundRect(vx, vyTop, vx + s * 0.036f, vyTop + s * 0.26f, 6f, 6f, ventPaint)
-    }
-
-    // Stencil spec callout graphics + racing number roundel
-    canvas.drawCircle(s * 0.24f, s * 0.26f, s * 0.14f, panelPaint)
-    val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      color = Color.rgb(18, 24, 34)
-      textSize = s * 0.075f
-      isFakeBoldText = true
-      textAlign = Paint.Align.CENTER
-    }
-    canvas.drawText("EV-PRO", s * 0.24f, s * 0.28f, badgePaint)
-    badgePaint.color = Color.rgb(240, 246, 255)
-    badgePaint.textSize = s * 0.044f
-    canvas.drawText("VOLT // APEX 74", s * 0.68f, s * 0.86f, badgePaint)
-
-    // Panel seam lines & stainless fastener bolts
-    canvas.drawRoundRect(s * 0.04f, s * 0.04f, s * 0.96f, s * 0.96f, s * 0.05f, s * 0.05f, seamPaint)
-    canvas.drawLine(s * 0.04f, s * 0.50f, s * 0.96f, s * 0.50f, seamPaint)
-    val boltCoords = listOf(0.08f to 0.08f, 0.92f to 0.08f, 0.08f to 0.92f, 0.92f to 0.92f, 0.50f to 0.08f, 0.50f to 0.92f)
-    val boltPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(210, 220, 232) }
-    boltCoords.forEach { (bx, by) ->
-      canvas.drawCircle(s * bx, s * by, s * 0.018f, ventPaint)
-      canvas.drawCircle(s * bx, s * by, s * 0.012f, boltPaint)
-    }
-
+    val pixels = IntArray(size * size)
     val heights = FloatArray(size * size)
     val mrPixels = IntArray(size * size)
+    val s = size.toFloat()
+
     for (y in 0 until size) {
       val yf = y / s
       for (x in 0 until size) {
         val xf = x / s
-        val edge = xf < 0.045f || xf > 0.955f || yf < 0.045f || yf > 0.955f || abs(yf - 0.50f) < 0.008f
-        val inVent = xf in 0.57f..0.92f && yf in 0.42f..0.78f && (((xf - 0.58f) / 0.068f) % 1f < 0.55f)
-        val weave = sin(x * 0.4f) * sin(y * 0.4f) * 0.06f
-        val h = when {
-          edge -> -0.45f
-          inVent -> -0.65f
-          else -> 0.12f + weave
+        // Subtle automotive metallic flake shimmer + gentle soft tonal gradient
+        val flake = (hash2d(x, y) - 0.5f) * 14f + (smoothNoise(x * 0.12f, y * 0.12f) - 0.5f) * 10f
+        val grad = (1f - yf * 0.10f) * 234f
+
+        // Subtle satin-charcoal lower belly/intake accent contour (diagonal aerodynamic split)
+        val diagVal = xf * 0.58f + yf * 0.82f
+        val isAccentPin = abs(diagVal - 0.86f) < 0.012f
+        val isCarbonInset = diagVal > 0.89f
+        // Stamped fairing panel parting seam
+        val isPanelSeam = abs(yf - 0.12f) < 0.004f || abs(yf - 0.88f) < 0.004f || abs(xf - 0.04f) < 0.004f || abs(xf - 0.96f) < 0.004f
+        // Recessed air-intake louver slots near lower rear quarter
+        val inVentArea = xf in 0.64f..0.88f && yf in 0.46f..0.68f
+        val ventPhase = ((xf - 0.64f) / 0.055f)
+        val isVentSlot = inVentArea && (ventPhase - floor(ventPhase)) < 0.36f
+
+        val baseVal: Int
+        val h: Float
+        val rough: Float
+        val metal: Float
+        when {
+          isVentSlot -> {
+            baseVal = 36
+            h = -0.62f
+            rough = 0.72f
+            metal = 0.18f
+          }
+          isPanelSeam -> {
+            baseVal = 72
+            h = -0.40f
+            rough = 0.58f
+            metal = 0.25f
+          }
+          isAccentPin -> {
+            baseVal = 246
+            h = 0.22f
+            rough = 0.14f
+            metal = 0.55f
+          }
+          isCarbonInset -> {
+            // Subtle woven dark satin inset panel
+            val weave = sin(x * 0.9f) * sin(y * 0.9f) * 14f
+            baseVal = (96f + weave).toInt().coerceIn(64, 132)
+            h = 0.06f + (weave / 120f)
+            rough = 0.30f
+            metal = 0.28f
+          }
+          else -> {
+            baseVal = (grad + flake).toInt().coerceIn(195, 250)
+            h = 0.18f + (flake / 320f)
+            rough = (0.14f + abs(flake) * 0.004f).coerceIn(0.11f, 0.24f)
+            metal = 0.54f
+          }
         }
+        pixels[y * size + x] = Color.rgb(baseVal, baseVal, baseVal)
         heights[y * size + x] = h
-        val rough = if (inVent) 0.72f else if (edge) 0.55f else 0.14f
-        val metal = if (inVent) 0.20f else 0.42f
         mrPixels[y * size + x] = Color.rgb(255, (rough * 255f).toInt(), (metal * 255f).toInt())
       }
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.6f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 4, strength = 1.50f, floorMin = 0.36f)
+
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
+      setPixels(pixels, 0, size, 0, 0, size, size)
+    }
+    // Crisp machined stainless Allen/Torx fairing bolts in corners
+    val canvas = Canvas(bmp)
+    val recessPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(42, 46, 52) }
+    val headPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(206, 212, 218) }
+    val hexPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(68, 72, 78) }
+    listOf(0.08f to 0.17f, 0.92f to 0.17f, 0.08f to 0.83f, 0.92f to 0.83f).forEach { (bx, by) ->
+      canvas.drawCircle(s * bx, s * by, s * 0.015f, recessPaint)
+      canvas.drawCircle(s * bx, s * by, s * 0.011f, headPaint)
+      canvas.drawCircle(s * bx, s * by, s * 0.005f, hexPaint)
+    }
+
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.0f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 1.25f, floorMin = 0.45f)
     val mrBmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
       setPixels(mrPixels, 0, size, 0, 0, size, size)
     }
     return PevPbrTextureBundle(bitmapToPng(bmp), bitmapToPng(normalBmp), bitmapToPng(mrBmp), bitmapToPng(aoBmp))
   }
 
+  /**
+   * Realistic dark-smoked bi-LED projector headlight optic with chrome reflector cups & crisp DRL ring.
+   */
   private fun buildHeadlightOpticPbrBundle(size: Int): PevPbrTextureBundle {
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val s = size.toFloat()
-    canvas.drawColor(Color.rgb(16, 22, 32))
+    canvas.drawColor(Color.rgb(14, 17, 22))
 
-    // Chrome inner reflector bowl & hex-mesh surround
-    val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      color = Color.rgb(42, 54, 72)
-      strokeWidth = s / 160f
+    // Subtle smoked chrome reflector backing
+    val reflectorBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      shader = RadialGradient(
+        s * 0.5f,
+        s * 0.5f,
+        s * 0.48f,
+        intArrayOf(Color.rgb(46, 52, 62), Color.rgb(20, 24, 30), Color.rgb(10, 12, 16)),
+        floatArrayOf(0f, 0.65f, 1f),
+        Shader.TileMode.CLAMP,
+      )
     }
-    for (i in 0..16) {
-      val p = i * (s / 16f)
-      canvas.drawLine(p, 0f, p, s, gridPaint)
-      canvas.drawLine(0f, p, s, p, gridPaint)
-    }
+    canvas.drawRect(0f, 0f, s, s, reflectorBg)
 
-    // Outer C-shaped Neon DRL Halo Perimeter
+    // Precision LED Daytime Running Light (DRL) Perimeter Ring
     val drlPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.STROKE
-      strokeWidth = s * 0.048f
-      color = Color.rgb(230, 248, 255)
+      strokeWidth = s * 0.036f
+      color = Color.rgb(240, 246, 255)
     }
-    canvas.drawRoundRect(s * 0.08f, s * 0.12f, s * 0.92f, s * 0.88f, s * 0.14f, s * 0.14f, drlPaint)
+    canvas.drawCircle(s * 0.5f, s * 0.5f, s * 0.42f, drlPaint)
 
-    // Twin Projector LED Lenses (left + right)
-    val centers = listOf(s * 0.31f to s * 0.50f, s * 0.69f to s * 0.50f)
-    centers.forEach { (cx, cy) ->
-      val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        shader = RadialGradient(
-          cx,
-          cy,
-          s * 0.18f,
-          intArrayOf(Color.rgb(255, 255, 250), Color.rgb(185, 232, 255), Color.rgb(28, 42, 62)),
-          floatArrayOf(0f, 0.52f, 1f),
-          Shader.TileMode.CLAMP,
-        )
-      }
-      canvas.drawCircle(cx, cy, s * 0.18f, glow)
-      val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = s * 0.022f
-        color = Color.rgb(255, 255, 255)
-      }
-      canvas.drawCircle(cx, cy, s * 0.14f, ring)
+    // Central High/Low Bi-LED Glass Projector Dome
+    val lensGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      shader = RadialGradient(
+        s * 0.5f,
+        s * 0.5f,
+        s * 0.28f,
+        intArrayOf(Color.rgb(255, 254, 248), Color.rgb(225, 238, 252), Color.rgb(48, 60, 74)),
+        floatArrayOf(0f, 0.58f, 1f),
+        Shader.TileMode.CLAMP,
+      )
     }
+    canvas.drawCircle(s * 0.5f, s * 0.5f, s * 0.28f, lensGlow)
+    val bezelRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      style = Paint.Style.STROKE
+      strokeWidth = s * 0.022f
+      color = Color.rgb(175, 185, 198)
+    }
+    canvas.drawCircle(s * 0.5f, s * 0.5f, s * 0.29f, bezelRing)
 
     val heights = FloatArray(size * size)
     val mrPixels = IntArray(size * size)
     for (y in 0 until size) {
-      val ny = y / s
+      val ny = y / s - 0.5f
       for (x in 0 until size) {
-        val nx = x / s
-        val dL = sqrt((nx - 0.31f) * (nx - 0.31f) + (ny - 0.50f) * (ny - 0.50f))
-        val dR = sqrt((nx - 0.69f) * (nx - 0.69f) + (ny - 0.50f) * (ny - 0.50f))
-        val dome = maxOf((0.18f - dL).coerceAtLeast(0f), (0.18f - dR).coerceAtLeast(0f)) * 4.5f
+        val nx = x / s - 0.5f
+        val d = sqrt(nx * nx + ny * ny)
+        val dome = (0.30f - d).coerceAtLeast(0f) * 3.8f
         heights[y * size + x] = dome
-        mrPixels[y * size + x] = Color.rgb(255, 16, 48) // Mirror-clear polycarbonate lens (rough=0.06)
+        mrPixels[y * size + x] = Color.rgb(255, 14, 40) // Crystal-clear optical polycarbonate
       }
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.8f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 0.8f, floorMin = 0.60f)
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.6f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 0.7f, floorMin = 0.65f)
     val mrBmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
       setPixels(mrPixels, 0, size, 0, 0, size, size)
     }
@@ -560,21 +648,20 @@ internal object Pev3dPbrTextures {
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val s = size.toFloat()
-    canvas.drawColor(Color.rgb(42, 6, 10))
+    canvas.drawColor(Color.rgb(36, 5, 8))
 
-    // Smoked ruby diffuser border & horizontal LED light-blades
-    val bladePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 44, 52) }
-    val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 165, 150) }
+    val bladePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(235, 28, 34) }
+    val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 145, 130) }
     val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.STROKE
-      strokeWidth = s * 0.04f
-      color = Color.rgb(255, 62, 68)
+      strokeWidth = s * 0.036f
+      color = Color.rgb(238, 42, 46)
     }
-    canvas.drawRoundRect(s * 0.06f, s * 0.14f, s * 0.94f, s * 0.86f, s * 0.10f, s * 0.10f, border)
+    canvas.drawRoundRect(s * 0.06f, s * 0.16f, s * 0.94f, s * 0.84f, s * 0.12f, s * 0.12f, border)
     for (col in 0 until 8) {
       val bx = s * (0.12f + col * 0.10f)
-      canvas.drawRoundRect(bx, s * 0.26f, bx + s * 0.065f, s * 0.74f, 6f, 6f, bladePaint)
-      canvas.drawRoundRect(bx + s * 0.015f, s * 0.34f, bx + s * 0.050f, s * 0.66f, 4f, 4f, corePaint)
+      canvas.drawRoundRect(bx, s * 0.28f, bx + s * 0.062f, s * 0.72f, 6f, 6f, bladePaint)
+      canvas.drawRoundRect(bx + s * 0.015f, s * 0.36f, bx + s * 0.047f, s * 0.64f, 4f, 4f, corePaint)
     }
 
     val heights = FloatArray(size * size)
@@ -582,13 +669,13 @@ internal object Pev3dPbrTextures {
       val yf = y / s
       for (x in 0 until size) {
         val xf = x / s
-        val inFin = yf in 0.24f..0.76f && ((xf - 0.12f) / 0.10f).let { it - kotlin.math.floor(it) } < 0.65f
-        heights[y * size + x] = if (inFin) 0.45f else 0.05f
+        val inFin = yf in 0.26f..0.74f && ((xf - 0.12f) / 0.10f).let { it - floor(it) } < 0.62f
+        heights[y * size + x] = if (inFin) 0.42f else 0.05f
       }
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 3.0f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 1.1f, floorMin = 0.50f)
-    val mrBmp = buildMrBitmap(size) { _, _ -> 0.14f to 0.08f }
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 2.8f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 3, strength = 1.0f, floorMin = 0.52f)
+    val mrBmp = buildMrBitmap(size) { _, _ -> 0.12f to 0.07f }
     return PevPbrTextureBundle(bitmapToPng(bmp), bitmapToPng(normalBmp), bitmapToPng(mrBmp), bitmapToPng(aoBmp))
   }
 
@@ -596,76 +683,55 @@ internal object Pev3dPbrTextures {
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val s = size.toFloat()
-    canvas.drawColor(Color.rgb(52, 24, 4))
+    canvas.drawColor(Color.rgb(44, 20, 4))
 
-    // Sequential amber chevron LED cells
-    val amber = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 168, 18) }
-    val hotCore = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 224, 120) }
+    val amber = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(245, 152, 16) }
+    val hotCore = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 218, 108) }
     for (i in 0 until 5) {
       val cx = s * (0.14f + i * 0.17f)
-      canvas.drawRoundRect(cx, s * 0.22f, cx + s * 0.11f, s * 0.78f, 5f, 5f, amber)
-      canvas.drawRoundRect(cx + s * 0.025f, s * 0.32f, cx + s * 0.085f, s * 0.68f, 3f, 3f, hotCore)
+      canvas.drawRoundRect(cx, s * 0.24f, cx + s * 0.105f, s * 0.76f, 5f, 5f, amber)
+      canvas.drawRoundRect(cx + s * 0.024f, s * 0.34f, cx + s * 0.082f, s * 0.66f, 3f, 3f, hotCore)
     }
 
     val heights = FloatArray(size * size)
     for (y in 0 until size) {
       for (x in 0 until size) {
-        heights[y * size + x] = 0.25f * sin(x * 0.35f) * cos(y * 0.35f)
+        heights[y * size + x] = 0.22f * sin(x * 0.38f) * cos(y * 0.38f)
       }
     }
-    val normalBmp = heightFieldToNormalBitmap(heights, size, 2.8f)
-    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 2, strength = 1.0f, floorMin = 0.55f)
-    val mrBmp = buildMrBitmap(size) { _, _ -> 0.12f to 0.07f }
+    val normalBmp = heightFieldToNormalBitmap(heights, size, 2.6f)
+    val aoBmp = heightFieldToOcclusionBitmap(heights, size, radiusPx = 2, strength = 0.9f, floorMin = 0.58f)
+    val mrBmp = buildMrBitmap(size) { _, _ -> 0.10f to 0.07f }
     return PevPbrTextureBundle(bitmapToPng(bmp), bitmapToPng(normalBmp), bitmapToPng(mrBmp), bitmapToPng(aoBmp))
   }
 }
 
-internal class Pev3dTextureBank(
-  val carbonWeave: Int,
-  val brushedMetal: Int,
-  val tireRubber: Int,
-  val batteryPack: Int,
-  val brakeRotor: Int,
-  val tftScreen: Int,
-  val dynoFloor: Int,
-) {
-  fun release() {
-    val ids = intArrayOf(carbonWeave, brushedMetal, tireRubber, batteryPack, brakeRotor, tftScreen, dynoFloor)
-    GLES20.glDeleteTextures(ids.size, ids, 0)
-  }
-
-  companion object {
-    fun createOnGlThread(): Pev3dTextureBank {
-      return Pev3dTextureBank(
-        carbonWeave = uploadBitmapTexture(buildCarbonWeaveBitmap(512)),
-        brushedMetal = uploadBitmapTexture(buildBrushedMetalBitmap(512)),
-        tireRubber = uploadBitmapTexture(buildTireTreadBitmap(512)),
-        batteryPack = uploadBitmapTexture(buildBatteryPackBitmap(512)),
-        brakeRotor = uploadBitmapTexture(buildBrakeRotorBitmap(512)),
-        tftScreen = uploadBitmapTexture(buildTftCockpitBitmap(512)),
-        dynoFloor = uploadBitmapTexture(buildDynoFloorBitmap(1024)),
-      )
+internal object Pev3dTextureBank {
+    private fun hashPx(x: Int, y: Int): Float {
+      var n = x * 374761393 + y * 668265263
+      n = (n xor (n ushr 13)) * 1274126177
+      n = n xor (n ushr 16)
+      return (n and 0x7fffffff) / 2147483647f
     }
 
-    private fun uploadBitmapTexture(bmp: Bitmap): Int {
-      val ids = IntArray(1)
-      GLES20.glGenTextures(1, ids, 0)
-      val texId = ids[0]
-      GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
-      GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR_MIPMAP_LINEAR)
-      GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
-      GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_REPEAT)
-      GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_REPEAT)
-      GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bmp, 0)
-      GLES20.glGenerateMipmap(GLES20.GL_TEXTURE_2D)
-      bmp.recycle()
-      return texId
+    private fun noise2d(x: Float, y: Float): Float {
+      val xi = floor(x).toInt()
+      val yi = floor(y).toInt()
+      val xf = x - xi
+      val yf = y - yi
+      val u = xf * xf * (3f - 2f * xf)
+      val v = yf * yf * (3f - 2f * yf)
+      val a = hashPx(xi, yi)
+      val b = hashPx(xi + 1, yi)
+      val c = hashPx(xi, yi + 1)
+      val d = hashPx(xi + 1, yi + 1)
+      return (a * (1f - u) + b * u) * (1f - v) + (c * (1f - u) + d * u) * v
     }
 
     internal fun buildCarbonWeaveBitmap(size: Int): Bitmap {
       val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
       val pixels = IntArray(size * size)
-      val cell = 16 // 2x2 twill repeat every 32px
+      val cell = 6 // Fine realistic 3K 2x2 twill carbon weave
       for (y in 0 until size) {
         val ty = y / cell
         val fy = (y % cell) / cell.toFloat()
@@ -676,15 +742,15 @@ internal class Pev3dTextureBank(
           val isWarp = twill < 2
           val fiberWave =
             if (isWarp) {
-              sin(fy * PI).toFloat() * (0.78f + 0.22f * cos(fx * 2f * PI).toFloat())
+              sin(fy * PI).toFloat() * (0.76f + 0.24f * cos(fx * 2f * PI).toFloat())
             } else {
-              sin(fx * PI).toFloat() * (0.62f + 0.20f * cos(fy * 2f * PI).toFloat())
+              sin(fx * PI).toFloat() * (0.64f + 0.22f * cos(fy * 2f * PI).toFloat())
             }
-          val baseLum = if (isWarp) 0.24f + 0.34f * fiberWave else 0.14f + 0.22f * fiberWave
-          val micro = (((x * 37 + y * 17) and 7) - 3) * 0.004f
-          val v = ((baseLum + micro).coerceIn(0.08f, 0.72f) * 255f).toInt()
-          val b = (v * 1.07f).toInt().coerceIn(0, 255)
-          pixels[y * size + x] = Color.rgb(v, v, b)
+          // Calibrated neutral graphite values so tinted/untinted carbon stays richly readable
+          val baseLum = if (isWarp) 0.44f + 0.34f * fiberWave else 0.28f + 0.24f * fiberWave
+          val micro = (hashPx(x, y) - 0.5f) * 0.025f
+          val v = ((baseLum + micro).coerceIn(0.18f, 0.84f) * 255f).toInt()
+          pixels[y * size + x] = Color.rgb(v, v, (v * 1.02f).toInt().coerceIn(0, 255))
         }
       }
       bmp.setPixels(pixels, 0, size, 0, 0, size, size)
@@ -698,17 +764,16 @@ internal class Pev3dTextureBank(
       val rowBias = FloatArray(size)
       for (y in 0 until size) {
         seed = (seed * 1103515245 + 12345) and 0x7fffffff
-        rowBias[y] = (seed / 2147483647f - 0.5f) * 0.16f
+        rowBias[y] = (seed / 2147483647f - 0.5f) * 0.13f
       }
       for (y in 0 until size) {
-        val streak = rowBias[y] + 0.04f * sin(y * 0.35f)
+        val streak = rowBias[y] + 0.03f * sin(y * 0.42f)
         for (x in 0 until size) {
-          val grain = 0.035f * sin((x * 0.09f) + (y * 0.02f)) + 0.02f * cos(x * 0.25f)
-          val seam = if (y % 128 < 2) -0.14f else 0f
-          val lum = (0.74f + streak + grain + seam).coerceIn(0.42f, 0.96f)
+          val grain = 0.025f * sin((x * 0.11f) + (y * 0.02f)) + (hashPx(x, y) - 0.5f) * 0.02f
+          val seam = if (y % 128 < 2) -0.11f else 0f
+          val lum = (0.82f + streak + grain + seam).coerceIn(0.54f, 0.97f)
           val c = (lum * 255f).toInt()
-          val b = ((lum * 1.04f).coerceIn(0f, 1f) * 255f).toInt()
-          pixels[y * size + x] = Color.rgb(c, c, b)
+          pixels[y * size + x] = Color.rgb(c, c, c)
         }
       }
       bmp.setPixels(pixels, 0, size, 0, 0, size, size)
@@ -717,78 +782,118 @@ internal class Pev3dTextureBank(
 
     internal fun buildTireTreadBitmap(size: Int): Bitmap {
       val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-      val canvas = Canvas(bmp)
-      canvas.drawColor(Color.rgb(26, 30, 36))
-
-      val knobDark = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(15, 17, 21) }
-      val knobTop = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(48, 54, 64) }
-      val sipePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(10, 12, 16)
-        strokeWidth = 3f
-      }
-
-      val rows = 8
-      val cols = 6
-      val cellH = size / rows.toFloat()
-      val cellW = size / cols.toFloat()
-      for (r in 0 until rows) {
-        val stagger = if (r % 2 == 0) 0f else cellW * 0.5f
-        for (c in -1..cols) {
-          val cx = c * cellW + stagger
-          val cy = r * cellH
-          canvas.drawRoundRect(cx + 7f, cy + 6f, cx + cellW - 7f, cy + cellH - 6f, 8f, 8f, knobDark)
-          canvas.drawRoundRect(cx + 11f, cy + 9f, cx + cellW - 11f, cy + cellH - 11f, 5f, 5f, knobTop)
-          canvas.drawLine(cx + 14f, cy + cellH * 0.5f, cx + cellW - 14f, cy + cellH * 0.5f, sipePaint)
+      val pixels = IntArray(size * size)
+      val s = size.toFloat()
+      for (y in 0 until size) {
+        val v = y / s
+        val distFromCenter = abs(v - 0.5f) * 2f
+        val inTreadZone = distFromCenter < 0.76f
+        for (x in 0 until size) {
+          val u = x / s
+          val grain = (hashPx(x, y) - 0.5f) * 7f + (noise2d(x * 0.14f, y * 0.14f) - 0.5f) * 8f
+          val base: Float =
+            if (inTreadZone) {
+              val centerGroove = abs(v - 0.5f) < 0.018f
+              val midGroove = abs(abs(v - 0.5f) - 0.16f) < 0.014f
+              val chevronPhase = (u * 18f + abs(v - 0.5f) * 5.2f)
+              val chevronFrac = chevronPhase - floor(chevronPhase)
+              val lateralGroove = chevronFrac < 0.18f
+              val microSipe = abs(chevronFrac - 0.58f) < 0.028f && distFromCenter in 0.08f..0.62f
+              when {
+                centerGroove || midGroove -> 20f
+                lateralGroove -> 24f
+                microSipe -> 28f
+                else -> 44f
+              }
+            } else {
+              val rib = if (abs(distFromCenter - 0.84f) < 0.025f) 7f else 0f
+              34f + rib
+            }
+          val c = (base + grain).toInt().coerceIn(14, 62)
+          pixels[y * size + x] = Color.rgb(c, c, (c + 2).coerceAtMost(66))
         }
       }
+      bmp.setPixels(pixels, 0, size, 0, 0, size, size)
       return bmp
     }
 
     internal fun buildBatteryPackBitmap(size: Int): Bitmap {
       val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
+      val s = size.toFloat()
+      // Matte anodized dark graphite extruded aluminum case
       val bgPaint = Paint().apply {
         shader = LinearGradient(
           0f,
           0f,
-          size.toFloat(),
-          size.toFloat(),
-          intArrayOf(Color.rgb(22, 36, 30), Color.rgb(16, 48, 36), Color.rgb(20, 30, 28)),
+          0f,
+          s,
+          intArrayOf(Color.rgb(42, 46, 52), Color.rgb(32, 35, 40), Color.rgb(46, 50, 56)),
           null,
           Shader.TileMode.CLAMP,
         )
       }
-      canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), bgPaint)
+      canvas.drawRect(0f, 0f, s, s, bgPaint)
 
-      val cellRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      // Extruded cooling fin grooves
+      val ribLight = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(65, 96, 104, 114)
+        strokeWidth = s / 120f
+      }
+      val ribDark = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(120, 14, 16, 20)
+        strokeWidth = s / 120f
+      }
+      for (i in 0 until 24) {
+        val ry = (i + 0.5f) * (s / 24f)
+        canvas.drawLine(s * 0.06f, ry, s * 0.94f, ry, ribLight)
+        canvas.drawLine(s * 0.06f, ry + s / 80f, s * 0.94f, ry + s / 80f, ribDark)
+      }
+
+      // Brushed titanium aluminum spec badge plate
+      val platePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = LinearGradient(
+          s * 0.14f,
+          s * 0.34f,
+          s * 0.86f,
+          s * 0.66f,
+          intArrayOf(Color.rgb(74, 80, 88), Color.rgb(58, 63, 70), Color.rgb(78, 84, 92)),
+          null,
+          Shader.TileMode.CLAMP,
+        )
+      }
+      canvas.drawRoundRect(s * 0.14f, s * 0.34f, s * 0.86f, s * 0.66f, s * 0.03f, s * 0.03f, platePaint)
+      val plateBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 3f
-        color = Color.argb(145, 74, 222, 128)
+        strokeWidth = s * 0.008f
+        color = Color.rgb(122, 130, 140)
       }
-      val cellCore = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(115, 16, 185, 129)
-      }
-      val step = size / 10f
-      var row = 0
-      var y = step * 0.45f
-      while (y < size) {
-        val offset = if (row % 2 == 0) 0f else step * 0.5f
-        var x = step * 0.5f + offset
-        while (x < size) {
-          canvas.drawCircle(x, y, step * 0.34f, cellCore)
-          canvas.drawCircle(x, y, step * 0.34f, cellRing)
-          x += step
-        }
-        y += step * 0.86f
-        row++
-      }
+      canvas.drawRoundRect(s * 0.14f, s * 0.34f, s * 0.86f, s * 0.66f, s * 0.03f, s * 0.03f, plateBorder)
 
-      val busbar = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(210, 245, 158, 11)
-        strokeWidth = (size / 48f).coerceAtLeast(4f)
+      // Subtle copper HV busbar accent trim + crisp laser-etched spec label
+      val copperBar = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(184, 115, 51) }
+      canvas.drawRoundRect(s * 0.16f, s * 0.14f, s * 0.84f, s * 0.185f, s * 0.01f, s * 0.01f, copperBar)
+
+      val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(218, 224, 232)
+        textSize = s * 0.062f
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
       }
-      canvas.drawLine(0f, size * 0.25f, size.toFloat(), size * 0.25f, busbar)
-      canvas.drawLine(0f, size * 0.75f, size.toFloat(), size * 0.75f, busbar)
+      canvas.drawText("21700 LI-ION PACK", s * 0.5f, s * 0.49f, titlePaint)
+      val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(154, 164, 176)
+        textSize = s * 0.038f
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+      }
+      canvas.drawText("SMART BMS • IP67 SEALED", s * 0.5f, s * 0.58f, subPaint)
+
+      // Corner stainless socket bolts
+      val boltPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(165, 172, 182) }
+      listOf(0.09f to 0.10f, 0.91f to 0.10f, 0.09f to 0.90f, 0.91f to 0.90f).forEach { (bx, by) ->
+        canvas.drawCircle(s * bx, s * by, s * 0.018f, boltPaint)
+      }
       return bmp
     }
 
@@ -797,26 +902,39 @@ internal class Pev3dTextureBank(
       val canvas = Canvas(bmp)
       val cx = size * 0.5f
       val cy = size * 0.5f
-      canvas.drawColor(Color.rgb(172, 184, 198))
+      canvas.drawColor(Color.rgb(188, 194, 202))
+
+      // Dark anodized aluminum inner carrier spider
+      val carrierPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(46, 50, 56) }
+      canvas.drawCircle(cx, cy, size * 0.23f, carrierPaint)
 
       val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = (size / 140f).coerceAtLeast(2f)
       }
-      val step = (size / 64).coerceAtLeast(4)
-      for (r in size / 16 until size / 2 step step) {
-        val tone = 160 + ((r * 13) % 65)
-        ringPaint.color = Color.rgb(tone, tone + 6, tone + 14)
+      val step = (size / 72).coerceAtLeast(4)
+      for (r in (size * 0.24f).toInt() until size / 2 step step) {
+        val tone = 176 + ((r * 11) % 44)
+        ringPaint.color = Color.rgb(tone, tone + 2, tone + 5)
         canvas.drawCircle(cx, cy, r.toFloat(), ringPaint)
       }
-      val holePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(22, 28, 36) }
+      // Brass/titanium floating rotor bobbins
+      val bobbinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(198, 164, 92) }
+      for (b in 0 until 8) {
+        val ang = (b / 8.0) * 2.0 * PI
+        val bx = cx + (size * 0.235f * cos(ang)).toFloat()
+        val by = cy + (size * 0.235f * sin(ang)).toFloat()
+        canvas.drawCircle(bx, by, size * 0.015f, bobbinPaint)
+      }
+      // Cross-drilled rotor vents
+      val holePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(24, 27, 32) }
       for (a in 0 until 24) {
         val ang = (a / 24.0) * 2.0 * PI
         for (band in 0..2) {
-          val rad = size * (0.24f + band * 0.09f)
-          val x = cx + (rad * cos(ang + band * 0.14)).toFloat()
-          val y = cy + (rad * sin(ang + band * 0.14)).toFloat()
-          canvas.drawCircle(x, y, size * 0.014f, holePaint)
+          val rad = size * (0.27f + band * 0.068f)
+          val x = cx + (rad * cos(ang + band * 0.13)).toFloat()
+          val y = cy + (rad * sin(ang + band * 0.13)).toFloat()
+          canvas.drawCircle(x, y, size * 0.012f, holePaint)
         }
       }
       return bmp
@@ -825,124 +943,110 @@ internal class Pev3dTextureBank(
     internal fun buildTftCockpitBitmap(size: Int): Bitmap {
       val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
-      canvas.drawColor(Color.rgb(9, 15, 30))
+      canvas.drawColor(Color.rgb(10, 13, 18))
 
       val scale = size / 512f
       val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 10f * scale
-        color = Color.rgb(56, 189, 248)
+        strokeWidth = 8f * scale
+        color = Color.rgb(68, 76, 88)
       }
-      canvas.drawRoundRect(14f * scale, 14f * scale, size - 14f * scale, size - 14f * scale, 24f * scale, 24f * scale, border)
+      canvas.drawRoundRect(14f * scale, 14f * scale, size - 14f * scale, size - 14f * scale, 22f * scale, 22f * scale, border)
 
       val arcBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 26f * scale
+        strokeWidth = 22f * scale
         strokeCap = Paint.Cap.ROUND
-        color = Color.rgb(30, 41, 59)
+        color = Color.rgb(32, 38, 48)
       }
-      canvas.drawArc(70f * scale, 70f * scale, size - 70f * scale, size - 70f * scale, 140f, 260f, false, arcBg)
+      canvas.drawArc(74f * scale, 74f * scale, size - 74f * scale, size - 74f * scale, 140f, 260f, false, arcBg)
 
       val arcFg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 26f * scale
+        strokeWidth = 22f * scale
         strokeCap = Paint.Cap.ROUND
-        color = Color.rgb(34, 211, 238)
+        color = Color.rgb(235, 170, 56)
       }
-      canvas.drawArc(70f * scale, 70f * scale, size - 70f * scale, size - 70f * scale, 140f, 195f, false, arcFg)
+      canvas.drawArc(74f * scale, 74f * scale, size - 74f * scale, size - 74f * scale, 140f, 185f, false, arcFg)
 
       val speedText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        textSize = 112f * scale
+        color = Color.rgb(245, 247, 250)
+        textSize = 104f * scale
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
       }
-      canvas.drawText("74V", size * 0.5f, size * 0.49f, speedText)
+      canvas.drawText("00", size * 0.5f, size * 0.48f, speedText)
 
       val subText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(74, 222, 128)
-        textSize = 36f * scale
+        color = Color.rgb(134, 218, 148)
+        textSize = 34f * scale
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
       }
-      canvas.drawText("FOC SPORT+ • 98%", size * 0.5f, size * 0.63f, subText)
+      canvas.drawText("SPORT • 98%", size * 0.5f, size * 0.62f, subText)
       val auxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(245, 158, 11)
+        color = Color.rgb(176, 186, 198)
         textSize = 26f * scale
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
       }
-      canvas.drawText("BMS 48°C • 240A PK", size * 0.5f, size * 0.75f, auxPaint)
+      canvas.drawText("MPH • FOC READY", size * 0.5f, size * 0.74f, auxPaint)
       return bmp
     }
 
+    /**
+     * Realistic dark polished concrete & machined steel circular automotive photography turntable floor.
+     */
     internal fun buildDynoFloorBitmap(size: Int): Bitmap {
       val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-      val canvas = Canvas(bmp)
+      val pixels = IntArray(size * size)
       val cx = size * 0.5f
       val cy = size * 0.5f
-
-      val bg = Paint().apply {
-        shader = RadialGradient(
-          cx,
-          cy,
-          size * 0.56f,
-          intArrayOf(Color.rgb(26, 40, 68), Color.rgb(13, 21, 38), Color.rgb(5, 8, 16)),
-          floatArrayOf(0f, 0.54f, 1f),
-          Shader.TileMode.CLAMP,
-        )
+      val invHalf = 1f / (size * 0.5f)
+      for (y in 0 until size) {
+        val dy = (y - cy) * invHalf
+        for (x in 0 until size) {
+          val dx = (x - cx) * invHalf
+          val r = sqrt(dx * dx + dy * dy)
+          // Soft overhead studio spotlight falloff on realistic dark polished concrete
+          val spotlight = (1f - (r * 0.85f).coerceIn(0f, 1f)).let { it * it }
+          val mottle = (noise2d(x * 0.025f, y * 0.025f) - 0.5f) * 14f +
+            (noise2d(x * 0.09f, y * 0.09f) - 0.5f) * 8f +
+            (hashPx(x, y) - 0.5f) * 4f
+          val inTurntable = r < 0.70f
+          val onSteelRing = abs(r - 0.72f) < 0.012f
+          val onGroove = abs(r - 0.695f) < 0.005f
+          val lum: Float =
+            when {
+              onGroove -> 16f
+              onSteelRing -> 84f + mottle * 0.4f
+              inTurntable -> 34f + spotlight * 22f + mottle
+              else -> 22f + spotlight * 12f + mottle * 0.7f
+            }
+          val v = lum.toInt().coerceIn(12, 118)
+          pixels[y * size + x] = Color.rgb(v, v + 1, (v + 3).coerceAtMost(124))
+        }
       }
-      canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), bg)
+      bmp.setPixels(pixels, 0, size, 0, 0, size, size)
 
-      val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(62, 56, 189, 248)
-        strokeWidth = (size / 512f).coerceAtLeast(1.5f)
-      }
-      val step = size / 24
-      for (i in 0..24) {
-        val p = i * step.toFloat()
-        canvas.drawLine(p, 0f, p, size.toFloat(), gridPaint)
-        canvas.drawLine(0f, p, size.toFloat(), p, gridPaint)
-      }
-
-      val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = (size / 220f).coerceAtLeast(2.5f)
-        color = Color.argb(170, 34, 211, 238)
-      }
-      canvas.drawCircle(cx, cy, size * 0.36f, ringPaint)
-      ringPaint.strokeWidth = (size / 420f).coerceAtLeast(1.5f)
-      ringPaint.color = Color.argb(95, 56, 189, 248)
-      canvas.drawCircle(cx, cy, size * 0.44f, ringPaint)
-      canvas.drawCircle(cx, cy, size * 0.22f, ringPaint)
-
-      // 15-degree radial degree protractor tick marks around turntable ring
+      // Subtle machined satin-steel compass ticks along the turntable perimeter
+      val canvas = Canvas(bmp)
       val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(165, 125, 211, 252)
-        strokeWidth = (size / 400f).coerceAtLeast(1.5f)
+        color = Color.argb(90, 180, 186, 194)
+        strokeWidth = (size / 512f).coerceAtLeast(1.2f)
       }
       for (deg in 0 until 360 step 15) {
-        val r = (deg * PI / 180.0).toFloat()
-        val inner = size * (if (deg % 45 == 0) 0.34f else 0.352f)
-        val outer = size * 0.378f
+        val rad = (deg * PI / 180.0).toFloat()
+        val inner = size * (if (deg % 45 == 0) 0.342f else 0.349f)
+        val outer = size * 0.356f
         canvas.drawLine(
-          cx + inner * cos(r),
-          cy + inner * sin(r),
-          cx + outer * cos(r),
-          cy + outer * sin(r),
+          cx + inner * cos(rad),
+          cy + inner * sin(rad),
+          cx + outer * cos(rad),
+          cy + outer * sin(rad),
           tickPaint,
         )
       }
-
-      // Dual Steel Dyno Drum Track Markers
-      val drumPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = (size / 180f).coerceAtLeast(3f)
-        color = Color.argb(180, 245, 158, 11)
-      }
-      canvas.drawRoundRect(cx - size * 0.24f, cy - size * 0.055f, cx - size * 0.14f, cy + size * 0.055f, 8f, 8f, drumPaint)
-      canvas.drawRoundRect(cx + size * 0.14f, cy - size * 0.055f, cx + size * 0.24f, cy + size * 0.055f, 8f, 8f, drumPaint)
       return bmp
     }
-  }
 }

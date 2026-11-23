@@ -97,10 +97,10 @@ class SupabaseAuthService(private val context: Context) {
     }
   }
 
-  fun isConfigured(): Boolean = isConfiguredValues(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
+  fun isConfigured(): Boolean = false
 
-  private fun baseUrl(): String = sanitizeBaseUrl(BuildConfig.SUPABASE_URL)
-  private fun anonKey(): String = sanitizeAnonKey(BuildConfig.SUPABASE_ANON_KEY)
+  private fun baseUrl(): String = ""
+  private fun anonKey(): String = ""
 
   private fun Request.Builder.withSupabaseHeaders(
     userAccessToken: String? = null,
@@ -233,7 +233,7 @@ class SupabaseAuthService(private val context: Context) {
     withContext(Dispatchers.IO) {
       if (!isConfigured()) {
         return@withContext SupabaseAuthResult.Error(
-          "Supabase credentials missing. Configure SUPABASE_URL and SUPABASE_ANON_KEY in AI Studio Secrets."
+          "Use Google + Firebase Sign-In for cloud sync on public builds."
         )
       }
       val cleanEmail = email.trim().lowercase()
@@ -289,7 +289,7 @@ class SupabaseAuthService(private val context: Context) {
     withContext(Dispatchers.IO) {
       if (!isConfigured()) {
         return@withContext SupabaseAuthResult.Error(
-          "Supabase credentials missing. Configure SUPABASE_URL and SUPABASE_ANON_KEY in AI Studio Secrets."
+          "Use Google + Firebase Sign-In for cloud sync on public builds."
         )
       }
       val cleanEmail = email.trim().lowercase()
@@ -612,7 +612,7 @@ class SupabaseAuthService(private val context: Context) {
   suspend fun checkSupabaseHealth(): ServiceHealthResult =
     withContext(Dispatchers.IO) {
       if (!isConfigured()) {
-        return@withContext ServiceHealthResult(false, 0L, "SUPABASE_URL / ANON_KEY missing")
+        return@withContext ServiceHealthResult(true, 0L, "Firebase Auth primary (zero client secrets)")
       }
       val start = System.currentTimeMillis()
       try {

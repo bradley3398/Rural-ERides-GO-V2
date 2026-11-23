@@ -189,21 +189,34 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
     riderWeightLbs: Double = settings.riderWeightLbs.toDouble(),
   ) {
     telemetryEngine.updateConfig(settings.gpsAccuracyLimitM, settings.crashSensitivityG)
-    if (activeVehicle != null) {
-      val wh = activeVehicle.batteryWh.toDouble().coerceAtLeast(250.0)
-      val weightFactor =
-        if (riderWeightLbs > 60.0) (0.75 + (riderWeightLbs / 175.0) * 0.25).coerceIn(0.8, 1.55)
-        else 1.0
-      val startPct = _activeRideStartBatteryPct.value.coerceIn(0, 100)
-      val startWh = wh * (startPct / 100.0)
-      val usedWh = telemetry.value.tripDistanceKm * (22.0 * weightFactor)
-      val estPct = (((startWh - usedWh) / wh) * 100.0).toInt().coerceIn(0, startPct)
-      val exactV = PevBatteryPhysics.voltageForSoc(activeVehicle.voltage, estPct.toDouble(), settings.batteryChemistry)
-      telemetryEngine.updateBatteryEstimate(estPct, exactV)
-    } else {
-      val fallbackV = PevBatteryPhysics.voltageForSoc(48.0, telemetry.value.batteryPct.toDouble(), settings.batteryChemistry)
-      telemetryEngine.updateBatteryEstimate(telemetry.value.batteryPct, fallbackV)
-    }
+    val snap = telemetry.value
+    val nomV = activeVehicle?.voltage?.takeIf { it >= 12.0 } ?: 48.0
+    val chemistry = activeVehicle?.batteryChemistry?.ifBlank { settings.batteryChemistry } ?: settings.batteryChemistry
+    val packWh =
+      when {
+        activeVehicle != null && activeVehicle.batteryWh >= 180L -> activeVehicle.batteryWh.toDouble()
+        activeVehicle != null && activeVehicle.batteryAh > 1.0 ->
+          PevBatteryPhysics.computePackWh(nomV, activeVehicle.batteryAh, chemistry)
+        else -> 960.0
+      }
+    val hudPack =
+      PevBatteryPhysics.computeLiveHudPackState(
+        ratedVoltage = nomV,
+        packWh = packWh,
+        chemistry = chemistry,
+        startBatteryPct = _activeRideStartBatteryPct.value,
+        tripDistanceKm = snap.tripDistanceKm,
+        elevationGainM = snap.elevationGainM,
+        speedKmh = snap.speedKmh,
+        avgSpeedKmh = snap.avgSpeedKmh,
+        pitchDeg = snap.pitchDeg.toDouble(),
+        riderWeightLbs = riderWeightLbs,
+        vehicleWeightLbs = activeVehicle?.vehicleWeightLbs ?: 58.0,
+        rideMode = settings.rideMode,
+        ambientTempC = snap.ambientTempC?.toDouble() ?: 22.0,
+        motorWatts = activeVehicle?.motorWatts ?: 0,
+      )
+    telemetryEngine.updateBatteryEstimate(hudPack.socPctInt, hudPack.underLoadVoltageV)
   }
 
   fun ahrsUiThrottleMs(damping: String): Long =
@@ -251,8 +264,9 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
     val cleanStart = startBatteryPct.coerceIn(0, 100)
     _activeRideStartBatteryPct.value = cleanStart
     telemetryEngine.startRideRecording()
-    val voltage = activeVehicle?.voltage ?: 48.0
-    val exactStartV = PevBatteryPhysics.voltageForSoc(voltage, cleanStart.toDouble(), settings.batteryChemistry)
+    val voltage = activeVehicle?.voltage?.takeIf { it >= 12.0 } ?: 48.0
+    val chem = activeVehicle?.batteryChemistry?.ifBlank { settings.batteryChemistry } ?: settings.batteryChemistry
+    val exactStartV = PevBatteryPhysics.voltageForSoc(voltage, cleanStart.toDouble(), chem)
     telemetryEngine.updateBatteryEstimate(cleanStart, exactStartV)
     _statusBanner.value = "Trailhead Ride Recording Active ($cleanStart% • ${"%.1f".format(exactStartV)}V)"
   }
@@ -272,14 +286,15 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
     val vehName = activeVehicle?.name?.ifBlank { "PEV Rig" } ?: "PEV Rig"
     val cleanStart = startBatteryPct.coerceIn(0, 100)
     val cleanEnd = endBatteryPct.coerceIn(0, 100)
-    val packWh = (activeVehicle?.batteryWh ?: 1200L).toDouble().coerceAtLeast(100.0)
+    val chem = activeVehicle?.batteryChemistry?.ifBlank { batteryChemistry } ?: batteryChemistry
+    val packWh = (activeVehicle?.batteryWh ?: 960L).toDouble().coerceAtLeast(180.0)
     val estWh =
       if (cleanStart > cleanEnd) packWh * ((cleanStart - cleanEnd) / 100.0)
       else (snap.tripDistanceKm * 22.0)
     val rid = "ride_${UUID.randomUUID().toString().take(8)}"
     val polyStrings = snap.trailPoints.map { "${"%.5f".format(it.first)},${"%.5f".format(it.second)}" }
     _activeRideStartBatteryPct.value = cleanEnd
-    val endVolts = PevBatteryPhysics.voltageForSoc(activeVehicle?.voltage ?: 48.0, cleanEnd.toDouble(), batteryChemistry)
+    val endVolts = PevBatteryPhysics.voltageForSoc(activeVehicle?.voltage?.takeIf { it >= 12.0 } ?: 48.0, cleanEnd.toDouble(), chem)
     telemetryEngine.updateBatteryEstimate(cleanEnd, endVolts)
 
     viewModelScope.launch {
