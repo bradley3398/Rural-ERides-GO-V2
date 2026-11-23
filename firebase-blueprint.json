@@ -1,0 +1,561 @@
+{
+  "entities": {
+    "RiderProfile": {
+      "title": "RiderProfile",
+      "description": "Owner-only PEV rider profile, emergency contacts, and preferences.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "callsign": { "type": "string" },
+        "email": { "type": "string" },
+        "activeVehicleId": { "type": "string" },
+        "unitSystem": { "type": "string", "enum": ["IMPERIAL", "METRIC"] },
+        "emergencyContactName": { "type": "string" },
+        "sosContactNumber": { "type": "string" },
+        "medicalProfile": { "type": "string" },
+        "acceptedLegal": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "callsign", "email", "activeVehicleId", "unitSystem", "emergencyContactName", "sosContactNumber", "medicalProfile", "acceptedLegal", "createdAt", "updatedAt"]
+    },
+    "PevVehicle": {
+      "title": "PevVehicle",
+      "description": "Personal Electric Vehicle registered in the rider's garage.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["EUC", "ONEWHEEL", "SCOOTER", "EBIKE", "ESKATE"] },
+        "batteryWh": { "type": "integer" },
+        "voltage": { "type": "number" },
+        "targetPsi": { "type": "number" },
+        "odometerKm": { "type": "number" },
+        "serviceIntervalKm": { "type": "number" },
+        "tireSize": { "type": "string" },
+        "photoUri": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "category", "batteryWh", "voltage", "targetPsi", "odometerKm", "serviceIntervalKm", "tireSize", "photoUri", "createdAt", "updatedAt"]
+    },
+    "RideSession": {
+      "title": "RideSession",
+      "description": "Recorded GPS & IMU ride telemetry session.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "vehicleId": { "type": "string" },
+        "vehicleName": { "type": "string" },
+        "title": { "type": "string" },
+        "durationSec": { "type": "integer" },
+        "distanceKm": { "type": "number" },
+        "maxSpeedKmh": { "type": "number" },
+        "avgSpeedKmh": { "type": "number" },
+        "elevationGainM": { "type": "number" },
+        "whUsed": { "type": "number" },
+        "weatherSummary": { "type": "string" },
+        "aiDebrief": { "type": "string" },
+        "polylinePoints": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "vehicleId", "vehicleName", "title", "durationSec", "distanceKm", "maxSpeedKmh", "avgSpeedKmh", "elevationGainM", "whUsed", "weatherSummary", "aiDebrief", "polylinePoints", "createdAt", "updatedAt"]
+    },
+    "MaintenanceTask": {
+      "title": "MaintenanceTask",
+      "description": "Scheduled or completed PEV maintenance task.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "vehicleId": { "type": "string" },
+        "vehicleName": { "type": "string" },
+        "title": { "type": "string" },
+        "notes": { "type": "string" },
+        "dueOdometerKm": { "type": "number" },
+        "completed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "vehicleId", "vehicleName", "title", "notes", "dueOdometerKm", "completed", "createdAt", "updatedAt"]
+    },
+    "SavedVideo": {
+      "title": "SavedVideo",
+      "description": "Bookmarked YouTube Data API v3 video and personal study notes.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "videoId": { "type": "string" },
+        "title": { "type": "string" },
+        "channelTitle": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "publishedAt": { "type": "string" },
+        "categoryTag": { "type": "string" },
+        "personalNote": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "videoId", "title", "channelTitle", "thumbnailUrl", "publishedAt", "categoryTag", "personalNote", "createdAt", "updatedAt"]
+    },
+    "PrayerJournalEntry": {
+      "title": "PrayerJournalEntry",
+      "description": "Owner-only Rider's Prayer journal reflection.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "body", "category", "createdAt", "updatedAt"]
+    },
+    "UserNotification": {
+      "title": "UserNotification",
+      "description": "Targeted user notification item.",
+      "type": "object",
+      "properties": {
+        "recipientId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderCallsign": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recipientId", "senderId", "senderCallsign", "type", "title", "body", "read", "createdAt", "updatedAt"]
+    },
+    "PublicPilotProfile": {
+      "title": "PublicPilotProfile",
+      "description": "Public pilot callsign, rank, XP, and telemetry totals without PII.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "callsign": { "type": "string" },
+        "rankBadge": { "type": "string" },
+        "xpPoints": { "type": "integer" },
+        "totalKm": { "type": "number" },
+        "ridesCount": { "type": "integer" },
+        "verified": { "type": "boolean" },
+        "banned": { "type": "boolean" },
+        "trustScore": { "type": "integer" },
+        "vehicleSummary": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["PUBLIC", "PRIVATE"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "callsign", "rankBadge", "xpPoints", "totalKm", "ridesCount", "verified", "banned", "trustScore", "vehicleSummary", "visibility", "createdAt", "updatedAt"]
+    },
+    "BoardPost": {
+      "title": "BoardPost",
+      "description": "Community Feed transmission post.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "authorCallsign": { "type": "string" },
+        "authorBadge": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "pollQuestion": { "type": "string" },
+        "pollOptions": { "type": "array" },
+        "priceUsd": { "type": "number" },
+        "locationLabel": { "type": "string" },
+        "telemetrySummary": { "type": "string" },
+        "helpNeeded": { "type": "boolean" },
+        "speedTrap": { "type": "boolean" },
+        "stolenAlert": { "type": "boolean" },
+        "likesCount": { "type": "integer" },
+        "commentsCount": { "type": "integer" },
+        "flaggedCount": { "type": "integer" },
+        "visibility": { "type": "string", "enum": ["PUBLIC"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "authorCallsign", "authorBadge", "category", "title", "body", "imageUrl", "pollQuestion", "pollOptions", "priceUsd", "locationLabel", "telemetrySummary", "helpNeeded", "speedTrap", "stolenAlert", "likesCount", "commentsCount", "flaggedCount", "visibility", "createdAt", "updatedAt"]
+    },
+    "BoardComment": {
+      "title": "BoardComment",
+      "description": "Comment on a community board post.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "authorCallsign": { "type": "string" },
+        "body": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["PUBLIC"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "authorCallsign", "body", "visibility", "createdAt", "updatedAt"]
+    },
+    "BoardLike": {
+      "title": "BoardLike",
+      "description": "User volt/upvote record on a board post.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "createdAt"]
+    },
+    "RadarRider": {
+      "title": "RadarRider",
+      "description": "Live Rider Radar telemetry beacon.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "callsign": { "type": "string" },
+        "vehicleName": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "speedKmh": { "type": "number" },
+        "headingDeg": { "type": "number" },
+        "batteryPct": { "type": "integer" },
+        "statusTag": { "type": "string", "enum": ["CRUISING", "CHARGING", "SOS", "ASSEMBLE", "OFFLINE"] },
+        "visibility": { "type": "string", "enum": ["PUBLIC", "HIDDEN"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "callsign", "vehicleName", "lat", "lng", "speedKmh", "headingDeg", "batteryPct", "statusTag", "visibility", "createdAt", "updatedAt"]
+    },
+    "RadarMeetup": {
+      "title": "RadarMeetup",
+      "description": "Scheduled group ride meetup pin on Rider Radar.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "creatorCallsign": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "scheduledTime": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "attendeeCount": { "type": "integer" },
+        "visibility": { "type": "string", "enum": ["PUBLIC"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "creatorCallsign", "title", "description", "scheduledTime", "lat", "lng", "attendeeCount", "visibility", "createdAt", "updatedAt"]
+    },
+    "RadarHazard": {
+      "title": "RadarHazard",
+      "description": "Trail hazard or enforcement pin on Rider Radar.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "creatorCallsign": { "type": "string" },
+        "hazardType": { "type": "string", "enum": ["POTHOLE", "GRAVEL", "POLICE", "CLOSURE", "DOG", "FLOOD"] },
+        "description": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "upvotes": { "type": "integer" },
+        "visibility": { "type": "string", "enum": ["PUBLIC"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "creatorCallsign", "hazardType", "description", "lat", "lng", "upvotes", "visibility", "createdAt", "updatedAt"]
+    },
+    "RadarWaypoint": {
+      "title": "RadarWaypoint",
+      "description": "Shared charger, repair station, or scenic waypoint.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "creatorCallsign": { "type": "string" },
+        "waypointType": { "type": "string", "enum": ["CHARGER", "REPAIR", "WATER", "SCENIC", "MEETSPOT"] },
+        "title": { "type": "string" },
+        "notes": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "visibility": { "type": "string", "enum": ["PUBLIC"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "creatorCallsign", "waypointType", "title", "notes", "lat", "lng", "visibility", "createdAt", "updatedAt"]
+    },
+    "ChannelPresence": {
+      "title": "ChannelPresence",
+      "description": "Walkie-Talkie active operator presence in a tactical channel.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "callsign": { "type": "string" },
+        "channelId": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "callsign", "channelId", "active", "createdAt", "updatedAt"]
+    },
+    "ChannelSpeakerState": {
+      "title": "ChannelSpeakerState",
+      "description": "Half-duplex current speaker floor lock on a tactical channel.",
+      "type": "object",
+      "properties": {
+        "speakerUid": { "type": "string" },
+        "speakerCallsign": { "type": "string" },
+        "channelId": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["speakerUid", "speakerCallsign", "channelId", "active", "createdAt", "updatedAt"]
+    },
+    "WalkieVoiceLog": {
+      "title": "WalkieVoiceLog",
+      "description": "Async Push-to-Talk voice transmission log.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "senderCallsign": { "type": "string" },
+        "channelId": { "type": "string" },
+        "audioBase64": { "type": "string" },
+        "durationMs": { "type": "integer" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "senderCallsign", "channelId", "audioBase64", "durationMs", "active", "createdAt", "updatedAt"]
+    },
+    "DmThread": {
+      "title": "DmThread",
+      "description": "Direct message conversation metadata between two riders.",
+      "type": "object",
+      "properties": {
+        "participantUids": { "type": "array" },
+        "participantCallsigns": { "type": "array" },
+        "lastMessage": { "type": "string" },
+        "selfDestructSec": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participantUids", "participantCallsigns", "lastMessage", "selfDestructSec", "createdAt", "updatedAt"]
+    },
+    "DmMessage": {
+      "title": "DmMessage",
+      "description": "Individual direct message entry with optional voice note or photo.",
+      "type": "object",
+      "properties": {
+        "participantUids": { "type": "array" },
+        "senderId": { "type": "string" },
+        "senderCallsign": { "type": "string" },
+        "text": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "voiceBase64": { "type": "string" },
+        "selfDestructSec": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participantUids", "senderId", "senderCallsign", "text", "imageUrl", "voiceBase64", "selfDestructSec", "createdAt", "updatedAt"]
+    },
+    "CallSession": {
+      "title": "CallSession",
+      "description": "Direct Audio/Video call signaling state between two riders.",
+      "type": "object",
+      "properties": {
+        "callerUid": { "type": "string" },
+        "callerCallsign": { "type": "string" },
+        "calleeUid": { "type": "string" },
+        "calleeCallsign": { "type": "string" },
+        "callType": { "type": "string", "enum": ["AUDIO", "VIDEO"] },
+        "status": { "type": "string", "enum": ["RINGING", "ACTIVE", "ENDED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["callerUid", "callerCallsign", "calleeUid", "calleeCallsign", "callType", "status", "createdAt", "updatedAt"]
+    },
+    "CallSignal": {
+      "title": "CallSignal",
+      "description": "WebRTC SDP/ICE signaling packet inside a direct call session.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "signalType": { "type": "string", "enum": ["OFFER", "ANSWER", "ICE"] },
+        "payload": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "signalType", "payload", "createdAt", "updatedAt"]
+    },
+    "CloudBackup": {
+      "title": "CloudBackup",
+      "description": "Owner-only encrypted/JSON vault & settings cloud backup snapshot.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "provider": { "type": "string" },
+        "summary": { "type": "string" },
+        "payloadJson": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "provider", "summary", "payloadJson", "createdAt", "updatedAt"]
+    },
+    "EmergencyBroadcast": {
+      "title": "EmergencyBroadcast",
+      "description": "Admin-issued network broadcast banner.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "category": { "type": "string" },
+        "message": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "category", "message", "active", "createdAt", "updatedAt"]
+    },
+    "YoutubeEngagement": {
+      "title": "YoutubeEngagement",
+      "description": "Shared community Volts counter per YouTube video.",
+      "type": "object",
+      "properties": {
+        "videoId": { "type": "string" },
+        "voltsCount": { "type": "integer" },
+        "visibility": { "type": "string", "enum": ["PUBLIC"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["videoId", "voltsCount", "visibility", "createdAt", "updatedAt"]
+    },
+    "YoutubeComment": {
+      "title": "YoutubeComment",
+      "description": "Community comment on a YouTube video.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "authorCallsign": { "type": "string" },
+        "text": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["PUBLIC"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "authorCallsign", "text", "visibility", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Granted admin account marker.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "grantedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "grantedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/RiderProfile" },
+      "description": "Owner-only PEV rider profile and PII settings."
+    },
+    "/users/{userId}/vehicles/{vehicleId}": {
+      "schema": { "$ref": "#/entities/PevVehicle" },
+      "description": "PEVs registered in the owner's garage."
+    },
+    "/users/{userId}/rides/{rideId}": {
+      "schema": { "$ref": "#/entities/RideSession" },
+      "description": "GPS telemetry ride logs owned by the user."
+    },
+    "/users/{userId}/maintenance/{taskId}": {
+      "schema": { "$ref": "#/entities/MaintenanceTask" },
+      "description": "Maintenance tasks owned by the user."
+    },
+    "/users/{userId}/saved_videos/{videoId}": {
+      "schema": { "$ref": "#/entities/SavedVideo" },
+      "description": "Watchlist and notes for saved YouTube videos."
+    },
+    "/users/{userId}/prayers/{prayerId}": {
+      "schema": { "$ref": "#/entities/PrayerJournalEntry" },
+      "description": "Personal Rider's Prayer journal entries."
+    },
+    "/users/{userId}/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/UserNotification" },
+      "description": "Targeted user inbox notifications."
+    },
+    "/users/{userId}/backups/{backupId}": {
+      "schema": { "$ref": "#/entities/CloudBackup" },
+      "description": "Owner-only full settings and garage cloud backup snapshots."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Admin role grant records."
+    },
+    "/user_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/PublicPilotProfile" },
+      "description": "Public pilot callsigns, rank badges, XP, and telemetry totals."
+    },
+    "/board_posts/{postId}": {
+      "schema": { "$ref": "#/entities/BoardPost" },
+      "description": "Community feed transmissions across all categories."
+    },
+    "/board_posts/{postId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/BoardComment" },
+      "description": "Comments under a community board post."
+    },
+    "/board_posts/{postId}/likes/{likeUserId}": {
+      "schema": { "$ref": "#/entities/BoardLike" },
+      "description": "Volt reaction markers on a community board post."
+    },
+    "/radar_riders/{riderId}": {
+      "schema": { "$ref": "#/entities/RadarRider" },
+      "description": "Live Rider Radar position beacons."
+    },
+    "/radar_meetups/{meetupId}": {
+      "schema": { "$ref": "#/entities/RadarMeetup" },
+      "description": "Group Ride Meetup pins on Rider Radar."
+    },
+    "/radar_hazards/{hazardId}": {
+      "schema": { "$ref": "#/entities/RadarHazard" },
+      "description": "Trail hazard and speed trap pins on Rider Radar."
+    },
+    "/radar_waypoints/{waypointId}": {
+      "schema": { "$ref": "#/entities/RadarWaypoint" },
+      "description": "Shared charging, repair, and scenic waypoints."
+    },
+    "/channels/{channelId}/presence/{peerId}": {
+      "schema": { "$ref": "#/entities/ChannelPresence" },
+      "description": "Active P2P Walkie-Talkie operators per channel."
+    },
+    "/channels/{channelId}/state/{stateId}": {
+      "schema": { "$ref": "#/entities/ChannelSpeakerState" },
+      "description": "Half-duplex speaker floor state per channel."
+    },
+    "/channels/{channelId}/walkie/{msgId}": {
+      "schema": { "$ref": "#/entities/WalkieVoiceLog" },
+      "description": "Async Push-to-Talk voice transmission logs."
+    },
+    "/direct_messages/{threadId}": {
+      "schema": { "$ref": "#/entities/DmThread" },
+      "description": "Private 1:1 DM thread headers."
+    },
+    "/direct_messages/{threadId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/DmMessage" },
+      "description": "Messages within a 1:1 DM thread."
+    },
+    "/call_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/CallSession" },
+      "description": "Audio/Video call signaling documents."
+    },
+    "/call_sessions/{sessionId}/signals/{signalId}": {
+      "schema": { "$ref": "#/entities/CallSignal" },
+      "description": "WebRTC SDP offer/answer and ICE candidates for an active call session."
+    },
+    "/broadcasts/{broadcastId}": {
+      "schema": { "$ref": "#/entities/EmergencyBroadcast" },
+      "description": "Admin-issued network emergency broadcasts."
+    },
+    "/youtube_engagements/{videoId}": {
+      "schema": { "$ref": "#/entities/YoutubeEngagement" },
+      "description": "Community Volt counts per YouTube video."
+    },
+    "/youtube_engagements/{videoId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/YoutubeComment" },
+      "description": "Community comments per YouTube video."
+    }
+  }
+}

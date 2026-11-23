@@ -1,0 +1,143 @@
+{
+  "project_info": {
+    "project_number": "1030367232900",
+    "firebase_url": "https://rural-erides-go-default-rtdb.firebaseio.com",
+    "project_id": "rural-erides-go",
+    "storage_bucket": "rural-erides-go.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1030367232900:android:2301877e3eb854e8c993d1",
+        "android_client_info": {
+          "package_name": "com.aistudio.ruralerides.vxbmqt"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1030367232900-odahqgp3ciiqpd2n1hp0dbls3uung52t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.ruralerides.vxbmqt",
+            "certificate_hash": "dc19ead1a3803c33dca5943b38ac543216642aed"
+          }
+        },
+        {
+          "client_id": "1030367232900-gqci4dcbsd2fo92m6b2oupupo8sqkvpi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbqZRoqq6xKsjHmr0062Gn_LJ87zXJVZA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1030367232900-gqci4dcbsd2fo92m6b2oupupo8sqkvpi.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1030367232900:android:b96563e096b095d6c993d1",
+        "android_client_info": {
+          "package_name": "com.aistudio.volttrail.kqrmvx"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1030367232900-gqci4dcbsd2fo92m6b2oupupo8sqkvpi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbqZRoqq6xKsjHmr0062Gn_LJ87zXJVZA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1030367232900-gqci4dcbsd2fo92m6b2oupupo8sqkvpi.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1030367232900:android:862649b03d744916c993d1",
+        "android_client_info": {
+          "package_name": "com.bradleycallison.ruraleridesgo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1030367232900-gqci4dcbsd2fo92m6b2oupupo8sqkvpi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbqZRoqq6xKsjHmr0062Gn_LJ87zXJVZA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1030367232900-gqci4dcbsd2fo92m6b2oupupo8sqkvpi.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1030367232900:android:9a6609ac72bff861c993d1",
+        "android_client_info": {
+          "package_name": "com.ruraleridesgo.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1030367232900-il5v1ji2l53onrk9kh5fo08he04tqtu8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ruraleridesgo.app",
+            "certificate_hash": "8ee3e5108104344b242d55a49bf21f09a25e107e"
+          }
+        },
+        {
+          "client_id": "1030367232900-gqci4dcbsd2fo92m6b2oupupo8sqkvpi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbqZRoqq6xKsjHmr0062Gn_LJ87zXJVZA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1030367232900-gqci4dcbsd2fo92m6b2oupupo8sqkvpi.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
