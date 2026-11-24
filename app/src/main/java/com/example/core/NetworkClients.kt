@@ -2736,7 +2736,76 @@ object LiveCloudServices {
             }
           }
         }
-        // Keyless Wikipedia OpenSearch fallback so deep grounding always returns factual context
+        // 4. Keyless Live Bing Web Search RSS (works with zero API keys; rich PEV specs, parts, prices & URLs)
+        if (combined.size < maxPerEngine || deepMode) {
+          runCatching {
+            val q = URLEncoder.encode(query.take(140), "UTF-8")
+            val rssUrl = "https://www.bing.com/search?q=$q&format=rss&cc=US&setlang=en-US"
+            val req =
+              Request.Builder()
+                .url(rssUrl)
+                .header(
+                  "User-Agent",
+                  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+                )
+                .header("Accept", "application/rss+xml, application/xml, text/xml, */*")
+                .get()
+                .build()
+            httpClient.newCall(req).execute().use { resp ->
+              if (resp.isSuccessful) {
+                val xml = resp.body?.string().orEmpty()
+                val items = parseStandardRss(xml, "BingWeb")
+                items.take(maxPerEngine).forEach { it ->
+                  val cleanLink = it.link.trim()
+                  if (cleanLink.startsWith("http")) {
+                    combined += "- [Web] ${it.title.trim()}: ${it.summary.trim().take(240)} ($cleanLink)"
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 5. Keyless Live DuckDuckGo HTML Search (broad independent PEV dealer & forum grounding)
+        if (combined.size < (if (deepMode) 8 else 4)) {
+          runCatching {
+            val q = URLEncoder.encode(query.take(140), "UTF-8")
+            val ddgUrl = "https://html.duckduckgo.com/html/?q=$q"
+            val req =
+              Request.Builder()
+                .url(ddgUrl)
+                .header(
+                  "User-Agent",
+                  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+                )
+                .header("Accept", "text/html,application/xhtml+xml")
+                .get()
+                .build()
+            httpClient.newCall(req).execute().use { resp ->
+              if (resp.isSuccessful) {
+                val html = resp.body?.string().orEmpty()
+                val titleRe = Regex("""<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+                val snipRe = Regex("""class="result__snippet"[^>]*>(.*?)</(?:a|div|span)>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+                val titles = titleRe.findAll(html).toList()
+                val snips = snipRe.findAll(html).map { m -> m.groupValues[1].replace(Regex("<[^>]+>"), " ").replace(Regex("\\s+"), " ").trim() }.toList()
+                titles.take(maxPerEngine).forEachIndexed { idx, m ->
+                  val rawHref = m.groupValues[1].replace("&amp;", "&")
+                  val resolvedUrl =
+                    Regex("""[?&]uddg=([^&]+)""").find(rawHref)?.groupValues?.get(1)?.let { enc ->
+                      runCatching { java.net.URLDecoder.decode(enc, "UTF-8") }.getOrDefault("")
+                    }.orEmpty().ifBlank { if (rawHref.startsWith("http")) rawHref else "" }
+                  val cleanTitle = m.groupValues[2].replace(Regex("<[^>]+>"), " ").replace(Regex("\\s+"), " ").trim()
+                  val snippet = snips.getOrElse(idx) { "" }.take(220)
+                  if (cleanTitle.isNotBlank() && resolvedUrl.startsWith("http")) {
+                    combined += "- [DDG] $cleanTitle: $snippet ($resolvedUrl)"
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 6. Keyless Wikipedia OpenSearch fallback so deep grounding always returns factual context
         if (combined.size < 3) {
           val q = URLEncoder.encode(query.take(80), "UTF-8")
           val wikiUrl = "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=$q&srlimit=4&format=json"
@@ -2760,7 +2829,7 @@ object LiveCloudServices {
       } catch (e: Exception) {
         Log.w(TAG, "Optional web search skipped: ${e.message}")
       }
-      combined.distinct().take(if (deepMode) 18 else 6).joinToString("\n")
+      combined.distinct().take(if (deepMode) 18 else 8).joinToString("\n")
     }
 
   suspend fun uploadImageToImgbb(base64Image: String): Result<String> =
@@ -3010,44 +3079,26 @@ object LiveCloudServices {
         }
       }
 
-      // 2. Keyless Wikipedia PageImages Search
-      runCatching {
-        val q = URLEncoder.encode(clean, "UTF-8")
-        val url =
-          "https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=$q&gsrlimit=4&prop=pageimages&pithumbsize=520&format=json"
-        val req = Request.Builder().url(url).header("User-Agent", "RuralERidesGO/10.0 Android").get().build()
-        httpClient.newCall(req).execute().use { resp ->
-          if (resp.isSuccessful) {
-            val pages = JSONObject(resp.body?.string().orEmpty()).optJSONObject("query")?.optJSONObject("pages")
-            if (pages != null) {
-              val keys = pages.keys()
-              while (keys.hasNext()) {
-                val p = pages.optJSONObject(keys.next()) ?: continue
-                val src = p.optJSONObject("thumbnail")?.optString("source").orEmpty()
-                if (src.startsWith("https://")) candidateUrls += src
-              }
-            }
-          }
-        }
-      }
+      // 2. Keyless Multi-Engine Live Product Image Search (Bing Images + Shopify PEV Dealers + DDG)
+      val liveUrls = runCatching { fetchLiveProductImages("$clean electric vehicle", limit = 6) }.getOrDefault(emptyList())
+      candidateUrls += liveUrls.filter { it.startsWith("https://") }
 
-      // 3. Keyless Wikimedia Commons Image Search
-      runCatching {
-        val q = URLEncoder.encode("$clean electric", "UTF-8")
-        val url =
-          "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=$q&gsrlimit=4&prop=imageinfo&iiprop=url&iiurlwidth=520&format=json"
-        val req = Request.Builder().url(url).header("User-Agent", "RuralERidesGO/14.0 Android").get().build()
-        httpClient.newCall(req).execute().use { resp ->
-          if (resp.isSuccessful) {
-            val pages = JSONObject(resp.body?.string().orEmpty()).optJSONObject("query")?.optJSONObject("pages")
-            if (pages != null) {
-              val keys = pages.keys()
-              while (keys.hasNext()) {
-                val p = pages.optJSONObject(keys.next()) ?: continue
-                val info = p.optJSONArray("imageinfo")?.optJSONObject(0) ?: continue
-                val src = info.optString("thumburl").ifBlank { info.optString("url") }
-                if (src.startsWith("https://") && !src.endsWith(".svg", ignoreCase = true)) {
-                  candidateUrls += src
+      // 3. Keyless Wikipedia PageImages Search
+      if (candidateUrls.size < 3) {
+        runCatching {
+          val q = URLEncoder.encode(clean, "UTF-8")
+          val url =
+            "https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=$q&gsrlimit=4&prop=pageimages&pithumbsize=520&format=json"
+          val req = Request.Builder().url(url).header("User-Agent", "RuralERidesGO/10.0 Android").get().build()
+          httpClient.newCall(req).execute().use { resp ->
+            if (resp.isSuccessful) {
+              val pages = JSONObject(resp.body?.string().orEmpty()).optJSONObject("query")?.optJSONObject("pages")
+              if (pages != null) {
+                val keys = pages.keys()
+                while (keys.hasNext()) {
+                  val p = pages.optJSONObject(keys.next()) ?: continue
+                  val src = p.optJSONObject("thumbnail")?.optString("source").orEmpty()
+                  if (src.startsWith("https://")) candidateUrls += src
                 }
               }
             }
@@ -3055,7 +3106,33 @@ object LiveCloudServices {
         }
       }
 
-      // 4. Keyless Openverse Creative Commons Image Search
+      // 4. Keyless Wikimedia Commons Image Search
+      if (candidateUrls.size < 3) {
+        runCatching {
+          val q = URLEncoder.encode("$clean electric", "UTF-8")
+          val url =
+            "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=$q&gsrlimit=4&prop=imageinfo&iiprop=url&iiurlwidth=520&format=json"
+          val req = Request.Builder().url(url).header("User-Agent", "RuralERidesGO/14.0 Android").get().build()
+          httpClient.newCall(req).execute().use { resp ->
+            if (resp.isSuccessful) {
+              val pages = JSONObject(resp.body?.string().orEmpty()).optJSONObject("query")?.optJSONObject("pages")
+              if (pages != null) {
+                val keys = pages.keys()
+                while (keys.hasNext()) {
+                  val p = pages.optJSONObject(keys.next()) ?: continue
+                  val info = p.optJSONArray("imageinfo")?.optJSONObject(0) ?: continue
+                  val src = info.optString("thumburl").ifBlank { info.optString("url") }
+                  if (src.startsWith("https://") && !src.endsWith(".svg", ignoreCase = true)) {
+                    candidateUrls += src
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 5. Keyless Openverse Creative Commons Image Search
       if (candidateUrls.isEmpty()) {
         runCatching {
           val q = URLEncoder.encode("$clean electric scooter bike", "UTF-8")
@@ -3076,17 +3153,20 @@ object LiveCloudServices {
         }
       }
 
-      // 5. Live multi-source product image search fallback
-      if (candidateUrls.isEmpty()) {
-        val liveUrls = runCatching { fetchLiveProductImages("$clean electric vehicle", limit = 3) }.getOrDefault(emptyList())
-        candidateUrls += liveUrls.filter { it.startsWith("https://") }
-      }
-
       // Download first valid raster image and convert directly to cloud-safe JPEG Base64
-      for (imgUrl in candidateUrls.distinct().take(8)) {
+      for (imgUrl in candidateUrls.distinct().take(10)) {
         val encoded =
           runCatching {
-            val req = Request.Builder().url(imgUrl).header("User-Agent", "RuralERidesGO/10.0 Android").get().build()
+            val req =
+              Request.Builder()
+                .url(imgUrl)
+                .header(
+                  "User-Agent",
+                  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+                )
+                .header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+                .get()
+                .build()
             httpClient.newCall(req).execute().use { resp ->
               if (!resp.isSuccessful) return@use ""
               val bytes = resp.body?.bytes() ?: return@use ""
@@ -3821,7 +3901,173 @@ object LiveCloudServices {
         }
       }
 
-      // 4. Keyless Wikimedia Commons & Wikipedia Multi-Image Fallback
+      val browserUa =
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+
+      // 4. Keyless Live Bing Image Search (parses real HTTPS product photos & fast Bing CDN thumbnails)
+      if (urls.size < limit) {
+        runCatching {
+          val bingUrl = "https://www.bing.com/images/search?q=$enc&form=HDRSC2&first=1&safeSearch=Strict"
+          val req =
+            Request.Builder()
+              .url(bingUrl)
+              .header("User-Agent", browserUa)
+              .header("Accept", "text/html,application/xhtml+xml")
+              .header("Accept-Language", "en-US,en;q=0.9")
+              .get()
+              .build()
+          httpClient.newCall(req).execute().use { resp ->
+            if (resp.isSuccessful) {
+              val html = resp.body?.string().orEmpty()
+              // Prefer reliable CDN thumbnails (turl -> tse*.mm.bing.net) interleaved with direct murl sources
+              val turlRe = Regex("""(?:&quot;|")turl(?:&quot;|")\s*:\s*(?:&quot;|")(https?:\\?/\\?/[^"&]+)(?:&quot;|")""")
+              val murlRe = Regex("""(?:&quot;|")murl(?:&quot;|")\s*:\s*(?:&quot;|")(https?:\\?/\\?/[^"&]+)(?:&quot;|")""")
+              val turls =
+                turlRe.findAll(html).map { m ->
+                  m.groupValues[1].replace("\\/", "/").replace("&amp;", "&")
+                }.filter { it.startsWith("https://") && acceptRasterUrl(it) }.distinct().toList()
+              val murls =
+                murlRe.findAll(html).map { m ->
+                  m.groupValues[1].replace("\\/", "/").replace("&amp;", "&")
+                }.filter { it.startsWith("https://") && acceptRasterUrl(it) }.distinct().toList()
+
+              val maxPairs = maxOf(turls.size, murls.size)
+              for (idx in 0 until maxPairs) {
+                if (idx < turls.size && urls.size < limit) urls += turls[idx]
+                if (idx < murls.size && urls.size < limit) urls += murls[idx]
+                if (urls.size >= limit) break
+              }
+            }
+          }
+        }
+      }
+
+      // 5. Keyless Live Shopify PEV Dealer Product Photography (official OEM/dealer product CDN photos)
+      if (urls.size < limit) {
+        val dealerHosts =
+          listOf(
+            "www.voromotors.com",
+            "alienrides.com",
+            "www.revrides.com",
+            "ewheels.com",
+            "chargedcycleworks.com",
+            "gritshift.com",
+            "minimotorsusa.com",
+          )
+        val shortQ = URLEncoder.encode(clean.take(64), "UTF-8")
+        runCatching {
+          coroutineScope {
+            dealerHosts.map { host ->
+              async {
+                runCatching {
+                  val sUrl = "https://$host/search/suggest.json?q=$shortQ&resources[type]=product&resources[limit]=3"
+                  val req =
+                    Request.Builder()
+                      .url(sUrl)
+                      .header("User-Agent", browserUa)
+                      .header("Accept", "application/json")
+                      .get()
+                      .build()
+                  httpClient.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use emptyList<String>()
+                    val arr =
+                      JSONObject(resp.body?.string().orEmpty())
+                        .optJSONObject("resources")
+                        ?.optJSONObject("results")
+                        ?.optJSONArray("products")
+                        ?: return@use emptyList<String>()
+                    val found = mutableListOf<String>()
+                    for (i in 0 until arr.length()) {
+                      val p = arr.optJSONObject(i) ?: continue
+                      val rawImg =
+                        p.optString("image").ifBlank {
+                          p.optJSONObject("featured_image")?.optString("url").orEmpty()
+                        }.trim()
+                      val normalized =
+                        when {
+                          rawImg.startsWith("//") -> "https:$rawImg"
+                          rawImg.startsWith("http://") -> rawImg.replaceFirst("http://", "https://")
+                          else -> rawImg
+                        }
+                      if (normalized.startsWith("https://") && acceptRasterUrl(normalized)) {
+                        found += normalized
+                      }
+                    }
+                    found
+                  }
+                }.getOrDefault(emptyList())
+              }
+            }.awaitAll().flatten()
+          }.forEach { u ->
+            if (urls.size < limit) urls += u
+          }
+        }
+      }
+
+      // 6. Keyless DuckDuckGo Live Image Search (vqd token + i.js JSON API)
+      if (urls.size < limit) {
+        runCatching {
+          val seedUrl = "https://duckduckgo.com/?q=$enc&iax=images&ia=images"
+          val seedReq = Request.Builder().url(seedUrl).header("User-Agent", browserUa).get().build()
+          val vqd =
+            httpClient.newCall(seedReq).execute().use { resp ->
+              if (!resp.isSuccessful) ""
+              else {
+                val body = resp.body?.string().orEmpty()
+                Regex("""vqd=["']?([0-9a-zA-Z_-]+)["']?""").find(body)?.groupValues?.get(1).orEmpty()
+              }
+            }
+          if (vqd.isNotBlank()) {
+            val ijsUrl = "https://duckduckgo.com/i.js?l=us-en&o=json&q=$enc&vqd=${URLEncoder.encode(vqd, "UTF-8")}&f=,,,&p=1"
+            val ijsReq =
+              Request.Builder()
+                .url(ijsUrl)
+                .header("User-Agent", browserUa)
+                .header("Referer", "https://duckduckgo.com/")
+                .header("Accept", "application/json")
+                .get()
+                .build()
+            httpClient.newCall(ijsReq).execute().use { resp ->
+              if (resp.isSuccessful) {
+                val arr = JSONObject(resp.body?.string().orEmpty()).optJSONArray("results")
+                if (arr != null) {
+                  for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    val thumb = o.optString("thumbnail").trim()
+                    val full = o.optString("image").trim()
+                    if (thumb.startsWith("https://") && acceptRasterUrl(thumb) && urls.size < limit) urls += thumb
+                    if (full.startsWith("https://") && acceptRasterUrl(full) && urls.size < limit) urls += full
+                    if (urls.size >= limit) break
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 7. Keyless Openverse Creative Commons Image Search
+      if (urls.size < limit) {
+        runCatching {
+          val ovUrl = "https://api.openverse.org/v1/images/?q=$enc&page_size=${limit.coerceIn(3, 8)}"
+          val req = Request.Builder().url(ovUrl).header("User-Agent", "RuralERidesGO/32.0 Android").get().build()
+          httpClient.newCall(req).execute().use { resp ->
+            if (resp.isSuccessful) {
+              val arr = JSONObject(resp.body?.string().orEmpty()).optJSONArray("results")
+              if (arr != null) {
+                for (i in 0 until arr.length()) {
+                  val o = arr.optJSONObject(i) ?: continue
+                  val pick = o.optString("thumbnail").ifBlank { o.optString("url") }
+                  if (acceptRasterUrl(pick)) urls += pick
+                  if (urls.size >= limit) break
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 8. Keyless Wikimedia Commons & Wikipedia Multi-Image Fallback
       if (urls.size < limit) {
         runCatching {
           val wikiUrl =
@@ -4328,16 +4574,7 @@ object LiveCloudServices {
           .sortedByDescending { it.stockBadge.startsWith("Direct Product") }
       }
 
-      // Live Web Auto-Discovery Fallback when fewer than 2 candidate stores verified
-      val hasWebDiscoveryKeys =
-        ApiKeyRing.tavilyKeys().isNotEmpty() ||
-          ApiKeyRing.braveKeys().isNotEmpty() ||
-          ApiKeyRing.googleCsePairs().isNotEmpty()
-      if (!hasWebDiscoveryKeys) {
-        return@withContext primaryOffers
-          .sortedByDescending { it.stockBadge.startsWith("Direct Product") }
-      }
-
+      // Live Web Auto-Discovery Fallback (works keyless via Bing RSS + DuckDuckGo HTML)
       val discoveredOffers =
         runCatching {
           val webCtx = webSearchGrounding("\"$cleanTitle\" buy price \"in stock\"", deepMode = false)

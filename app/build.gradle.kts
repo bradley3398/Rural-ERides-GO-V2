@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.volttrail.kqrmvx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 32
-    versionName = "32.0"
+    versionCode = 34
+    versionName = "34.0"
 
     buildConfigField("Boolean", "LEGAL_COMPLIANCE_MODE", "true")
 
@@ -45,8 +45,8 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = true
-      isShrinkResources = true
+      isMinifyEnabled = false
+      isShrinkResources = false
       ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in

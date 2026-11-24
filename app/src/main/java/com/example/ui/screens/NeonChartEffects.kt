@@ -179,6 +179,7 @@ internal fun Modifier.chartHoverAndScrub(
       var horizontalScrubLocked = false
 
       fun emitForX(x: Float, width: Float) {
+        if (!x.isFinite() || !width.isFinite() || width <= 0f) return
         val rawFrac = (x / width).coerceIn(0f, 1f)
         val idx =
           if (useSlots || itemCount == 1) {
@@ -324,10 +325,13 @@ internal fun NeonChartTooltipOverlay(
           if (sz.width != containerWidthPx) containerWidthPx = sz.width
         },
   ) {
+    val safeAnchor = if (anchorXFraction.isFinite()) anchorXFraction.coerceIn(0f, 1f) else 0.5f
     val maxWidthPx = containerWidthPx.toFloat().coerceAtLeast(approxTooltipWidthPx + 8f)
+    val maxClamped = (maxWidthPx - approxTooltipWidthPx - 4f).coerceAtLeast(4f)
     val clampedX =
-      (anchorXFraction.coerceIn(0f, 1f) * maxWidthPx - approxTooltipWidthPx / 2f)
-        .coerceIn(4f, (maxWidthPx - approxTooltipWidthPx - 4f).coerceAtLeast(4f))
+      (safeAnchor * maxWidthPx - approxTooltipWidthPx / 2f)
+        .let { if (it.isFinite()) it else 4f }
+        .coerceIn(4f, maxClamped)
 
     AnimatedVisibility(
       visible = visible && containerWidthPx > 0,

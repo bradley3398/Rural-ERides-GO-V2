@@ -722,10 +722,43 @@ fun AhrsCockpitBatterySettingsContent(
         TacticalFilterChip(selected = settings.tempUnit == "f", onClick = { sessionVm.updateSettings { it.copy(tempUnit = "f") } }, label = "°F")
         TacticalFilterChip(selected = settings.tempUnit == "c", onClick = { sessionVm.updateSettings { it.copy(tempUnit = "c") } }, label = "°C")
       }
-      Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        listOf("NMC", "LFP").forEach { chem ->
-          TacticalFilterChip(selected = settings.batteryChemistry == chem, onClick = { sessionVm.updateSettings { it.copy(batteryChemistry = chem) } }, label = "Battery: $chem")
+      val selectedChemSpec = remember(settings.batteryChemistry) { PevBatteryPhysics.specFor(settings.batteryChemistry) }
+      Spacer(Modifier.height(6.dp))
+      Text("Default Battery Chemistry (AI & Telemetry Fallback)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(PevBatteryPhysics.ALL_BATTERY_CHEMISTRIES) { spec ->
+          TacticalFilterChip(
+            selected = selectedChemSpec.code == spec.code,
+            onClick = { sessionVm.updateSettings { it.copy(batteryChemistry = spec.code) } },
+            label = spec.shortLabel,
+          )
         }
+      }
+      Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+      ) {
+        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+          Text(
+            "${selectedChemSpec.label} • ${selectedChemSpec.fullCellV}V full / ${selectedChemSpec.nominalCellV}V nom / ${selectedChemSpec.cutoffCellV}V LVC",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+          )
+          Text(
+            "IR ~${selectedChemSpec.typicalCellIrMohm}mΩ • Max ${selectedChemSpec.maxContinuousCRate}C • Min Charge ${selectedChemSpec.minChargeTempC.toInt()}°C • ${selectedChemSpec.cycleLifeLabel}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Text(
+            selectedChemSpec.notes,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      }
+      Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         listOf("Linear", "Adaptive", "Aggressive").forEach { reg ->
           TacticalFilterChip(selected = settings.regenAlgorithm == reg, onClick = { sessionVm.updateSettings { it.copy(regenAlgorithm = reg) } }, label = "Regen: $reg")
         }

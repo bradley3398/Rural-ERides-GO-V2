@@ -137,13 +137,26 @@ private class GravelVoltVulkanHost(
   private var destroyed = false
   private var startNs = System.nanoTime()
 
+  private fun toDirectBuffer(bytes: ByteArray): ByteBuffer =
+    ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply {
+      put(bytes)
+      flip()
+    }
+
   private val choreographer = Choreographer.getInstance()
   private val frameCallback = object : Choreographer.FrameCallback {
     override fun doFrame(frameTimeNanos: Long) {
       if (destroyed) return
       if (started) {
         choreographer.postFrameCallback(this)
-        renderFrame(frameTimeNanos)
+        try {
+          renderFrame(frameTimeNanos)
+        } catch (t: Throwable) {
+          state.onAssetStateChanged?.invoke(
+            Pev3dAssetLoadState.VulkanUnavailable(t.message ?: "Vulkan 3D render error")
+          )
+          destroy()
+        }
       }
     }
   }
@@ -174,6 +187,7 @@ private class GravelVoltVulkanHost(
       val helper = UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK)
       helper.renderCallback = object : UiHelper.RendererCallback {
         override fun onNativeWindowChanged(surface: Surface) {
+          if (destroyed || !surface.isValid) return
           try {
             swapChain?.let { eng.destroySwapChain(it) }
             swapChain = eng.createSwapChain(surface)
@@ -186,14 +200,20 @@ private class GravelVoltVulkanHost(
         }
 
         override fun onDetachedFromSurface() {
-          swapChain?.let { eng.destroySwapChain(it); swapChain = null }
+          if (destroyed) return
+          runCatching {
+            swapChain?.let { eng.destroySwapChain(it); swapChain = null }
+          }
         }
 
         override fun onResized(width: Int, height: Int) {
-          val w = width.coerceAtLeast(1)
-          val h = height.coerceAtLeast(1)
-          view?.viewport = Viewport(0, 0, w, h)
-          camera?.setProjection(52.0, w.toDouble() / h.toDouble(), 0.25, 140.0, Camera.Fov.VERTICAL)
+          if (destroyed) return
+          runCatching {
+            val w = width.coerceAtLeast(1)
+            val h = height.coerceAtLeast(1)
+            view?.viewport = Viewport(0, 0, w, h)
+            camera?.setProjection(52.0, w.toDouble() / h.toDouble(), 0.25, 140.0, Camera.Fov.VERTICAL)
+          }
         }
       }
       helper.attachTo(surfaceView)
@@ -224,8 +244,8 @@ private class GravelVoltVulkanHost(
   private fun setupLightingAndPostProcessing(eng: Engine, scn: Scene, vw: View) {
     val em = EntityManager.get()
     val shadowCfg = LightManager.ShadowOptions().apply {
-      mapSize = 2048
-      shadowCascades = 2
+      mapSize = 1024
+      shadowCascades = 1
       shadowBulbRadius = 0.05f
     }
     sunLightEntity = em.create()
@@ -289,7 +309,7 @@ private class GravelVoltVulkanHost(
 
     val loadedIbl = ktxIbl?.let { buf ->
       try {
-        KTX1Loader.createIndirectLight(eng, buf).indirectLight?.also { il ->
+        KTX1Loader.createIndirectLight(eng, buf).also { il ->
           il.intensity = 34_000f
           indirectLight = il
           scn.indirectLight = il
@@ -300,8 +320,6 @@ private class GravelVoltVulkanHost(
       }
     }
     if (loadedIbl == null) {
-      val cubemap = buildTwilightCubemap(eng, 128, mipmapped = true)
-      iblTexture = cubemap
       val sh = floatArrayOf(
         0.34f, 0.28f, 0.30f,
         0.14f, 0.10f, 0.12f,
@@ -313,18 +331,20 @@ private class GravelVoltVulkanHost(
         -0.03f, -0.02f, -0.01f,
         0.05f, 0.04f, 0.03f,
       )
-      indirectLight = IndirectLight.Builder()
-        .reflections(cubemap)
-        .irradiance(3, sh)
-        .intensity(34_000f)
-        .build(eng)
+      val cubemap = runCatching { buildTwilightCubemap(eng, 32, mipmapped = true) }.getOrNull()
+      iblTexture = cubemap
+      indirectLight = runCatching {
+        val builder = IndirectLight.Builder().irradiance(3, sh).intensity(34_000f)
+        if (cubemap != null) builder.reflections(cubemap)
+        builder.build(eng)
+      }.getOrNull()
       scn.indirectLight = indirectLight
-      envSource = "Procedural Twilight IBL"
+      envSource = if (cubemap != null) "Procedural Twilight IBL" else "Twilight SH IBL"
     }
 
     val loadedSky = ktxSky?.let { buf ->
       try {
-        KTX1Loader.createSkybox(eng, buf).skybox?.also { sb ->
+        KTX1Loader.createSkybox(eng, buf).also { sb ->
           skybox = sb
           scn.skybox = sb
         }
@@ -333,48 +353,70 @@ private class GravelVoltVulkanHost(
       }
     }
     if (loadedSky == null) {
-      val skyTex = buildTwilightCubemap(eng, 128, mipmapped = false)
+      val skyTex = runCatching { buildTwilightCubemap(eng, 32, mipmapped = false) }.getOrNull()
       skyboxTexture = skyTex
-      skybox = Skybox.Builder().environment(skyTex).build(eng)
+      skybox = runCatching {
+        if (skyTex != null) Skybox.Builder().environment(skyTex).build(eng)
+        else Skybox.Builder().color(0.06f, 0.07f, 0.14f, 1f).build(eng)
+      }.getOrNull()
       scn.skybox = skybox
     }
 
-    // Full UE5-Style Post Processing Pipeline on Filament 1.81.0
-    colorGrading = ColorGrading.Builder()
-      .toneMapping(ColorGrading.ToneMapping.ACES)
-      .build(eng)
-    vw.colorGrading = colorGrading
-    vw.multiSampleAntiAliasingOptions = View.MultiSampleAntiAliasingOptions().apply {
-      enabled = true
-      sampleCount = 4
+    // Mobile-safe Post Processing Pipeline on Filament 1.81.0
+    runCatching {
+      colorGrading = ColorGrading.Builder()
+        .toneMapping(ColorGrading.ToneMapping.ACES)
+        .build(eng)
+      vw.colorGrading = colorGrading
     }
-    vw.antiAliasing = View.AntiAliasing.FXAA
-    vw.dithering = View.Dithering.TEMPORAL
-    vw.setShadowingEnabled(true)
-    vw.setShadowType(View.ShadowType.PCF)
-    vw.setDynamicLightingOptions(0.25f, 120.0f)
-    vw.bloomOptions = View.BloomOptions().apply {
-      enabled = true
-      strength = 0.20f
-      levels = 5
-      threshold = true
+    runCatching {
+      vw.multiSampleAntiAliasingOptions = View.MultiSampleAntiAliasingOptions().apply {
+        enabled = true
+        sampleCount = 2
+      }
     }
-    vw.ambientOcclusionOptions = View.AmbientOcclusionOptions().apply {
-      enabled = true
-      radius = 0.35f
-      intensity = 1.25f
-      quality = View.QualityLevel.HIGH
+    runCatching { vw.antiAliasing = View.AntiAliasing.FXAA }
+    runCatching { vw.dithering = View.Dithering.TEMPORAL }
+    runCatching {
+      vw.setShadowingEnabled(true)
+      vw.setShadowType(View.ShadowType.PCF)
+      vw.setDynamicLightingOptions(0.25f, 120.0f)
     }
-    vw.vignetteOptions = View.VignetteOptions().apply {
-      enabled = true
-      midPoint = 0.56f
-      roundness = 0.70f
-      feather = 0.40f
+    runCatching {
+      vw.bloomOptions = View.BloomOptions().apply {
+        enabled = true
+        strength = 0.18f
+        levels = 4
+        threshold = true
+      }
+    }
+    runCatching {
+      vw.ambientOcclusionOptions = View.AmbientOcclusionOptions().apply {
+        enabled = true
+        radius = 0.32f
+        intensity = 1.15f
+        quality = View.QualityLevel.MEDIUM
+      }
+    }
+    runCatching {
+      vw.vignetteOptions = View.VignetteOptions().apply {
+        enabled = true
+        midPoint = 0.56f
+        roundness = 0.70f
+        feather = 0.40f
+      }
     }
   }
 
   private fun buildTwilightCubemap(eng: Engine, baseSize: Int, mipmapped: Boolean): Texture {
-    val levels = if (mipmapped) 7 else 1
+    var levels = 1
+    if (mipmapped) {
+      var s = baseSize
+      while (s > 1) {
+        s = s shr 1
+        levels++
+      }
+    }
     val tex = Texture.Builder()
       .width(baseSize)
       .height(baseSize)
@@ -387,7 +429,7 @@ private class GravelVoltVulkanHost(
       val size = (baseSize shr level).coerceAtLeast(1)
       val blur = if (levels > 1) level / (levels - 1f) else 0f
       for (face in 0 until 6) {
-        val buf = ByteBuffer.allocateDirect(size * size * 4).order(ByteOrder.LITTLE_ENDIAN)
+        val buf = ByteBuffer.allocateDirect(size * size * 4).order(ByteOrder.nativeOrder())
         for (y in 0 until size) {
           val v = 1f - 2f * ((y + 0.5f) / size)
           for (x in 0 until size) {
@@ -417,7 +459,7 @@ private class GravelVoltVulkanHost(
             buf.put(255.toByte())
           }
         }
-        buf.flip()
+        buf.rewind()
         tex.setImage(
           eng, level, 0, 0, face, size, size, 1,
           Texture.PixelBufferDescriptor(buf, Texture.Format.RGBA, Texture.Type.UBYTE),
@@ -580,7 +622,7 @@ private class GravelVoltVulkanHost(
   }
 
   private fun spawnPoolAsset(eng: Engine, scn: Scene, glb: ByteArray, castShadows: Boolean): FilamentAsset? {
-    val asset = assetLoader?.createAsset(ByteBuffer.wrap(glb)) ?: return null
+    val asset = assetLoader?.createAsset(toDirectBuffer(glb)) ?: return null
     resourceLoader?.loadResources(asset)
     asset.releaseSourceData()
     val rm = eng.renderableManager

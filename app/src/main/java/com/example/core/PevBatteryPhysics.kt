@@ -12,6 +12,27 @@ import kotlin.math.roundToInt
  * and LiFePO4 (LFP) 3.2V packs, plus SoC/temperature-dependent IR sag and numerical curve
  * integration for real-world Peukert + BMS low-voltage cutoff (LVC) usable capacity.
  */
+data class BatteryChemistrySpec(
+  val code: String,
+  val label: String,
+  val shortLabel: String,
+  val fullCellV: Double,
+  val nominalCellV: Double,
+  val storageCellV: Double,
+  val cutoffCellV: Double,
+  val sagWarnCellV: Double,
+  val typicalCellIrMohm: Double,
+  val maxContinuousCRate: Double,
+  val cycleLifeLabel: String,
+  val minChargeTempC: Double,
+  val coldIrScale: Double,
+  val coldCapSlopePerC: Double,
+  val cvTaperFactor: Double,
+  val energyDensityWhKg: String,
+  val commonCells: String,
+  val notes: String,
+)
+
 data class BatteryPackProfile(
   val nominalLabelV: Double,
   val seriesCells: Int,
@@ -139,42 +160,341 @@ object PevBatteryPhysics {
       0.0 to 2.80,
     )
 
-  fun isLfp(chemistry: String): Boolean {
-    val c = chemistry.trim().uppercase()
-    return c.contains("LFP") || c.contains("LIFEPO") || c.contains("IRON")
+  // High-energy NCA (Tesla/Panasonic 21700/18650, 3.65V nominal, high density, 4.20V full -> 2.85V LVC)
+  private val ncaCellCurve: List<Pair<Double, Double>> =
+    listOf(
+      100.0 to 4.20,
+      95.0 to 4.12,
+      90.0 to 4.06,
+      80.0 to 3.95,
+      70.0 to 3.85,
+      60.0 to 3.76,
+      50.0 to 3.67,
+      40.0 to 3.58,
+      30.0 to 3.49,
+      20.0 to 3.38,
+      10.0 to 3.20,
+      5.0 to 3.02,
+      0.0 to 2.85,
+    )
+
+  // High-discharge LiPo Pouch (RC/race packs, ultra-low IR, 3.7V nominal, 4.20V -> 3.20V safe cutoff)
+  private val lipoCellCurve: List<Pair<Double, Double>> =
+    listOf(
+      100.0 to 4.20,
+      95.0 to 4.15,
+      90.0 to 4.11,
+      80.0 to 4.02,
+      70.0 to 3.95,
+      60.0 to 3.87,
+      50.0 to 3.82,
+      40.0 to 3.79,
+      30.0 to 3.75,
+      20.0 to 3.70,
+      10.0 to 3.58,
+      5.0 to 3.42,
+      0.0 to 3.20,
+    )
+
+  // LiHV High-Voltage Pouch/Cell (4.35V full, 3.8V nominal, 3.10V cutoff)
+  private val lihvCellCurve: List<Pair<Double, Double>> =
+    listOf(
+      100.0 to 4.35,
+      95.0 to 4.28,
+      90.0 to 4.22,
+      80.0 to 4.11,
+      70.0 to 4.01,
+      60.0 to 3.92,
+      50.0 to 3.84,
+      40.0 to 3.77,
+      30.0 to 3.70,
+      20.0 to 3.60,
+      10.0 to 3.44,
+      5.0 to 3.28,
+      0.0 to 3.10,
+    )
+
+  // Lithium Titanate (LTO — 2.3V nominal, 2.80V full, 1.80V cutoff, sub-zero fast charging & 15,000+ cycles)
+  private val ltoCellCurve: List<Pair<Double, Double>> =
+    listOf(
+      100.0 to 2.80,
+      95.0 to 2.62,
+      90.0 to 2.52,
+      80.0 to 2.43,
+      70.0 to 2.37,
+      60.0 to 2.33,
+      50.0 to 2.30,
+      40.0 to 2.26,
+      30.0 to 2.21,
+      20.0 to 2.14,
+      10.0 to 2.02,
+      5.0 to 1.92,
+      0.0 to 1.80,
+    )
+
+  // Sodium-Ion (Na-Ion — 3.1V nominal, 3.95V full, 2.00V cutoff, wide linear slope, excellent cold performance)
+  private val naIonCellCurve: List<Pair<Double, Double>> =
+    listOf(
+      100.0 to 3.95,
+      95.0 to 3.84,
+      90.0 to 3.74,
+      80.0 to 3.56,
+      70.0 to 3.40,
+      60.0 to 3.24,
+      50.0 to 3.09,
+      40.0 to 2.94,
+      30.0 to 2.76,
+      20.0 to 2.54,
+      10.0 to 2.28,
+      5.0 to 2.14,
+      0.0 to 2.00,
+    )
+
+  // Semi-Solid / Solid-State Lithium (3.75V nominal, 4.25V full, 2.95V cutoff, high density & thermal stability)
+  private val solidStateCellCurve: List<Pair<Double, Double>> =
+    listOf(
+      100.0 to 4.25,
+      95.0 to 4.17,
+      90.0 to 4.11,
+      80.0 to 4.01,
+      70.0 to 3.92,
+      60.0 to 3.84,
+      50.0 to 3.76,
+      40.0 to 3.68,
+      30.0 to 3.59,
+      20.0 to 3.48,
+      10.0 to 3.30,
+      5.0 to 3.14,
+      0.0 to 2.95,
+    )
+
+  val ALL_BATTERY_CHEMISTRIES: List<BatteryChemistrySpec> =
+    listOf(
+      BatteryChemistrySpec(
+        code = "NMC",
+        label = "Li-Ion NMC 3.7V (High-Power)",
+        shortLabel = "NMC 3.7V",
+        fullCellV = 4.20,
+        nominalCellV = 3.70,
+        storageCellV = 3.75,
+        cutoffCellV = 3.00,
+        sagWarnCellV = 3.15,
+        typicalCellIrMohm = 16.0,
+        maxContinuousCRate = 4.0,
+        cycleLifeLabel = "800–1,200 cycles",
+        minChargeTempC = 0.0,
+        coldIrScale = 1.0,
+        coldCapSlopePerC = 0.0118,
+        cvTaperFactor = 1.75,
+        energyDensityWhKg = "230–265 Wh/kg",
+        commonCells = "Molicel P45B/P42A, Samsung 40T/30Q, Sony VTC6",
+        notes = "Balanced power & range standard for performance scooters, e-motos, and EUCs.",
+      ),
+      BatteryChemistrySpec(
+        code = "NMC_36",
+        label = "Li-Ion NMC 3.6V (High-Capacity)",
+        shortLabel = "NMC 3.6V",
+        fullCellV = 4.20,
+        nominalCellV = 3.60,
+        storageCellV = 3.70,
+        cutoffCellV = 2.80,
+        sagWarnCellV = 2.95,
+        typicalCellIrMohm = 22.0,
+        maxContinuousCRate = 2.5,
+        cycleLifeLabel = "600–1,000 cycles",
+        minChargeTempC = 0.0,
+        coldIrScale = 1.05,
+        coldCapSlopePerC = 0.0120,
+        cvTaperFactor = 1.75,
+        energyDensityWhKg = "255–285 Wh/kg",
+        commonCells = "Samsung 50S/50E, LG M50LT, EVE 50E",
+        notes = "Maximum Wh per cell for long-range cruisers; slightly higher sag under heavy boost.",
+      ),
+      BatteryChemistrySpec(
+        code = "NCA",
+        label = "Li-Ion NCA 3.65V (Ultra-Range)",
+        shortLabel = "NCA",
+        fullCellV = 4.20,
+        nominalCellV = 3.65,
+        storageCellV = 3.72,
+        cutoffCellV = 2.85,
+        sagWarnCellV = 3.05,
+        typicalCellIrMohm = 20.0,
+        maxContinuousCRate = 2.2,
+        cycleLifeLabel = "700–1,100 cycles",
+        minChargeTempC = 0.0,
+        coldIrScale = 1.06,
+        coldCapSlopePerC = 0.0122,
+        cvTaperFactor = 1.80,
+        energyDensityWhKg = "260–295 Wh/kg",
+        commonCells = "Panasonic NCR21700A / NCR18650GA, Tesla 2170",
+        notes = "High energy density nickel-cobalt-aluminum cells; avoid high heat & keep storage ~50%.",
+      ),
+      BatteryChemistrySpec(
+        code = "LFP",
+        label = "LiFePO4 / LFP 3.2V (Long-Life)",
+        shortLabel = "LFP",
+        fullCellV = 3.65,
+        nominalCellV = 3.20,
+        storageCellV = 3.28,
+        cutoffCellV = 2.80,
+        sagWarnCellV = 2.90,
+        typicalCellIrMohm = 18.0,
+        maxContinuousCRate = 2.0,
+        cycleLifeLabel = "3,000–6,000 cycles",
+        minChargeTempC = 2.0,
+        coldIrScale = 1.28,
+        coldCapSlopePerC = 0.0155,
+        cvTaperFactor = 1.35,
+        energyDensityWhKg = "140–175 Wh/kg",
+        commonCells = "CATL / EVE Prismatic, Headway 38120, A123 26650",
+        notes = "Ultra-safe flat discharge curve & massive cycle life; NEVER charge below 0°C (lithium plating).",
+      ),
+      BatteryChemistrySpec(
+        code = "LIPO",
+        label = "LiPo Pouch 3.7V (High-Discharge)",
+        shortLabel = "LiPo",
+        fullCellV = 4.20,
+        nominalCellV = 3.70,
+        storageCellV = 3.80,
+        cutoffCellV = 3.20,
+        sagWarnCellV = 3.35,
+        typicalCellIrMohm = 7.5,
+        maxContinuousCRate = 15.0,
+        cycleLifeLabel = "300–500 cycles",
+        minChargeTempC = 5.0,
+        coldIrScale = 0.92,
+        coldCapSlopePerC = 0.0108,
+        cvTaperFactor = 1.60,
+        energyDensityWhKg = "200–245 Wh/kg",
+        commonCells = "SPIM08HP, Turnigy/CNHL/SMC High-C Pouches",
+        notes = "Ultra-low internal resistance for race drag builds; never discharge below 3.2V/cell or store full.",
+      ),
+      BatteryChemistrySpec(
+        code = "LIHV",
+        label = "LiHV 3.8V / 4.35V (High-Volt)",
+        shortLabel = "LiHV",
+        fullCellV = 4.35,
+        nominalCellV = 3.80,
+        storageCellV = 3.85,
+        cutoffCellV = 3.10,
+        sagWarnCellV = 3.30,
+        typicalCellIrMohm = 9.0,
+        maxContinuousCRate = 10.0,
+        cycleLifeLabel = "300–600 cycles",
+        minChargeTempC = 5.0,
+        coldIrScale = 0.95,
+        coldCapSlopePerC = 0.0110,
+        cvTaperFactor = 1.70,
+        energyDensityWhKg = "235–270 Wh/kg",
+        commonCells = "High-Voltage 4.35V LiPo/Pouch Packs",
+        notes = "Extra top-end voltage punch (4.35V/cell full); requires LiHV-compatible charger & BMS.",
+      ),
+      BatteryChemistrySpec(
+        code = "LTO",
+        label = "Lithium Titanate / LTO 2.3V (Sub-Zero)",
+        shortLabel = "LTO",
+        fullCellV = 2.80,
+        nominalCellV = 2.30,
+        storageCellV = 2.35,
+        cutoffCellV = 1.80,
+        sagWarnCellV = 1.95,
+        typicalCellIrMohm = 5.0,
+        maxContinuousCRate = 10.0,
+        cycleLifeLabel = "15,000–25,000 cycles",
+        minChargeTempC = -30.0,
+        coldIrScale = 0.45,
+        coldCapSlopePerC = 0.0045,
+        cvTaperFactor = 1.15,
+        energyDensityWhKg = "75–100 Wh/kg",
+        commonCells = "Yinlong 66160H 40Ah, Toshiba SCiB",
+        notes = "Extreme cold charging down to -30°C, 10C fast charge & ultra-long lifespan; heavier per Wh.",
+      ),
+      BatteryChemistrySpec(
+        code = "NA_ION",
+        label = "Sodium-Ion / Na-Ion 3.1V (All-Weather)",
+        shortLabel = "Na-Ion",
+        fullCellV = 3.95,
+        nominalCellV = 3.10,
+        storageCellV = 3.15,
+        cutoffCellV = 2.00,
+        sagWarnCellV = 2.25,
+        typicalCellIrMohm = 24.0,
+        maxContinuousCRate = 3.0,
+        cycleLifeLabel = "2,500–4,000 cycles",
+        minChargeTempC = -20.0,
+        coldIrScale = 0.62,
+        coldCapSlopePerC = 0.0062,
+        cvTaperFactor = 1.45,
+        energyDensityWhKg = "130–160 Wh/kg",
+        commonCells = "CATL / HiNa / Faradion 18650 & Prismatic Na-Ion",
+        notes = "Wide voltage window (3.95V->2.0V/cell); charges below freezing and safe at 0V transport.",
+      ),
+      BatteryChemistrySpec(
+        code = "SOLID_STATE",
+        label = "Solid-State / Semi-Solid 3.75V",
+        shortLabel = "Solid-State",
+        fullCellV = 4.25,
+        nominalCellV = 3.75,
+        storageCellV = 3.80,
+        cutoffCellV = 2.95,
+        sagWarnCellV = 3.15,
+        typicalCellIrMohm = 14.0,
+        maxContinuousCRate = 4.5,
+        cycleLifeLabel = "1,500–2,500 cycles",
+        minChargeTempC = -10.0,
+        coldIrScale = 0.78,
+        coldCapSlopePerC = 0.0085,
+        cvTaperFactor = 1.50,
+        energyDensityWhKg = "300–360 Wh/kg",
+        commonCells = "Semi-Solid Silicon-Anode & Solid-Electrolyte Pouches",
+        notes = "Next-gen high energy density with enhanced thermal stability and rapid charge acceptance.",
+      ),
+    )
+
+  fun specFor(chemistry: String): BatteryChemistrySpec {
+    val c = chemistry.trim().uppercase().replace("-", "_").replace(" ", "_")
+    return when {
+      c == "LFP" || c.contains("LIFEPO") || c.contains("IRON") -> ALL_BATTERY_CHEMISTRIES.first { it.code == "LFP" }
+      c == "LTO" || c.contains("TITANATE") -> ALL_BATTERY_CHEMISTRIES.first { it.code == "LTO" }
+      c == "NA_ION" || c.contains("NAION") || c.contains("SODIUM") || c.contains("NA+") -> ALL_BATTERY_CHEMISTRIES.first { it.code == "NA_ION" }
+      c == "LIHV" || c.contains("4.35") || c.contains("HIGH_VOLT") -> ALL_BATTERY_CHEMISTRIES.first { it.code == "LIHV" }
+      c == "LIPO" || c.contains("POUCH") || c.contains("POLYMER") -> ALL_BATTERY_CHEMISTRIES.first { it.code == "LIPO" }
+      c == "SOLID_STATE" || c.contains("SOLID") || c.contains("SEMI_SOLID") -> ALL_BATTERY_CHEMISTRIES.first { it.code == "SOLID_STATE" }
+      c == "NCA" || c.contains("PANASONIC") || c.contains("TESLA") -> ALL_BATTERY_CHEMISTRIES.first { it.code == "NCA" }
+      c == "NMC_36" || c.contains("36") || c.contains("3.6") || c.contains("50S") || c.contains("50E") || c.contains("M50") ->
+        ALL_BATTERY_CHEMISTRIES.first { it.code == "NMC_36" }
+      else -> ALL_BATTERY_CHEMISTRIES.first { it.code == "NMC" }
+    }
   }
 
-  fun isNmc36(chemistry: String): Boolean {
-    val c = chemistry.trim().uppercase()
-    return c.contains("36") || c.contains("3.6") || c.contains("50S") || c.contains("50E") || c.contains("M50")
-  }
+  fun isLfp(chemistry: String): Boolean = specFor(chemistry).code == "LFP"
+
+  fun isNmc36(chemistry: String): Boolean = specFor(chemistry).code == "NMC_36"
 
   private fun curveForChemistry(chemistry: String): List<Pair<Double, Double>> =
-    when {
-      isLfp(chemistry) -> lfpCellCurve
-      isNmc36(chemistry) -> nmc36CellCurve
+    when (specFor(chemistry).code) {
+      "LFP" -> lfpCellCurve
+      "NMC_36" -> nmc36CellCurve
+      "NCA" -> ncaCellCurve
+      "LIPO" -> lipoCellCurve
+      "LIHV" -> lihvCellCurve
+      "LTO" -> ltoCellCurve
+      "NA_ION" -> naIonCellCurve
+      "SOLID_STATE" -> solidStateCellCurve
       else -> nmcCellCurve
     }
 
-  private fun nominalCellV(chemistry: String): Double =
-    when {
-      isLfp(chemistry) -> 3.20
-      isNmc36(chemistry) -> 3.60
-      else -> 3.70
-    }
+  private fun nominalCellV(chemistry: String): Double = specFor(chemistry).nominalCellV
 
-  private fun cutoffCellV(chemistry: String): Double =
-    when {
-      isLfp(chemistry) -> 2.80
-      isNmc36(chemistry) -> 2.80
-      else -> 3.00
-    }
+  private fun cutoffCellV(chemistry: String): Double = specFor(chemistry).cutoffCellV
 
   private fun canonicalChemLabel(chemistry: String): String =
-    when {
-      isLfp(chemistry) -> "LFP"
-      isNmc36(chemistry) -> "NMC 3.6V"
-      else -> "NMC"
+    when (specFor(chemistry).code) {
+      "NMC" -> "NMC"
+      "NMC_36" -> "NMC 3.6V"
+      "LFP" -> "LFP"
+      else -> specFor(chemistry).shortLabel
     }
 
   /**
@@ -182,7 +502,8 @@ object PevBatteryPhysics {
    */
   fun resolveSeriesCount(ratedVoltage: Double, chemistry: String = "NMC"): Int {
     val v = ratedVoltage.coerceIn(12.0, 420.0)
-    if (isLfp(chemistry)) {
+    val spec = specFor(chemistry)
+    if (spec.code == "LFP") {
       val knownLfp =
         listOf(
           12.0 to 4,
@@ -202,6 +523,38 @@ object PevBatteryPhysics {
         )
       knownLfp.firstOrNull { abs(it.first - v) <= 1.2 }?.let { return it.second }
       return (v / 3.20).roundToInt().coerceIn(4, 120)
+    }
+    if (spec.code == "LTO") {
+      val knownLto =
+        listOf(
+          12.0 to 5,
+          24.0 to 10,
+          36.0 to 16,
+          48.0 to 20,
+          52.0 to 22,
+          60.0 to 26,
+          72.0 to 30,
+          84.0 to 36,
+          96.0 to 40,
+        )
+      knownLto.firstOrNull { abs(it.first - v) <= 1.5 }?.let { return it.second }
+      return (v / spec.nominalCellV).roundToInt().coerceIn(5, 160)
+    }
+    if (spec.code == "NA_ION") {
+      val knownNa =
+        listOf(
+          12.0 to 4,
+          24.0 to 8,
+          36.0 to 12,
+          48.0 to 15,
+          52.0 to 16,
+          60.0 to 19,
+          72.0 to 23,
+          84.0 to 27,
+          96.0 to 31,
+        )
+      knownNa.firstOrNull { abs(it.first - v) <= 1.5 }?.let { return it.second }
+      return (v / spec.nominalCellV).roundToInt().coerceIn(4, 135)
     }
 
     val knownNmc =
@@ -259,18 +612,18 @@ object PevBatteryPhysics {
         360.0 to 96,
       )
     knownNmc.firstOrNull { abs(it.first - v) <= 0.7 }?.let { return it.second }
-    return (v / nominalCellV(chemistry)).roundToInt().coerceIn(4, 108)
+    return (v / spec.nominalCellV).roundToInt().coerceIn(4, 140)
   }
 
   /** Returns the complete voltage specification profile for any PEV pack. */
   fun packProfile(ratedVoltage: Double, chemistry: String = "NMC"): BatteryPackProfile {
-    val lfp = isLfp(chemistry)
+    val spec = specFor(chemistry)
     val s = resolveSeriesCount(ratedVoltage, chemistry)
-    val fullV = s * (if (lfp) 3.65 else 4.20)
-    val nomV = s * nominalCellV(chemistry)
-    val storageV = s * (if (lfp) 3.28 else if (isNmc36(chemistry)) 3.70 else 3.75)
+    val fullV = s * spec.fullCellV
+    val nomV = s * spec.nominalCellV
+    val storageV = s * spec.storageCellV
     val lowWarnV = voltageForSeriesSoc(s, 20.0, chemistry)
-    val emptyV = s * cutoffCellV(chemistry)
+    val emptyV = s * spec.cutoffCellV
     return BatteryPackProfile(
       nominalLabelV = ratedVoltage,
       seriesCells = s,
@@ -281,6 +634,18 @@ object PevBatteryPhysics {
       lowWarningV = round2(lowWarnV),
       cutoffEmptyV = round2(emptyV),
     )
+  }
+
+  /** Concise chemistry & voltage engineering summary injected into Gemini AI prompts for maximum accuracy. */
+  fun aiContextSummary(ratedVoltage: Double, chemistry: String = "NMC", packWh: Long = 0L): String {
+    val spec = specFor(chemistry)
+    val profile = packProfile(ratedVoltage, chemistry)
+    val whPart = if (packWh > 0L) " | Capacity=${packWh}Wh (~${"%.1f".format(computePackAh(packWh.toDouble(), ratedVoltage, chemistry))}Ah)" else ""
+    return "BatteryChemistry=${spec.label} (${spec.code}) | Config=${profile.seriesCells}S$whPart | " +
+      "Full=${profile.fullChargeV}V (${spec.fullCellV}V/cell) | Nom=${profile.nominalPackV}V (${spec.nominalCellV}V/cell) | " +
+      "Storage=${profile.storageV}V | LVC=${profile.cutoffEmptyV}V (${spec.cutoffCellV}V/cell) | " +
+      "SagWarn=${"%.1f".format(profile.seriesCells * spec.sagWarnCellV)}V | MaxCont=${spec.maxContinuousCRate}C | " +
+      "MinChargeTemp=${spec.minChargeTempC.roundToInt()}C | Cycles=${spec.cycleLifeLabel}"
   }
 
   /** Accurate resting pack voltage for an explicit series cell count [seriesCells] and SoC (0..100%). */
@@ -350,7 +715,7 @@ object PevBatteryPhysics {
       } else {
         1.14 + ((30.0 - soc) / 30.0).pow(1.75) * 0.78
       }
-    val chemColdScale = if (isLfp(chemistry)) 1.28 else 1.0
+    val chemColdScale = specFor(chemistry).coldIrScale
     val tempMult =
       if (ambientTempC >= 25.0) {
         (1.0 - (ambientTempC - 25.0) * 0.0038).coerceIn(0.86, 1.0)
@@ -369,7 +734,7 @@ object PevBatteryPhysics {
       return if (ambientTempC > 40.0) (1.0 - (ambientTempC - 40.0) * 0.004).coerceIn(0.90, 1.0) else 1.0
     }
     val delta = (20.0 - ambientTempC).coerceIn(0.0, 48.0)
-    val slope = if (isLfp(chemistry)) 0.0155 else 0.0118
+    val slope = specFor(chemistry).coldCapSlopePerC
     return (1.0 - delta * slope).coerceIn(0.42, 1.0)
   }
 
@@ -643,7 +1008,7 @@ object PevBatteryPhysics {
     val cvSpanPct = (target - cvStart).coerceAtLeast(0.0)
 
     val ccHours = (ah * (ccSpanPct / 100.0)) / chargerAmps
-    val cvFactor = if (isLfp(chemistry)) 1.35 else 1.75
+    val cvFactor = specFor(chemistry).cvTaperFactor
     val cvHours = ((ah * (cvSpanPct / 100.0)) / chargerAmps) * cvFactor
     return (ccHours + cvHours).coerceAtLeast(0.0)
   }
@@ -798,7 +1163,7 @@ object PevBatteryPhysics {
         ratedVoltage = cleanNomV,
         parallelCells = parallelCells,
         chemistry = chemistry,
-        cellInternalResistanceMohm = if (isLfp(chemistry)) 18.0 else 22.0,
+        cellInternalResistanceMohm = specFor(chemistry).typicalCellIrMohm,
         socPct = socExact,
         ambientTempC = ambientTempC,
       )

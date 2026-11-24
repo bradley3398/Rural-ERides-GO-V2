@@ -57,7 +57,7 @@ internal object Pev3dPbrTextures {
       PevPbrMaterialId.BRAKE_ROTOR -> buildBrakeRotorPbrBundle(512)
       PevPbrMaterialId.QUILTED_LEATHER -> buildQuiltedLeatherPbrBundle(512)
       PevPbrMaterialId.TFT_SCREEN -> buildTftPbrBundle(512)
-      PevPbrMaterialId.DYNO_FLOOR -> buildDynoFloorPbrBundle(1024)
+      PevPbrMaterialId.DYNO_FLOOR -> buildDynoFloorPbrBundle(256)
       PevPbrMaterialId.RACING_LIVERY -> buildRacingLiveryPbrBundle(512)
       PevPbrMaterialId.HEADLIGHT_OPTIC -> buildHeadlightOpticPbrBundle(512)
       PevPbrMaterialId.TAILLIGHT_OPTIC -> buildTaillightOpticPbrBundle(512)

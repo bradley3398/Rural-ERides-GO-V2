@@ -307,7 +307,9 @@ fun Pev3dGarageViewer(
     }
   }
   val currentModel = AAA_PEV_MODELS[selectedModelIdx]
-  val archetype = remember(currentModel.category) { Pev3dEngine.archetypeForCategory(currentModel.category) }
+  val archetype = remember(currentModel.name, currentModel.category) {
+    Pev3dEngine.archetypeForCategory("${currentModel.name} ${currentModel.category}")
+  }
   val packSpec = remember(currentModel.voltage) { PevBatteryPhysics.packProfile(currentModel.voltage.toDouble(), "NMC") }
 
   val projectedHotspots =

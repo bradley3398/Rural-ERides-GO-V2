@@ -1,6 +1,7 @@
-# R8 Full Mode Rules for Rural ERides GO
-# Keeps full code shrinking, optimization, and resource shrinking while avoiding
-# heavy obfuscation mapping bloat during Play Console bundle uploads.
+# R8 Rules for Rural ERides GO
+# Keeps code shrinking and resource shrinking while disabling slow multi-pass bytecode
+# optimization and obfuscation to prevent 504 gateway timeouts during AAB bundling.
+-dontoptimize
 -dontobfuscate
 -keepattributes SourceFile,LineNumberTable,Signature,InnerClasses,EnclosingMethod,*Annotation*
 
@@ -56,6 +57,48 @@
 
 # Keep Android hardware service & BroadcastReceiver entry points
 -keep class com.example.hardware.AhrsSensorService { *; }
+
+# Firebase AI Logic, App Check & reCAPTCHA Enterprise (critical under R8 full mode)
+-keep class com.google.firebase.ai.** { *; }
+-keep class com.google.firebase.appcheck.** { *; }
+-keep class com.google.android.recaptcha.** { *; }
+-keep class com.google.android.gms.recaptcha.** { *; }
+-dontwarn com.google.android.recaptcha.**
+-dontwarn com.google.firebase.ai.**
+
+# Ktor HTTP client & engine ServiceLoader providers (used internally by Firebase AI Logic)
+-keep class io.ktor.** { *; }
+-keep class * implements io.ktor.client.HttpClientEngineFactory { *; }
+-keep class * implements io.ktor.client.HttpClientEngineContainer { *; }
+-dontwarn io.ktor.**
+
+# Kotlinx Serialization (used internally by Firebase AI Logic request/response models)
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class com.google.firebase.ai.**$$serializer { *; }
+-keepclassmembers class com.google.firebase.ai.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.google.firebase.ai.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keepclassmembers class * {
+    static ** Companion;
+}
+-keep class **$$serializer { *; }
+
+# Coil & OkHttp image/network pipeline under R8 full mode
+-keep class coil.** { *; }
+-keep class okhttp3.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn coil.**
 
 # Kotlin coroutines & serialization metadata safety under R8 full mode
 -keepclassmembers class kotlinx.coroutines.** {

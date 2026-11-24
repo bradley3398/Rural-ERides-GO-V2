@@ -20,6 +20,8 @@ import com.google.android.filament.EntityManager
 import com.google.android.filament.Filament
 import com.google.android.filament.IndirectLight
 import com.google.android.filament.LightManager
+import com.google.android.filament.Material
+import com.google.android.filament.MaterialInstance
 import com.google.android.filament.Renderer
 import com.google.android.filament.Scene
 import com.google.android.filament.Skybox
@@ -38,6 +40,7 @@ import com.google.android.filament.utils.Utils
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.IdentityHashMap
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -170,10 +173,46 @@ private class PevVulkanHost(
   )
 
   private var nodeBindings: List<GlbNodeBinding> = emptyList()
+  private val materialParamCache = IdentityHashMap<Material, Map<String, Material.ParameterType>>()
   private var uiHelper: UiHelper? = null
   private var started = false
   private var destroyed = false
   private var startNs = System.nanoTime()
+
+  private fun paramTypesFor(mi: MaterialInstance): Map<String, Material.ParameterType> {
+    val mat = mi.material
+    return materialParamCache.getOrPut(mat) {
+      runCatching { mat.parameters.associate { it.name to it.type } }.getOrDefault(emptyMap())
+    }
+  }
+
+  private fun safeSetFloat(mi: MaterialInstance, name: String, value: Float) {
+    if (paramTypesFor(mi)[name] == Material.ParameterType.FLOAT) {
+      runCatching { mi.setParameter(name, value) }
+    }
+  }
+
+  private fun safeSetFloat3(mi: MaterialInstance, name: String, x: Float, y: Float, z: Float) {
+    when (paramTypesFor(mi)[name]) {
+      Material.ParameterType.FLOAT3 -> runCatching { mi.setParameter(name, x, y, z) }
+      Material.ParameterType.FLOAT4 -> runCatching { mi.setParameter(name, x, y, z, 1.0f) }
+      else -> Unit
+    }
+  }
+
+  private fun safeSetFloat4(mi: MaterialInstance, name: String, x: Float, y: Float, z: Float, w: Float) {
+    when (paramTypesFor(mi)[name]) {
+      Material.ParameterType.FLOAT4 -> runCatching { mi.setParameter(name, x, y, z, w) }
+      Material.ParameterType.FLOAT3 -> runCatching { mi.setParameter(name, x, y, z) }
+      else -> Unit
+    }
+  }
+
+  private fun toDirectBuffer(bytes: ByteArray): ByteBuffer =
+    ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply {
+      put(bytes)
+      flip()
+    }
 
   private val choreographer = Choreographer.getInstance()
   private val frameCallback = object : Choreographer.FrameCallback {
@@ -181,7 +220,14 @@ private class PevVulkanHost(
       if (destroyed) return
       if (started) {
         choreographer.postFrameCallback(this)
-        renderFrame(frameTimeNanos)
+        try {
+          renderFrame(frameTimeNanos)
+        } catch (t: Throwable) {
+          state.onAssetStateChanged?.invoke(
+            Pev3dAssetLoadState.VulkanUnavailable(t.message ?: "Vulkan 3D render error")
+          )
+          destroy()
+        }
       }
     }
   }
@@ -213,6 +259,7 @@ private class PevVulkanHost(
       val helper = UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK)
       helper.renderCallback = object : UiHelper.RendererCallback {
         override fun onNativeWindowChanged(surface: Surface) {
+          if (destroyed || !surface.isValid) return
           try {
             swapChain?.let { eng.destroySwapChain(it) }
             swapChain = eng.createSwapChain(surface)
@@ -225,17 +272,23 @@ private class PevVulkanHost(
         }
 
         override fun onDetachedFromSurface() {
-          swapChain?.let {
-            eng.destroySwapChain(it)
-            swapChain = null
+          if (destroyed) return
+          runCatching {
+            swapChain?.let {
+              eng.destroySwapChain(it)
+              swapChain = null
+            }
           }
         }
 
         override fun onResized(width: Int, height: Int) {
-          val w = width.coerceAtLeast(1)
-          val h = height.coerceAtLeast(1)
-          view?.viewport = Viewport(0, 0, w, h)
-          camera?.setProjection(38.0, w.toDouble() / h.toDouble(), 0.25, 40.0, Camera.Fov.VERTICAL)
+          if (destroyed) return
+          runCatching {
+            val w = width.coerceAtLeast(1)
+            val h = height.coerceAtLeast(1)
+            view?.viewport = Viewport(0, 0, w, h)
+            camera?.setProjection(38.0, w.toDouble() / h.toDouble(), 0.25, 40.0, Camera.Fov.VERTICAL)
+          }
         }
       }
       helper.attachTo(surfaceView)
@@ -252,8 +305,8 @@ private class PevVulkanHost(
   private fun setupEnvironmentAndLights(eng: Engine, scn: Scene, vw: View) {
     val em = EntityManager.get()
     val shadowCfg = LightManager.ShadowOptions().apply {
-      mapSize = 2048
-      shadowCascades = 2
+      mapSize = 1024
+      shadowCascades = 1
       shadowBulbRadius = 0.04f
     }
     keyLightEntity = em.create()
@@ -337,31 +390,41 @@ private class PevVulkanHost(
 
     // Full UE5-Style Filament 1.81.0 Post-Processing Pipeline:
     // ACES Filmic ColorGrading, 4x MSAA + FXAA, High SSAO, Subtle HDR Bloom, PCF Shadows & DynamicLightingOptions
-    colorGrading = ColorGrading.Builder()
-      .toneMapping(ColorGrading.ToneMapping.ACES)
-      .build(eng)
-    vw.colorGrading = colorGrading
-    vw.multiSampleAntiAliasingOptions = View.MultiSampleAntiAliasingOptions().apply {
-      enabled = true
-      sampleCount = 4
+    runCatching {
+      colorGrading = ColorGrading.Builder()
+        .toneMapping(ColorGrading.ToneMapping.ACES)
+        .build(eng)
+      vw.colorGrading = colorGrading
     }
-    vw.antiAliasing = View.AntiAliasing.FXAA
-    vw.dithering = View.Dithering.TEMPORAL
-    vw.setShadowingEnabled(true)
-    vw.setShadowType(View.ShadowType.PCF)
-    vw.setDynamicLightingOptions(0.25f, 40.0f)
-    vw.bloomOptions = View.BloomOptions().apply {
-      enabled = true
-      strength = 0.16f
-      levels = 5
-      threshold = true
+    runCatching {
+      vw.multiSampleAntiAliasingOptions = View.MultiSampleAntiAliasingOptions().apply {
+        enabled = true
+        sampleCount = 2
+      }
     }
-    applySsaoIfNeeded(vw)
-    vw.vignetteOptions = View.VignetteOptions().apply {
-      enabled = true
-      midPoint = 0.54f
-      roundness = 0.68f
-      feather = 0.42f
+    runCatching { vw.antiAliasing = View.AntiAliasing.FXAA }
+    runCatching { vw.dithering = View.Dithering.TEMPORAL }
+    runCatching {
+      vw.setShadowingEnabled(true)
+      vw.setShadowType(View.ShadowType.PCF)
+      vw.setDynamicLightingOptions(0.25f, 40.0f)
+    }
+    runCatching {
+      vw.bloomOptions = View.BloomOptions().apply {
+        enabled = true
+        strength = 0.14f
+        levels = 4
+        threshold = true
+      }
+    }
+    runCatching { applySsaoIfNeeded(vw) }
+    runCatching {
+      vw.vignetteOptions = View.VignetteOptions().apply {
+        enabled = true
+        midPoint = 0.54f
+        roundness = 0.68f
+        feather = 0.42f
+      }
     }
   }
 
@@ -369,21 +432,23 @@ private class PevVulkanHost(
     val desired = state.ssaoEnabled
     if (appliedSsaoEnabled == desired) return
     appliedSsaoEnabled = desired
-    vw.ambientOcclusionOptions = if (desired) {
-      View.AmbientOcclusionOptions().apply {
-        enabled = true
-        radius = 0.28f
-        intensity = 1.45f
-        power = 1.25f
-        bias = 0.0005f
-        resolution = 1.0f
-        quality = View.QualityLevel.HIGH
-        bilateralThreshold = 0.05f
-        bentNormals = true
-      }
-    } else {
-      View.AmbientOcclusionOptions().apply {
-        enabled = false
+    runCatching {
+      vw.ambientOcclusionOptions = if (desired) {
+        View.AmbientOcclusionOptions().apply {
+          enabled = true
+          radius = 0.28f
+          intensity = 1.35f
+          power = 1.20f
+          bias = 0.0005f
+          resolution = 0.5f
+          quality = View.QualityLevel.MEDIUM
+          bilateralThreshold = 0.05f
+          bentNormals = false
+        }
+      } else {
+        View.AmbientOcclusionOptions().apply {
+          enabled = false
+        }
       }
     }
   }
@@ -395,7 +460,7 @@ private class PevVulkanHost(
   private fun loadShowroomFloorPlane(eng: Engine, scn: Scene) {
     try {
       val glbBytes = buildShowroomFloorGlb()
-      val asset = assetLoader?.createAsset(ByteBuffer.wrap(glbBytes)) ?: return
+      val asset = assetLoader?.createAsset(toDirectBuffer(glbBytes)) ?: return
       resourceLoader?.loadResources(asset)
       asset.releaseSourceData()
       val rm = eng.renderableManager
@@ -559,7 +624,7 @@ private class PevVulkanHost(
     // Prefer real cmgen .ktx HDRI environment from assets/envs/; otherwise synthesize studio SH + softbox cubemap
     val loadedKtxIbl = ktxIblBuf?.let { buf ->
       try {
-        KTX1Loader.createIndirectLight(eng, buf).indirectLight?.also { il ->
+        KTX1Loader.createIndirectLight(eng, buf).also { il ->
           il.intensity = 38_000f
           indirectLight = il
           scn.indirectLight = il
@@ -571,8 +636,6 @@ private class PevVulkanHost(
     }
 
     if (loadedKtxIbl == null) {
-      val cubemap = createStudioCubemapTexture(eng, 128, preset)
-      iblTexture = cubemap
       val shBands =
         when (preset) {
           Pev3dLightingPreset.STUDIO -> floatArrayOf(
@@ -609,18 +672,20 @@ private class PevVulkanHost(
             0.06f, 0.08f, 0.12f,
           )
         }
-      indirectLight = IndirectLight.Builder()
-        .reflections(cubemap)
-        .irradiance(3, shBands)
-        .intensity(38_000f)
-        .build(eng)
+      val cubemap = runCatching { createStudioCubemapTexture(eng, 32, preset) }.getOrNull()
+      iblTexture = cubemap
+      indirectLight = runCatching {
+        val builder = IndirectLight.Builder().irradiance(3, shBands).intensity(38_000f)
+        if (cubemap != null) builder.reflections(cubemap)
+        builder.build(eng)
+      }.getOrNull()
       scn.indirectLight = indirectLight
-      activeEnvSource = "Procedural Studio IBL"
+      activeEnvSource = if (cubemap != null) "Procedural Studio IBL" else "Studio SH IBL"
     }
 
     val loadedKtxSky = ktxSkyBuf?.let { buf ->
       try {
-        KTX1Loader.createSkybox(eng, buf).skybox?.also { sb ->
+        KTX1Loader.createSkybox(eng, buf).also { sb ->
           skybox = sb
           scn.skybox = sb
         }
@@ -629,9 +694,19 @@ private class PevVulkanHost(
       }
     }
     if (loadedKtxSky == null) {
-      val skyTex = createCycloramaSkyboxTexture(eng, 128, preset)
+      val skyTex = runCatching { createCycloramaSkyboxTexture(eng, 32, preset) }.getOrNull()
       skyboxTexture = skyTex
-      skybox = Skybox.Builder().environment(skyTex).build(eng)
+      skybox = runCatching {
+        if (skyTex != null) {
+          Skybox.Builder().environment(skyTex).build(eng)
+        } else {
+          when (preset) {
+            Pev3dLightingPreset.STUDIO -> Skybox.Builder().color(0.06f, 0.068f, 0.082f, 1f).build(eng)
+            Pev3dLightingPreset.SUNSET -> Skybox.Builder().color(0.11f, 0.065f, 0.060f, 1f).build(eng)
+            Pev3dLightingPreset.NEON -> Skybox.Builder().color(0.04f, 0.048f, 0.095f, 1f).build(eng)
+          }
+        }
+      }.getOrNull()
       scn.skybox = skybox
     }
 
@@ -693,7 +768,12 @@ private class PevVulkanHost(
     baseSize: Int,
     preset: Pev3dLightingPreset,
   ): Texture {
-    val levels = 8
+    var levels = 1
+    var s = baseSize
+    while (s > 1) {
+      s = s shr 1
+      levels++
+    }
     val tex = Texture.Builder()
       .width(baseSize)
       .height(baseSize)
@@ -704,10 +784,10 @@ private class PevVulkanHost(
 
     for (level in 0 until levels) {
       val size = (baseSize shr level).coerceAtLeast(1)
-      val roughnessBlur = level / (levels - 1f)
+      val roughnessBlur = if (levels > 1) level / (levels - 1f) else 0f
       val faceBytes = size * size * 4
       for (face in 0 until 6) {
-        val faceBuf = ByteBuffer.allocateDirect(faceBytes).order(ByteOrder.LITTLE_ENDIAN)
+        val faceBuf = ByteBuffer.allocateDirect(faceBytes).order(ByteOrder.nativeOrder())
         for (y in 0 until size) {
           val v = 1f - 2f * ((y + 0.5f) / size)
           for (x in 0 until size) {
@@ -805,7 +885,7 @@ private class PevVulkanHost(
             faceBuf.put(255.toByte())
           }
         }
-        faceBuf.flip()
+        faceBuf.rewind()
         tex.setImage(
           eng,
           level,
@@ -837,7 +917,7 @@ private class PevVulkanHost(
 
     val faceBytes = size * size * 4
     for (face in 0 until 6) {
-      val faceBuf = ByteBuffer.allocateDirect(faceBytes).order(ByteOrder.LITTLE_ENDIAN)
+      val faceBuf = ByteBuffer.allocateDirect(faceBytes).order(ByteOrder.nativeOrder())
       for (y in 0 until size) {
         val v = 1f - 2f * ((y + 0.5f) / size)
         for (x in 0 until size) {
@@ -884,7 +964,7 @@ private class PevVulkanHost(
           faceBuf.put(255.toByte())
         }
       }
-      faceBuf.flip()
+      faceBuf.rewind()
       tex.setImage(
         eng,
         0,
@@ -1004,12 +1084,13 @@ private class PevVulkanHost(
       val hsMap = Pev3dEngine.hotspotsForArchetype(state.archetype).associateBy { it.partKey }
       val bindings = ArrayList<GlbNodeBinding>()
       for (ent in asset.entities) {
+        if (ent == asset.root) continue
         val ri = rm.getInstance(ent)
         if (ri != 0) {
           rm.setCastShadows(ri, true)
           rm.setReceiveShadows(ri, true)
         }
-        val name = asset.getName(ent) ?: ""
+        val name = asset.getName(ent).orEmpty()
         val (partKey, role, isWheel) = classifyNode(name)
         val localMat = FloatArray(16)
         val ti = tm.getInstance(ent)
@@ -1059,7 +1140,7 @@ private class PevVulkanHost(
       val primCount = rm.getPrimitiveCount(ri)
       for (p in 0 until primCount) {
         val mi = rm.getMaterialInstanceAt(ri, p)
-        val matName = mi.name.lowercase()
+        val matName = runCatching { mi.name.orEmpty().lowercase() }.getOrDefault("")
         val effectiveRole =
           if (binding.role == GlbPartRole.BODY_PAINT && matName.isNotBlank()) {
             classifyNode(matName).second
@@ -1067,76 +1148,74 @@ private class PevVulkanHost(
             binding.role
           }
 
-        try {
-          when (effectiveRole) {
-            GlbPartRole.BODY_PAINT -> {
-              if (isCarbonGloss) {
-                mi.setParameter("baseColorFactor", 0.045f, 0.050f, 0.062f, if (isXray) 0.25f else 1f)
-                mi.setParameter("metallicFactor", 0.35f)
-                mi.setParameter("roughnessFactor", 0.14f)
-              } else if (isXray) {
-                mi.setParameter("baseColorFactor", 0.08f, 0.32f, 0.56f, 0.24f)
-                mi.setParameter("metallicFactor", 0.12f)
-                mi.setParameter("roughnessFactor", 0.28f)
-              } else if (isWire) {
-                mi.setParameter("baseColorFactor", 0.06f, 0.08f, 0.11f, 1f)
-                mi.setParameter("metallicFactor", 0.20f)
-                mi.setParameter("roughnessFactor", 0.65f)
-              } else {
-                mi.setParameter(
-                  "baseColorFactor",
-                  srgbToLinear(finish.bodyRgb[0]),
-                  srgbToLinear(finish.bodyRgb[1]),
-                  srgbToLinear(finish.bodyRgb[2]),
-                  1f,
-                )
-                mi.setParameter("metallicFactor", finish.paintMetallic)
-                mi.setParameter("roughnessFactor", 0.22f)
-              }
-            }
-            GlbPartRole.SUSPENSION_ACCENT -> {
-              mi.setParameter(
+        when (effectiveRole) {
+          GlbPartRole.BODY_PAINT -> {
+            if (isCarbonGloss) {
+              safeSetFloat4(mi, "baseColorFactor", 0.045f, 0.050f, 0.062f, if (isXray) 0.25f else 1f)
+              safeSetFloat(mi, "metallicFactor", 0.35f)
+              safeSetFloat(mi, "roughnessFactor", 0.14f)
+            } else if (isXray) {
+              safeSetFloat4(mi, "baseColorFactor", 0.08f, 0.32f, 0.56f, 0.24f)
+              safeSetFloat(mi, "metallicFactor", 0.12f)
+              safeSetFloat(mi, "roughnessFactor", 0.28f)
+            } else if (isWire) {
+              safeSetFloat4(mi, "baseColorFactor", 0.06f, 0.08f, 0.11f, 1f)
+              safeSetFloat(mi, "metallicFactor", 0.20f)
+              safeSetFloat(mi, "roughnessFactor", 0.65f)
+            } else {
+              safeSetFloat4(
+                mi,
                 "baseColorFactor",
-                srgbToLinear(finish.accentRgb[0]),
-                srgbToLinear(finish.accentRgb[1]),
-                srgbToLinear(finish.accentRgb[2]),
+                srgbToLinear(finish.bodyRgb[0]),
+                srgbToLinear(finish.bodyRgb[1]),
+                srgbToLinear(finish.bodyRgb[2]),
                 1f,
               )
-              mi.setParameter("metallicFactor", 0.90f)
-              mi.setParameter("roughnessFactor", 0.20f)
-            }
-            GlbPartRole.CALIPER_ACCENT -> {
-              mi.setParameter(
-                "baseColorFactor",
-                srgbToLinear(finish.caliperRgb[0]),
-                srgbToLinear(finish.caliperRgb[1]),
-                srgbToLinear(finish.caliperRgb[2]),
-                1f,
-              )
-              mi.setParameter("metallicFactor", 0.80f)
-              mi.setParameter("roughnessFactor", 0.24f)
-            }
-            GlbPartRole.SECONDARY_TRIM -> {
-              mi.setParameter(
-                "baseColorFactor",
-                srgbToLinear(finish.secondaryRgb[0]),
-                srgbToLinear(finish.secondaryRgb[1]),
-                srgbToLinear(finish.secondaryRgb[2]),
-                1f,
-              )
-              mi.setParameter("metallicFactor", 0.12f)
-              mi.setParameter("roughnessFactor", 0.68f)
-            }
-            else -> Unit
-          }
-          if (isCarbonGloss && effectiveRole == GlbPartRole.BODY_PAINT) {
-            try {
-              mi.setParameter("clearcoatFactor", 1.0f)
-              mi.setParameter("clearcoatRoughnessFactor", 0.08f)
-            } catch (_: Throwable) {
+              safeSetFloat(mi, "metallicFactor", finish.paintMetallic)
+              safeSetFloat(mi, "roughnessFactor", 0.22f)
             }
           }
-        } catch (_: Throwable) {
+          GlbPartRole.SUSPENSION_ACCENT -> {
+            safeSetFloat4(
+              mi,
+              "baseColorFactor",
+              srgbToLinear(finish.accentRgb[0]),
+              srgbToLinear(finish.accentRgb[1]),
+              srgbToLinear(finish.accentRgb[2]),
+              1f,
+            )
+            safeSetFloat(mi, "metallicFactor", 0.90f)
+            safeSetFloat(mi, "roughnessFactor", 0.20f)
+          }
+          GlbPartRole.CALIPER_ACCENT -> {
+            safeSetFloat4(
+              mi,
+              "baseColorFactor",
+              srgbToLinear(finish.caliperRgb[0]),
+              srgbToLinear(finish.caliperRgb[1]),
+              srgbToLinear(finish.caliperRgb[2]),
+              1f,
+            )
+            safeSetFloat(mi, "metallicFactor", 0.80f)
+            safeSetFloat(mi, "roughnessFactor", 0.24f)
+          }
+          GlbPartRole.SECONDARY_TRIM -> {
+            safeSetFloat4(
+              mi,
+              "baseColorFactor",
+              srgbToLinear(finish.secondaryRgb[0]),
+              srgbToLinear(finish.secondaryRgb[1]),
+              srgbToLinear(finish.secondaryRgb[2]),
+              1f,
+            )
+            safeSetFloat(mi, "metallicFactor", 0.12f)
+            safeSetFloat(mi, "roughnessFactor", 0.68f)
+          }
+          else -> Unit
+        }
+        if (isCarbonGloss && effectiveRole == GlbPartRole.BODY_PAINT) {
+          safeSetFloat(mi, "clearcoatFactor", 1.0f)
+          safeSetFloat(mi, "clearcoatRoughnessFactor", 0.08f)
         }
       }
     }
@@ -1268,32 +1347,29 @@ private class PevVulkanHost(
           val isSelected = selKey != null && binding.partKey == selKey
           for (p in 0 until primCount) {
             val mi = rm.getMaterialInstanceAt(ri, p)
-            try {
-              when {
-                wireStealth -> mi.setParameter("emissiveFactor", 0f, 0f, 0f)
-                binding.role == GlbPartRole.HEADLIGHT -> {
-                  if (lightsEnabled) mi.setParameter("emissiveFactor", 2.6f, 2.8f, 3.1f)
-                  else mi.setParameter("emissiveFactor", 0.04f, 0.04f, 0.05f)
-                }
-                binding.role == GlbPartRole.TAILLIGHT -> {
-                  if (lightsEnabled) mi.setParameter("emissiveFactor", 2.4f, 0.24f, 0.20f)
-                  else mi.setParameter("emissiveFactor", 0.05f, 0.01f, 0.01f)
-                }
-                binding.role == GlbPartRole.SIGNAL_LEFT -> {
-                  val lv = if (leftActive) 0.10f + 3.0f * flashLevel else 0.04f
-                  mi.setParameter("emissiveFactor", lv, lv * 0.48f, lv * 0.03f)
-                }
-                binding.role == GlbPartRole.SIGNAL_RIGHT -> {
-                  val rv = if (rightActive) 0.10f + 3.0f * flashLevel else 0.04f
-                  mi.setParameter("emissiveFactor", rv, rv * 0.48f, rv * 0.03f)
-                }
-                isSelected -> {
-                  val g = 0.22f + 0.42f * pulse
-                  mi.setParameter("emissiveFactor", acc[0] * g, acc[1] * g, acc[2] * g)
-                }
-                else -> mi.setParameter("emissiveFactor", 0f, 0f, 0f)
+            when {
+              wireStealth -> safeSetFloat3(mi, "emissiveFactor", 0f, 0f, 0f)
+              binding.role == GlbPartRole.HEADLIGHT -> {
+                if (lightsEnabled) safeSetFloat3(mi, "emissiveFactor", 2.6f, 2.8f, 3.1f)
+                else safeSetFloat3(mi, "emissiveFactor", 0.04f, 0.04f, 0.05f)
               }
-            } catch (_: Throwable) {
+              binding.role == GlbPartRole.TAILLIGHT -> {
+                if (lightsEnabled) safeSetFloat3(mi, "emissiveFactor", 2.4f, 0.24f, 0.20f)
+                else safeSetFloat3(mi, "emissiveFactor", 0.05f, 0.01f, 0.01f)
+              }
+              binding.role == GlbPartRole.SIGNAL_LEFT -> {
+                val lv = if (leftActive) 0.10f + 3.0f * flashLevel else 0.04f
+                safeSetFloat3(mi, "emissiveFactor", lv, lv * 0.48f, lv * 0.03f)
+              }
+              binding.role == GlbPartRole.SIGNAL_RIGHT -> {
+                val rv = if (rightActive) 0.10f + 3.0f * flashLevel else 0.04f
+                safeSetFloat3(mi, "emissiveFactor", rv, rv * 0.48f, rv * 0.03f)
+              }
+              isSelected -> {
+                val g = 0.22f + 0.42f * pulse
+                safeSetFloat3(mi, "emissiveFactor", acc[0] * g, acc[1] * g, acc[2] * g)
+              }
+              else -> safeSetFloat3(mi, "emissiveFactor", 0f, 0f, 0f)
             }
           }
         }
@@ -1323,8 +1399,10 @@ private class PevVulkanHost(
     pause()
     val eng = engine ?: return
     val scn = scene
+    uiHelper?.renderCallback = null
     uiHelper?.detach()
     uiHelper = null
+    materialParamCache.clear()
     vehicleAsset?.let { a ->
       scn?.removeEntities(a.entities)
       assetLoader?.destroyAsset(a)

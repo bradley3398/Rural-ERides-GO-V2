@@ -102,6 +102,11 @@ fun PevVehicleProfileDialog(
   var batteryAh by remember { mutableDoubleStateOf(initAh) }
   var ahStr by remember { mutableStateOf("%.1f".format(initAh)) }
   var batteryWh by remember { mutableStateOf((initial?.batteryWh ?: (voltage * initAh).toLong()).toString()) }
+  var batteryChemistry by remember {
+    mutableStateOf(
+      com.example.core.PevBatteryPhysics.specFor(initial?.batteryChemistry?.ifBlank { "NMC" } ?: "NMC").code
+    )
+  }
   var motorWattsStr by remember { mutableStateOf((initial?.motorWatts ?: 2000).toString()) }
   var topSpeedStr by remember { mutableStateOf((initial?.topSpeedKmh ?: 60.0).roundToInt().toString()) }
   var vehicleWeightStr by remember { mutableStateOf((initial?.vehicleWeightLbs ?: 72.0).roundToInt().toString()) }
@@ -399,6 +404,35 @@ fun PevVehicleProfileDialog(
               Icon(Icons.Default.BatteryChargingFull, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
               Text("BATTERY SIZE PICKER", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
+            // Battery Chemistry selector (9 PEV/EV chemistries for accurate AI & Pack Gauge math)
+            val chemSpec = remember(batteryChemistry) { com.example.core.PevBatteryPhysics.specFor(batteryChemistry) }
+            val livePackSpec = remember(voltage, batteryChemistry) {
+              com.example.core.PevBatteryPhysics.packProfile(voltage, batteryChemistry)
+            }
+            Text(
+              "Battery Chemistry (${livePackSpec.seriesCount}S ${chemSpec.shortLabel} • Full ${livePackSpec.fullChargeV}V / LVC ${livePackSpec.cutoffEmptyV}V)",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.secondary,
+              fontWeight = FontWeight.Bold,
+            )
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+              items(com.example.core.PevBatteryPhysics.ALL_BATTERY_CHEMISTRIES) { spec ->
+                FilterChip(
+                  selected = chemSpec.code == spec.code,
+                  onClick = {
+                    manualSpecTouched = true
+                    batteryChemistry = spec.code
+                  },
+                  label = { Text(spec.shortLabel, style = MaterialTheme.typography.labelSmall) },
+                  modifier = Modifier.testTag("pev_chem_chip_${spec.code.lowercase()}"),
+                )
+              }
+            }
+            Text(
+              "${chemSpec.commonCells} • Min Charge ${chemSpec.minChargeTempC.roundToInt()}°C • ${chemSpec.cycleLifeLabel}",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             // Voltage quick chips
             LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
               items(listOf(36, 48, 52, 60, 72, 84, 100, 126, 134)) { v ->
@@ -741,6 +775,7 @@ fun PevVehicleProfileDialog(
               batteryWh = finalWh,
               batteryAh = finalAh,
               voltage = finalVolt,
+              batteryChemistry = batteryChemistry,
               motorWatts = motorWattsStr.toIntOrNull()?.coerceIn(0, 50000) ?: 0,
               topSpeedKmh = topSpeedStr.toDoubleOrNull()?.coerceIn(0.0, 250.0) ?: 0.0,
               vehicleWeightLbs = vehicleWeightStr.toDoubleOrNull()?.coerceIn(0.0, 1000.0) ?: 0.0,

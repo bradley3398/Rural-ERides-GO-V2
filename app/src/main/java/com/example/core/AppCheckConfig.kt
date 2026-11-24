@@ -38,19 +38,21 @@ fun configureAppCheck(context: Context, intent: Intent?) {
         .installAppCheckProviderFactory(DebugAppCheckProviderFactory.getInstance())
       Log.d(TAG, "DebugAppCheckProviderFactory installed.")
     } else {
-      val resId =
-        context.resources.getIdentifier(RECAPTCHA_SITE_KEY_RES, "string", context.packageName)
-      if (resId != 0) {
-        val siteKey = context.getString(resId)
-        if (siteKey.isNotBlank()) {
-          FirebaseAppCheck.getInstance()
-            .installAppCheckProviderFactory(RecaptchaAppCheckProviderFactory.getInstance(siteKey))
-          Log.d(TAG, "RecaptchaAppCheckProviderFactory installed.")
-        } else {
-          Log.e(TAG, "recaptcha_site_key resource string is blank.")
-        }
+      val siteKey =
+        runCatching { context.getString(com.example.R.string.recaptcha_site_key) }
+          .getOrDefault("")
+          .ifBlank {
+            val resId =
+              context.resources.getIdentifier(RECAPTCHA_SITE_KEY_RES, "string", context.packageName)
+            if (resId != 0) runCatching { context.getString(resId) }.getOrDefault("") else ""
+          }
+          .trim()
+      if (siteKey.isNotBlank()) {
+        FirebaseAppCheck.getInstance()
+          .installAppCheckProviderFactory(RecaptchaAppCheckProviderFactory.getInstance(siteKey))
+        Log.d(TAG, "RecaptchaAppCheckProviderFactory installed.")
       } else {
-        Log.e(TAG, "recaptcha_site_key string resource not found.")
+        Log.e(TAG, "recaptcha_site_key string resource not found or blank.")
       }
     }
   } catch (e: Exception) {

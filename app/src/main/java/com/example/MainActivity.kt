@@ -71,8 +71,12 @@ import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.Coil
+import coil.ImageLoader
 import com.example.core.AppStrings
 import com.example.core.configureAppCheck
+import java.util.concurrent.TimeUnit
+import okhttp3.OkHttpClient
 import com.example.data.VisualStyleMode
 import com.example.ui.components.BroadcastBanner
 import com.example.ui.components.TacticalBottomNavigationHost
@@ -128,6 +132,7 @@ class MainActivity : FragmentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     configureAppCheck(this, intent)
+    ensureCoilImageLoaderConfigured(applicationContext)
     ensureOsmdroidConfigured(this)
     enableEdgeToEdge()
 
@@ -684,3 +689,41 @@ private fun MainTacticalScaffold(
     LiveCallOverlayHost(sessionVm = sessionVm, socialVm = socialVm)
   }
 }
+
+@Volatile private var coilLoaderInitialized = false
+
+private fun ensureCoilImageLoaderConfigured(appContext: android.content.Context) {
+  if (coilLoaderInitialized) return
+  synchronized(MainActivity::class.java) {
+    if (coilLoaderInitialized) return
+    val imageHttpClient =
+      OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .addInterceptor { chain ->
+          val orig = chain.request()
+          val req =
+            orig
+              .newBuilder()
+              .header(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+              )
+              .header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+              .build()
+          chain.proceed(req)
+        }
+        .build()
+    val loader =
+      ImageLoader.Builder(appContext)
+        .okHttpClient(imageHttpClient)
+        .crossfade(true)
+        .respectCacheHeaders(false)
+        .build()
+    Coil.setImageLoader(loader)
+    coilLoaderInitialized = true
+  }
+}
+

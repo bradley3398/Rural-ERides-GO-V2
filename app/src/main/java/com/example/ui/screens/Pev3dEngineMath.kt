@@ -187,7 +187,11 @@ internal object Pev3dEngine {
       c.contains("unicycle") || c.contains("euc") -> Pev3dArchetype.EUC
       c.contains("scooter") -> Pev3dArchetype.SCOOTER
       c.contains("hydrofoil") || c.contains("efoil") -> Pev3dArchetype.HYDROFOIL
-      c.contains("e-bike") || c.contains("moped") || c.contains("scrambler") || c.contains("folding") -> Pev3dArchetype.EBIKE
+      c.contains("dirt") || c.contains("moto") || c.contains("enduro") || c.contains("mx") ||
+        c.contains("sur-ron") || c.contains("surron") || c.contains("talaria") || c.contains("stark") ->
+        Pev3dArchetype.EMOTO
+      c.contains("e-bike") || c.contains("ebike") || c.contains("moped") || c.contains("scrambler") || c.contains("folding") ->
+        Pev3dArchetype.EBIKE
       else -> Pev3dArchetype.EMOTO
     }
   }

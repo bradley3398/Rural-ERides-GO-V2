@@ -22,12 +22,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.BubbleChart
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BubbleChart
 import androidx.compose.material.icons.filled.CloudDone
@@ -117,7 +126,7 @@ fun RideTelemetryStudioScreen(
   var overlayAllTracks by remember { mutableStateOf(false) }
   var compareLeftIdx by remember(rides) { mutableIntStateOf(0) }
   var compareRightIdx by remember(rides) { mutableIntStateOf(if (rides.size > 1) 1 else 0) }
-  var activeGraphTab by remember { mutableIntStateOf(0) }
+  var activeGraphTab by remember { mutableStateOf<Int?>(null) }
 
   fun playCue(cue: VoiceAudioManager.TouchCue = VoiceAudioManager.TouchCue.BUTTON_TAP) {
     sessionVm.voiceAudio.triggerHapticCue(
@@ -387,73 +396,7 @@ fun RideTelemetryStudioScreen(
             }
           }
 
-          // DEDICATED FULL-SCREEN INDEPENDENT WINDOW MODAL WHEN A GRAPH IS TAPPED
-          if (activeGraphTab >= 0) {
-            item {
-              Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-              ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("ACTIVE GRAPH WINDOW: ${graphMeta[activeGraphTab].first}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-                    IconButton(onClick = { activeGraphTab = -1 }, modifier = Modifier.size(36.dp)) {
-                      Icon(Icons.Default.Refresh, contentDescription = "Close Window", tint = Color.White)
-                    }
-                  }
 
-                  when (activeGraphTab) {
-                    0 -> HistoricalSpeedProfileChart(rides = filteredRides, settings = settings, chartHeight = 260.dp)
-                    1 -> HistoricalElevationGainChart(rides = filteredRides, settings = settings, chartHeight = 260.dp)
-                    2 -> HistoricalEfficiencyVoltageChart(rides = filteredRides, activeVehicle = activeVehicle, settings = settings, chartHeight = 260.dp)
-                    3 -> HistoricalDistanceEnergyChart(rides = filteredRides, settings = settings, chartHeight = 260.dp)
-                    4 -> {
-                      val palette = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.tertiary, Color(0xFF38BDF8), Color(0xFFF97316), Color(0xFFA855F7))
-                      LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("By PEV", "Speed Zones", "Energy Wh", "Elevation", "Battery Drain").forEachIndexed { idx, lbl ->
-                          item {
-                            FilterChip(
-                              selected = pieMode == idx,
-                              onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); pieMode = idx },
-                              label = { Text(lbl, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
-                            )
-                          }
-                        }
-                      }
-                      val (slices, cVal, cLbl) = remember(filteredRides, pieMode, palette, settings.distanceUnit) {
-                        buildFleetPieSlices(filteredRides, pieMode, palette, settings.distanceUnit)
-                      }
-                      TelemetryDonutPieChart(slices = slices, centerValue = cVal, centerLabel = cLbl, reducedMotion = settings.reducedMotion, chartSize = 190.dp)
-                    }
-                    5 -> SpeedVsEfficiencyScatterChart(rides = filteredRides, settings = settings, chartHeight = 260.dp)
-                    6 -> RideDurationHistogramChart(rides = filteredRides, reducedMotion = settings.reducedMotion, chartHeight = 240.dp)
-                    7 -> HistoricalPowerAmpsChart(rides = filteredRides, activeVehicle = activeVehicle, settings = settings, chartHeight = 260.dp)
-                    8 -> RiderPerformanceRadarChart(rides = filteredRides, settings = settings, chartHeight = 260.dp)
-                    9 -> CumulativeOdometerRoiChart(rides = filteredRides, settings = settings, chartHeight = 260.dp)
-                    else -> {
-                      if (fleetDebrief.isNotBlank()) {
-                        Text(fleetDebrief, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-                      } else {
-                        Text("Run Gemini AI across your ${filteredRides.size} Firestore ride logs.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                      }
-                      Button(
-                        onClick = {
-                          playCue()
-                          cockpitVm.requestFleetLogbookDebrief(activeVehicle = activeVehicle, batteryChemistry = settings.batteryChemistry, modelId = settings.aiModelId)
-                        },
-                        enabled = !fleetDebriefBusy,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                      ) {
-                        Text("Generate AI Fleet Report")
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
 
           // INTERACTIVE MULTI-RIDE & SINGLE-RIDE GPS TRACK MAP
           item {

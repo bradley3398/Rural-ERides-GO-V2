@@ -137,21 +137,25 @@ internal fun HistoricalPowerAmpsChart(
         val pulseAlpha = pulseState.value
         val w = size.width
         val h = size.height
+        if (w < 24f || h < 24f) return@Canvas
         for (g in 0..3) drawLine(gridC, Offset(0f, h * g / 3f), Offset(w, h * g / 3f), strokeWidth = 1f)
 
         val slotW = w / series.size.coerceAtLeast(1)
-        val barW = (slotW * 0.52f).coerceIn(8f, 34f)
+        val barW = (slotW * 0.52f).coerceIn(6f, 34f)
         val ampPts = ArrayList<Offset>(series.size)
+        val maxBarH = (h - 4f).coerceAtLeast(4f)
+        val maxAmpY = (h - 6f).coerceAtLeast(6f)
 
         avgWatts.forEachIndexed { idx, watts ->
           val stagger = ((entrance * 1.3f) - (idx.toFloat() / (series.size + 2)) * 0.3f).coerceIn(0f, 1f)
-          val bH = ((watts / maxW).toFloat() * h * stagger).coerceIn(4f, h - 4f)
+          val rawBar = ((watts / maxW).toFloat() * h * stagger).let { if (it.isFinite()) it else 4f }
+          val bH = rawBar.coerceIn(4f, maxBarH)
           val xLeft = idx * slotW + (slotW - barW) / 2f
           val isSel = idx == safeIdx
           if (isSel && showTooltip) {
             drawRoundRect(
               color = wattColor.copy(alpha = 0.24f * pulseAlpha),
-              topLeft = Offset(xLeft - 3.dp.toPx(), h - bH - 3.dp.toPx()),
+              topLeft = Offset(xLeft - 3.dp.toPx(), (h - bH - 3.dp.toPx()).coerceAtLeast(0f)),
               size = Size(barW + 6.dp.toPx(), bH + 3.dp.toPx()),
               cornerRadius = CornerRadius(10f, 10f),
             )
@@ -162,7 +166,8 @@ internal fun HistoricalPowerAmpsChart(
             size = Size(barW, bH),
             cornerRadius = CornerRadius(8f, 8f),
           )
-          val aY = h - ((estAmps[idx] / maxA).toFloat() * h * stagger).coerceIn(6f, h - 6f)
+          val rawAmp = ((estAmps[idx] / maxA).toFloat() * h * stagger).let { if (it.isFinite()) it else 6f }
+          val aY = h - rawAmp.coerceIn(6f, maxAmpY)
           ampPts.add(Offset(xLeft + barW / 2f, aY))
         }
 
@@ -233,26 +238,31 @@ internal fun RiderPerformanceRadarChart(
       val maxElev = max(40.0, rides.maxOfOrNull { it.elevationGainM } ?: 120.0)
       val maxDur = max(600.0, rides.maxOfOrNull { it.durationSec.toDouble() } ?: 1800.0)
 
+      fun safeRatio(num: Double, den: Double): Float {
+        val r = if (den > 0.0 && num.isFinite()) num / den else 0.25
+        return (if (r.isFinite()) r.toFloat() else 0.25f).coerceIn(0.15f, 1f)
+      }
+
       fun effScore(r: RideSession): Float {
-        val whKm = PevBatteryPhysics.whPerKm(r.whUsed, r.distanceKm)
+        val whKm = PevBatteryPhysics.whPerKm(r.whUsed, r.distanceKm).let { if (it.isFinite()) it else 25.0 }
         return ((42.0 - whKm) / 30.0).toFloat().coerceIn(0.18f, 1f)
       }
 
       val lScores =
         listOf(
-          (latest.maxSpeedKmh / maxSpd).toFloat().coerceIn(0.15f, 1f),
-          (latest.distanceKm / maxDist).toFloat().coerceIn(0.15f, 1f),
-          (latest.elevationGainM / maxElev).toFloat().coerceIn(0.15f, 1f),
+          safeRatio(latest.maxSpeedKmh, maxSpd),
+          safeRatio(latest.distanceKm, maxDist),
+          safeRatio(latest.elevationGainM, maxElev),
           effScore(latest),
-          (latest.durationSec / maxDur).toFloat().coerceIn(0.15f, 1f),
+          safeRatio(latest.durationSec.toDouble(), maxDur),
         )
       val fScores =
         listOf(
-          (rides.map { it.maxSpeedKmh }.average() / maxSpd).toFloat().coerceIn(0.15f, 1f),
-          (rides.map { it.distanceKm }.average() / maxDist).toFloat().coerceIn(0.15f, 1f),
-          (rides.map { it.elevationGainM }.average() / maxElev).toFloat().coerceIn(0.15f, 1f),
-          rides.map { effScore(it).toDouble() }.average().toFloat().coerceIn(0.15f, 1f),
-          (rides.map { it.durationSec.toDouble() }.average() / maxDur).toFloat().coerceIn(0.15f, 1f),
+          safeRatio(rides.map { it.maxSpeedKmh }.filter { it.isFinite() }.average(), maxSpd),
+          safeRatio(rides.map { it.distanceKm }.filter { it.isFinite() }.average(), maxDist),
+          safeRatio(rides.map { it.elevationGainM }.filter { it.isFinite() }.average(), maxElev),
+          rides.map { effScore(it).toDouble() }.average().let { if (it.isFinite()) it.toFloat() else 0.5f }.coerceIn(0.15f, 1f),
+          safeRatio(rides.map { it.durationSec.toDouble() }.average(), maxDur),
         )
       lScores to fScores
     }
@@ -272,6 +282,7 @@ internal fun RiderPerformanceRadarChart(
 
     Canvas(modifier = Modifier.fillMaxWidth().height(chartHeight)) {
       val entrance = entranceState.value
+      if (size.width < 24f || size.height < 24f) return@Canvas
       val cx = size.width / 2f
       val cy = size.height / 2f
       val maxR = minOf(size.width, size.height) * 0.42f
@@ -408,14 +419,19 @@ internal fun CumulativeOdometerRoiChart(
         val entrance = entranceState.value
         val w = size.width
         val h = size.height
+        if (w < 24f || h < 24f) return@Canvas
         for (g in 0..3) drawLine(gridC, Offset(0f, h * g / 3f), Offset(w, h * g / 3f), strokeWidth = 1f)
+        val maxYBound = (h - 8f).coerceAtLeast(8f)
         clipRect(0f, 0f, w * entrance, h) {
           if (ordered.size == 1) {
             val y = h * 0.35f
             drawCircle(accentC, radius = 6.dp.toPx(), center = Offset(w / 2f, y))
           } else {
-            val stepX = w / (ordered.size - 1)
-            val pts = cumulativeDist.mapIndexed { i, d -> Offset(i * stepX, h - ((d / maxDist).toFloat() * h).coerceIn(8f, h - 8f)) }
+            val stepX = w / (ordered.size - 1).coerceAtLeast(1)
+            val pts = cumulativeDist.mapIndexed { i, d ->
+              val rawY = ((d / maxDist).toFloat() * h).let { if (it.isFinite()) it else 8f }
+              Offset(i * stepX, h - rawY.coerceIn(8f, maxYBound))
+            }
             val spline = buildSmoothSplinePath(pts)
             val fill = Path().apply {
               addPath(spline)
@@ -425,8 +441,9 @@ internal fun CumulativeOdometerRoiChart(
             }
             drawPath(fill, brush = Brush.verticalGradient(listOf(accentC.copy(alpha = 0.35f), Color.Transparent)))
             drawPath(spline, accentC, style = Stroke(width = 2.8.dp.toPx(), cap = StrokeCap.Round))
-            val selPt = pts[safeIdx]
-            drawCircle(accentC, radius = 5.5.dp.toPx(), center = selPt)
+            pts.getOrNull(safeIdx)?.let { selPt ->
+              drawCircle(accentC, radius = 5.5.dp.toPx(), center = selPt)
+            }
           }
         }
       }
