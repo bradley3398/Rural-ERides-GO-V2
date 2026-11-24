@@ -231,7 +231,7 @@ fun YoutubeMiniPlayerHost(
           factory = { ctx ->
             val embedOrigin = youtubeEmbedOriginForPackage(ctx.packageName)
             val iFrameOptions =
-              IFramePlayerOptions.Builder(ctx)
+              IFramePlayerOptions.Builder()
                 .controls(0)
                 .rel(0)
                 .ivLoadPolicy(3)
@@ -975,7 +975,7 @@ fun YoutubeMiniPlayerHost(
                         }
                         IconButton(
                           onClick = { socialVm.enqueuePlayNext(track) },
-                          modifier = Modifier.size(24.dp),
+                          modifier = Modifier.size(48.dp),
                         ) {
                           Icon(Icons.Default.QueueMusic, contentDescription = "Queue Next", modifier = Modifier.size(14.dp))
                         }
@@ -997,10 +997,9 @@ private fun sanitizeYoutubeVideoId(videoId: String): String =
 
 private fun mapPlaybackRate(speed: Float): PlayerConstants.PlaybackRate =
   when {
-    speed <= 0.6f -> PlayerConstants.PlaybackRate.RATE_0_5
-    speed <= 0.85f -> PlayerConstants.PlaybackRate.RATE_0_75
-    speed <= 1.15f -> PlayerConstants.PlaybackRate.RATE_1
-    speed <= 1.35f -> PlayerConstants.PlaybackRate.RATE_1_25
+    speed <= 0.35f -> PlayerConstants.PlaybackRate.RATE_0_25
+    speed <= 0.75f -> PlayerConstants.PlaybackRate.RATE_0_5
+    speed <= 1.25f -> PlayerConstants.PlaybackRate.RATE_1
     speed <= 1.75f -> PlayerConstants.PlaybackRate.RATE_1_5
     else -> PlayerConstants.PlaybackRate.RATE_2
   }

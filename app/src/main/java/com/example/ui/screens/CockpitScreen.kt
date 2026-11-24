@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CompassCalibration
 import androidx.compose.material.icons.filled.DarkMode
@@ -34,13 +36,19 @@ import androidx.compose.material.icons.filled.ElectricScooter
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.SatelliteAlt
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Sos
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Vibration
@@ -53,9 +61,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -145,6 +155,7 @@ fun CockpitScreen(
   onOpenInfo: () -> Unit,
   onOpenTelemetryStudio: (String?) -> Unit = {},
   onOpenCreatorHub: () -> Unit = {},
+  onOpen3dLab: () -> Unit = {},
 ) {
   val ctx = LocalContext.current
   val activeUser by sessionVm.activeUser.collectAsStateWithLifecycle()
@@ -195,9 +206,9 @@ fun CockpitScreen(
   var lastOverspeedToneMs by remember { mutableLongStateOf(0L) }
   var dismissedVoltMsg by remember { mutableStateOf("") }
   var shareStatusNotice by remember { mutableStateOf("") }
-  var showPevProSuite by remember { mutableStateOf(false) }
   var showTrailToolkit by remember { mutableStateOf(false) }
   var showLiveArHud by remember { mutableStateOf(false) }
+  var showMissionMusicDialog by remember { mutableStateOf(false) }
   var preferredArMode by remember { mutableStateOf(ArHudMode.TELEMETRY_HUD) }
   val activeNavRoute by radarVm.activeNavRoute.collectAsStateWithLifecycle()
   val navStepIndex by radarVm.navCurrentStepIndex.collectAsStateWithLifecycle()
@@ -383,6 +394,396 @@ fun CockpitScreen(
   val dashPadH = if (settings.spaciousLayoutMode) 16.dp else 14.dp
   val dashGap = if (settings.spaciousLayoutMode) 16.dp else 12.dp
   Box(Modifier.fillMaxSize()) {
+    if (telemetry.recording) {
+      // LOCKED NON-SCROLLING RIDE MISSION HUD (GPS Speedometer + Speed Limit + Essential Telemetry + YouTube Music)
+      val cockpitView = LocalView.current
+      DisposableEffect(settings.keepScreenBrightOnRide, telemetry.recording) {
+        if (settings.keepScreenBrightOnRide && telemetry.recording) {
+          cockpitView.keepScreenOn = true
+        }
+        onDispose {
+          cockpitView.keepScreenOn = false
+        }
+      }
+
+      val packWh = (activeVehicle?.batteryWh ?: 1500L).toDouble()
+      val remWh = (packWh * (telemetry.batteryPct / 100.0)).coerceAtLeast(0.0)
+      val estRemKm = (remWh / 24.0).coerceAtLeast(0.0)
+      val dispDist = formatDistValue(telemetry.tripDistanceKm, settings.distanceUnit)
+      val distUnit = distUnitLabel(settings.distanceUnit)
+      val spdUnit = speedUnitLabel(settings.distanceUnit)
+      val ytPlaying by socialVm.playerPlaying.collectAsStateWithLifecycle()
+      val musicQueue by socialVm.playerQueue.collectAsStateWithLifecycle()
+      val musicMixes by socialVm.musicMixesState.collectAsStateWithLifecycle()
+      val cs = MaterialTheme.colorScheme
+      val chrome = LocalTacticalChrome.current
+
+      Column(
+        modifier =
+          Modifier
+            .fillMaxSize()
+            .padding(
+              start = dashPadH,
+              end = dashPadH,
+              top = 10.dp,
+              bottom = if (activeVideo != null) 96.dp else 10.dp,
+            )
+            .testTag("locked_mission_hud"),
+        verticalArrangement = Arrangement.SpaceBetween,
+      ) {
+        // 1. COMPACT LOCKED MISSION STATUS BAR
+        Surface(
+          color = cs.surface.copy(alpha = 0.92f),
+          shape = chrome.smallShape,
+          border = BorderStroke(1.3.dp, if (isOverspeeding) cs.error else cs.primary.copy(alpha = 0.65f)),
+          modifier = Modifier.fillMaxWidth().testTag("mission_lock_header"),
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              modifier = Modifier.weight(1f),
+            ) {
+              Icon(Icons.Default.Lock, contentDescription = "Mission Locked", tint = cs.primary, modifier = Modifier.size(16.dp))
+              Text(
+                text = "MISSION LOCKED • ${activeVehicle?.name?.take(16) ?: "PEV"}",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Black,
+                color = cs.primary,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              if (rtbVector != null) {
+                Surface(
+                  color = (if (rtbVector.turnBackWarning) cs.error else cs.secondary).copy(alpha = 0.18f),
+                  shape = chrome.smallShape,
+                ) {
+                  Text(
+                    text = "RTB ${"%.1f".format(formatDistValue(rtbVector.distanceKm, settings.distanceUnit))}$distUnit",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = if (rtbVector.turnBackWarning) cs.error else cs.secondary,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    maxLines = 1,
+                    softWrap = false,
+                  )
+                }
+              }
+              Text(
+                text = "${telemetry.batteryPct}% • ${"%.1f".format(telemetry.estimatedVoltage)}V",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = cs.onSurface,
+                maxLines = 1,
+                softWrap = false,
+              )
+            }
+          }
+        }
+
+        // 2. CONDITIONAL ESSENTIAL TURN-BY-TURN NAV STRIP (IF NAVIGATION ROUTE ACTIVE)
+        activeNavRoute?.let { route ->
+          val activeStep = route.steps.getOrNull(navStepIndex) ?: route.steps.firstOrNull()
+          Surface(
+            color = if (navOffRoute) cs.errorContainer else cs.surfaceVariant.copy(alpha = 0.85f),
+            shape = chrome.smallShape,
+            border = BorderStroke(1.dp, if (navOffRoute) cs.error else cs.secondary.copy(alpha = 0.55f)),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+              Icon(Icons.Default.Navigation, contentDescription = null, tint = if (navOffRoute) cs.error else cs.secondary, modifier = Modifier.size(18.dp))
+              Column(Modifier.weight(1f)) {
+                Text(
+                  text = if (navOffRoute) "OFF-ROUTE • REROUTING" else activeStep?.instruction ?: route.destinationName,
+                  style = MaterialTheme.typography.labelMedium,
+                  fontWeight = FontWeight.Bold,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                  text = "Turn in ${navDistToTurnM.toInt()}m • Rem ${"%.1f".format(formatDistValue(navRemainingKm, settings.distanceUnit))} $distUnit",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = cs.onSurfaceVariant,
+                  maxLines = 1,
+                )
+              }
+              TextButton(
+                onClick = { radarVm.stopGpsNavigation(announce = settings.navVoiceGuidance, volumePct = settings.globalVolume) },
+                modifier = Modifier.heightIn(min = 48.dp),
+              ) { Text("End Nav", style = MaterialTheme.typography.labelSmall) }
+            }
+          }
+        }
+
+        // 3. LOCKED SPEEDOMETER + GPS SPEED LIMIT SIGN CORE HUD
+        TacticalCard(
+          highlight = true,
+          modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+        ) {
+          Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+          ) {
+            SpeedometerHudGauge(telemetry = telemetry, settings = settings)
+
+            RoadSpeedSignWidget(
+              speedLimitMph = telemetry.speedLimitMph,
+              currentSpeedMph = currentSpeedMph,
+              roadName = telemetry.roadName,
+              inSchoolZone = telemetry.inSchoolZone,
+              toleranceOffset = settings.speedOffsetTolerance,
+              schoolStrict = settings.schoolZoneStrict,
+              legalComplianceMode = settings.legalComplianceMode,
+              pevLegalClass = settings.pevLegalClass,
+            )
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+              StatPill("TRIP", "${"%.2f".format(dispDist)} $distUnit")
+              StatPill("TIME", "%02d:%02d".format(telemetry.elapsedSec / 60, telemetry.elapsedSec % 60))
+              StatPill("AVG", "${"%.1f".format(formatSpeedValue(telemetry.avgSpeedKmh, settings.distanceUnit))} $spdUnit")
+              StatPill("RANGE", "${"%.1f".format(formatDistValue(estRemKm, settings.distanceUnit))} $distUnit")
+            }
+          }
+        }
+
+        // 4. ESSENTIAL YOUTUBE MUSIC MISSION BAR (ALWAYS AVAILABLE EVEN WHEN DASHBOARD LOCKED)
+        Surface(
+          color = cs.surfaceVariant.copy(alpha = 0.88f),
+          shape = chrome.smallShape,
+          border = BorderStroke(1.dp, if (activeVideo != null) cs.primary.copy(alpha = 0.65f) else cs.outline.copy(alpha = 0.4f)),
+          modifier = Modifier.fillMaxWidth().testTag("mission_youtube_music_bar"),
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
+            Icon(Icons.Default.MusicNote, contentDescription = null, tint = cs.primary, modifier = Modifier.size(18.dp))
+            Column(
+              modifier =
+                Modifier
+                  .weight(1f)
+                  .heightIn(min = 48.dp)
+                  .clickable { showMissionMusicDialog = true },
+              verticalArrangement = Arrangement.Center,
+            ) {
+              Text(
+                text = activeVideo?.title ?: "YouTube Music Ready",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = cs.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+              Text(
+                text = activeVideo?.channelTitle ?: "Tap to search songs or start Auto-DJ",
+                style = MaterialTheme.typography.labelSmall,
+                color = cs.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+            if (activeVideo != null) {
+              IconButton(
+                onClick = { socialVm.togglePlayerPlaying() },
+                modifier = Modifier.size(48.dp).testTag("mission_music_play_pause_btn"),
+              ) {
+                Icon(
+                  if (ytPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                  contentDescription = if (ytPlaying) "Pause Music" else "Play Music",
+                  tint = cs.primary,
+                )
+              }
+              if (musicQueue.isNotEmpty()) {
+                IconButton(
+                  onClick = { socialVm.playNextInQueue() },
+                  modifier = Modifier.size(48.dp).testTag("mission_music_next_btn"),
+                ) {
+                  Icon(Icons.Default.SkipNext, contentDescription = "Next Track", tint = cs.secondary)
+                }
+              }
+            } else {
+              IconButton(
+                onClick = { socialVm.launchAutoDjPevMix() },
+                modifier = Modifier.size(48.dp).testTag("mission_music_autodj_btn"),
+              ) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = "Auto-DJ PEV Mix", tint = cs.secondary)
+              }
+            }
+            IconButton(
+              onClick = { showMissionMusicDialog = true },
+              modifier = Modifier.size(48.dp).testTag("mission_music_search_btn"),
+            ) {
+              Icon(Icons.Default.Search, contentDescription = "Search YouTube Music", tint = cs.primary)
+            }
+          }
+        }
+
+        // 5. ESSENTIAL RIDE MISSION CONTROLS ROW
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          TacticalButton(
+            onClick = {
+              sessionVm.voiceAudio.triggerHapticCue(
+                enabled = settings.hapticFeedback && settings.rideMilestoneHaptics,
+                cue = VoiceAudioManager.HapticCue.HEAVY_THUD,
+              )
+              showSaveTitleDialog = true
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = cs.error),
+            isDestructive = true,
+            modifier = Modifier.weight(1f).height(50.dp).testTag("toggle_ride_recording_button"),
+          ) {
+            Icon(Icons.Default.Stop, null)
+            Spacer(Modifier.width(6.dp))
+            Text("Stop & Save Ride", maxLines = 1, softWrap = false)
+          }
+          TacticalOutlinedButton(
+            onClick = {
+              sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
+              preferredArMode = if (activeNavRoute != null) ArHudMode.NAV_WAYFINDER else ArHudMode.TELEMETRY_HUD
+              showLiveArHud = true
+            },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.height(50.dp).testTag("cockpit_ar_hud_button"),
+          ) {
+            Icon(RuralPevIcons.ActionArReticle, contentDescription = "AR HUD", tint = cs.secondary)
+          }
+          TacticalOutlinedButton(
+            onClick = {
+              sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
+              cockpitVm.calibrateZeroPitchRoll()
+            },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.height(50.dp).testTag("calibrate_imu_button"),
+          ) {
+            Icon(Icons.Default.CompassCalibration, contentDescription = "Zero Tilt Level")
+          }
+          TacticalOutlinedButton(
+            onClick = {
+              sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.WARNING_PULSE)
+              manualSosCountdown = settings.sosCancelWindowSec
+            },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.height(50.dp).testTag("manual_sos_button"),
+          ) {
+            Icon(Icons.Default.Sos, contentDescription = "Emergency SOS", tint = cs.error)
+          }
+        }
+      }
+
+      if (showMissionMusicDialog) {
+        var missionMusicQuery by remember { mutableStateOf("") }
+        val activeGenre by socialVm.activeMusicCategory.collectAsStateWithLifecycle()
+        val quickGenres = remember { listOf("Synthwave", "Lo-Fi", "Phonk", "Drum & Bass", "Rock", "Hip-Hop", "Ambient") }
+        TacticalDialog(
+          onDismissRequest = { showMissionMusicDialog = false },
+          title = "YOUTUBE MISSION AUDIO",
+          subtitle = "Search or start mixes without leaving locked HUD",
+          icon = Icons.Default.MusicNote,
+          badgeText = "LIVE",
+          confirmButton = {
+            TacticalOutlinedButton(
+              onClick = { showMissionMusicDialog = false },
+              modifier = Modifier.heightIn(min = 48.dp),
+            ) { Text("Done") }
+          },
+        ) {
+          Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+              OutlinedTextField(
+                value = missionMusicQuery,
+                onValueChange = { missionMusicQuery = it },
+                placeholder = { Text("Song, artist, or mix...") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+              )
+              Button(
+                onClick = {
+                  val q = missionMusicQuery.trim()
+                  if (q.isNotBlank()) socialVm.loadMusicMixes("Custom: $q", customQuery = q)
+                },
+                enabled = missionMusicQuery.isNotBlank(),
+                modifier = Modifier.heightIn(min = 52.dp),
+              ) { Icon(Icons.Default.Search, contentDescription = "Search Music") }
+            }
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              item {
+                FilterChip(
+                  selected = false,
+                  onClick = { socialVm.launchAutoDjPevMix(); showMissionMusicDialog = false },
+                  label = { Text("Auto-DJ Mix") },
+                  modifier = Modifier.heightIn(min = 48.dp),
+                )
+              }
+              items(quickGenres) { genre ->
+                FilterChip(
+                  selected = activeGenre.equals(genre, ignoreCase = true),
+                  onClick = { socialVm.loadMusicMixes(genre) },
+                  label = { Text(genre) },
+                  modifier = Modifier.heightIn(min = 48.dp),
+                )
+              }
+            }
+            when (val st = musicMixes) {
+              is UiState.Loading -> Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(22.dp)) }
+              is UiState.Error -> Text(st.message, style = MaterialTheme.typography.bodySmall, color = cs.error)
+              is UiState.Success -> {
+                val tracks = st.data.first
+                if (tracks.isEmpty()) {
+                  Text("Search a track or tap a genre to load live YouTube streams.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                } else {
+                  LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                  ) {
+                    items(tracks.take(10), key = { it.videoId }) { track ->
+                      Surface(
+                        onClick = {
+                          socialVm.playInMiniPlayer(track, tracks, expandTheater = false)
+                          showMissionMusicDialog = false
+                        },
+                        color = if (activeVideo?.videoId == track.videoId) cs.primaryContainer else cs.surfaceVariant,
+                        shape = chrome.smallShape,
+                        modifier = Modifier.fillMaxWidth(),
+                      ) {
+                        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                          Column(Modifier.weight(1f)) {
+                            Text(track.title, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${track.channelTitle} • ${track.durationLabel}", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
+                          }
+                          IconButton(
+                            onClick = { socialVm.enqueuePlayNext(track) },
+                            modifier = Modifier.size(48.dp),
+                          ) {
+                            Icon(Icons.Default.QueueMusic, contentDescription = "Queue Play Next")
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } else {
     LazyColumn(
       modifier = Modifier.fillMaxSize(),
       contentPadding = PaddingValues(start = dashPadH, end = dashPadH, top = 16.dp, bottom = if (activeVideo != null) 100.dp else 22.dp),
@@ -540,7 +941,7 @@ fun CockpitScreen(
                 }
               }
 
-              // ROW 2: AI LAB, PRAYER, HEALTH & OPTIONAL QUICK THEME
+              // ROW 2: AI LAB, 3D LAB, PRAYER & HEALTH
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -554,6 +955,16 @@ fun CockpitScreen(
                   modifier = Modifier.weight(1f),
                 ) {
                   onOpenCreatorHub()
+                }
+
+                QuickActionTile(
+                  icon = Icons.Default.ViewInAr,
+                  label = "3D Lab",
+                  tint = Color(0xFFA855F7),
+                  tag = "cockpit_3d_lab_button",
+                  modifier = Modifier.weight(1f),
+                ) {
+                  onOpen3dLab()
                 }
 
                 QuickActionTile(
@@ -574,21 +985,6 @@ fun CockpitScreen(
                   modifier = Modifier.weight(1f),
                 ) {
                   onOpenInfo()
-                }
-
-                if (settings.quickThemeBarEnabled) {
-                  QuickActionTile(
-                    icon = RuralPevIcons.ActionThemeStudio,
-                    label = "Theme",
-                    tint = Color(0xFFFF9F1C),
-                    tag = "cockpit_quick_theme_button",
-                    modifier = Modifier.weight(1f),
-                  ) {
-                    val all = com.example.data.VisualStyleMode.entries
-                    val next = all[(all.indexOf(settings.visualStyle) + 1) % all.size]
-                    sessionVm.updateSettings { it.copy(visualStyle = next) }
-                    Toast.makeText(ctx, "Theme: ${next.label}", Toast.LENGTH_SHORT).show()
-                  }
                 }
               }
             }
@@ -714,19 +1110,22 @@ fun CockpitScreen(
       // QUICK SHORTCUTS & THEME BAR
       item {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          item {
-            TacticalFilterChip(
-              selected = settings.visualStyle == VisualStyleMode.WINDOWS_CLASSIC,
-              onClick = {
-                sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback && settings.buttonHapticFeedback, VoiceAudioManager.HapticCue.LIGHT_TICK)
-                val all = VisualStyleMode.entries
-                val next = all[(all.indexOf(settings.visualStyle) + 1) % all.size]
-                sessionVm.updateSettings { it.copy(visualStyle = next) }
-              },
-              leadingIcon = Icons.Default.Palette,
-              label = "Theme: ${settings.visualStyle.label}",
-              modifier = Modifier.testTag("quick_theme_cycle_chip"),
-            )
+          if (settings.quickThemeBarEnabled) {
+            item {
+              TacticalFilterChip(
+                selected = settings.visualStyle == VisualStyleMode.WINDOWS_CLASSIC,
+                onClick = {
+                  sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback && settings.buttonHapticFeedback, VoiceAudioManager.HapticCue.LIGHT_TICK)
+                  val all = com.example.ui.theme.availableVisualStyles()
+                  val idx = all.indexOf(settings.visualStyle)
+                  val next = all[if (idx >= 0) (idx + 1) % all.size else 0]
+                  sessionVm.updateSettings { it.copy(visualStyle = next) }
+                },
+                leadingIcon = Icons.Default.Palette,
+                label = "Theme: ${settings.visualStyle.label}",
+                modifier = Modifier.testTag("quick_theme_cycle_chip"),
+              )
+            }
           }
           item {
             TacticalFilterChip(
@@ -754,55 +1153,6 @@ fun CockpitScreen(
               },
               leadingIcon = Icons.Default.Gavel,
               label = settings.pevLegalClass.label.substringBefore(" ("),
-            )
-          }
-          item {
-            TacticalFilterChip(
-              selected = activeNavRoute != null,
-              onClick = onOpenRadar,
-              leadingIcon = Icons.Default.Navigation,
-              label = if (activeNavRoute != null) "Directions Active" else "Directions",
-              modifier = Modifier.testTag("cockpit_gps_nav_chip"),
-            )
-          }
-          item {
-            TacticalFilterChip(
-              selected = showLiveArHud,
-              onClick = {
-                sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback && settings.buttonHapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
-                preferredArMode = if (activeNavRoute != null) ArHudMode.NAV_WAYFINDER else ArHudMode.TELEMETRY_HUD
-                showLiveArHud = true
-              },
-              leadingIcon = Icons.Default.ViewInAr,
-              label = "AR Camera",
-              modifier = Modifier.testTag("cockpit_ar_hud_chip"),
-            )
-          }
-          item {
-            TacticalFilterChip(
-              selected = showPevProSuite,
-              onClick = { showPevProSuite = true },
-              leadingIcon = Icons.Default.ElectricScooter,
-              label = "Pro Tools",
-              modifier = Modifier.testTag("cockpit_pev_pro_suite_chip"),
-            )
-          }
-          item {
-            TacticalFilterChip(
-              selected = false,
-              onClick = {
-                sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback && settings.buttonHapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
-                sessionVm.voiceAudio.playTouchSound(
-                  enabled = settings.touchSoundsEnabled,
-                  pack = settings.touchSoundPack,
-                  cue = VoiceAudioManager.TouchCue.ACTION_CONFIRM,
-                  volumePct = settings.globalVolume,
-                )
-                onOpenTelemetryStudio(null)
-              },
-              leadingIcon = Icons.Default.Analytics,
-              label = "Telemetry Studio",
-              modifier = Modifier.testTag("cockpit_telemetry_studio_chip"),
             )
           }
           item {
@@ -907,8 +1257,8 @@ fun CockpitScreen(
                   maxLines = 1,
                   softWrap = false,
                 )
-                IconButton(onClick = { showVehicleDialog = veh }, modifier = Modifier.size(24.dp)) {
-                  Icon(Icons.Default.Edit, contentDescription = "Edit Vehicle", tint = fg, modifier = Modifier.size(14.dp))
+                IconButton(onClick = { showVehicleDialog = veh }, modifier = Modifier.size(48.dp)) {
+                  Icon(Icons.Default.Edit, contentDescription = "Edit Vehicle", tint = fg, modifier = Modifier.size(16.dp))
                 }
               }
             }
@@ -1165,30 +1515,17 @@ fun CockpitScreen(
             }
 
             Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-              TacticalOutlinedButton(
-                onClick = {
-                  sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
-                  preferredArMode = ArHudMode.SATELLITE_SKY
-                  showLiveArHud = true
-                },
-                modifier = Modifier.weight(1f).testTag("open_ar_satellites_button"),
-              ) {
-                Icon(Icons.Default.ViewInAr, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Satellites AR", maxLines = 1, softWrap = false)
-              }
-              TacticalOutlinedButton(
-                onClick = {
-                  val ok = sessionVm.voiceAudio.triggerHapticCue(true, VoiceAudioManager.HapticCue.SUCCESS_DOUBLE, settings.hapticDurationMs)
-                  shareStatusNotice = if (ok) "Haptic pulse felt! Customize strength in Settings -> Sound & Haptics." else "No vibration motor found."
-                },
-                modifier = Modifier.weight(1f).testTag("cockpit_test_haptic_button"),
-              ) {
-                Icon(Icons.Default.Vibration, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Test Haptics", maxLines = 1, softWrap = false)
-              }
+            TacticalOutlinedButton(
+              onClick = {
+                sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
+                preferredArMode = ArHudMode.SATELLITE_SKY
+                showLiveArHud = true
+              },
+              modifier = Modifier.fillMaxWidth().testTag("open_ar_satellites_button"),
+            ) {
+              Icon(Icons.Default.ViewInAr, null, Modifier.size(16.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Satellites AR", maxLines = 1, softWrap = false)
             }
           }
         }
@@ -1583,6 +1920,7 @@ fun CockpitScreen(
         )
       }
     }
+    }
 
     // SOS CRASH COUNTDOWN DIALOG
     val count = manualSosCountdown
@@ -1745,10 +2083,6 @@ fun CockpitScreen(
           showPilotProfileDialog = false
         },
       )
-    }
-
-    if (showPevProSuite) {
-      PevProSuiteModal(onDismiss = { showPevProSuite = false })
     }
 
     if (showTrailToolkit) {

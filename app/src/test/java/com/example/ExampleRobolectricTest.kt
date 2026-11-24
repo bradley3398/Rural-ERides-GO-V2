@@ -8,6 +8,11 @@ import com.example.core.LiveCloudServices
 import com.example.core.MissionCardShareUtil
 import com.example.core.PevBatteryPhysics
 import com.example.data.AiVoiceProfile
+import com.example.data.CustomVoiceProfile
+import com.example.data.VoiceDspProfile
+import com.example.data.parseCustomVoiceProfiles
+import com.example.data.serializeCustomVoiceProfiles
+import com.example.hardware.VoiceAudioManager
 import com.example.data.AppThemePreset
 import com.example.data.ColorModeOverride
 import com.example.data.LocalRiderVault
@@ -957,7 +962,7 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `vulkan pbr texture bundles and gltf2 glb binaries build cleanly for all archetypes`() {
+  fun `opengl and webgl pbr texture bundles and gltf2 glb binaries build cleanly for all archetypes`() {
     PevPbrMaterialId.entries.forEach { matId ->
       val bundle = Pev3dPbrTextures.getBundle(matId)
       assertTrue(bundle.albedoPng.size > 100)
@@ -1009,5 +1014,65 @@ class ExampleRobolectricTest {
     assertTrue("HEADLIGHT_OPTIC" in matNames)
     assertTrue("TAILLIGHT_OPTIC" in matNames)
     assertTrue("AMBER_SIGNAL_OPTIC" in matNames)
+  }
+
+  @Test
+  fun `custom voice profile serialization and active selection work accurately`() {
+    val sample = CustomVoiceProfile(
+      id = "cv_test_123",
+      name = "Appalachian Co-Pilot",
+      description = "Warm rural tone",
+      pitch = 1.08f,
+      speechRate = 0.94f,
+      baseProfileId = "warm_rural_porch",
+      geminiVoiceName = "Zephyr",
+      dspProfile = VoiceDspProfile.WARM_PORCH,
+      styleDirective = "Warm hospitable backroads guide",
+      audioSampleBase64 = "UklGRi4AAABXQVZFZm10IBAAAAABAAEA",
+      audioSampleFileName = "custom_ref.wav",
+      audioSampleDurationMs = 4500L,
+    )
+    val json = serializeCustomVoiceProfiles(listOf(sample))
+    assertTrue(json.contains("cv_test_123"))
+    assertTrue(json.contains("Appalachian Co-Pilot"))
+    assertTrue(json.contains("Zephyr"))
+
+    val parsed = parseCustomVoiceProfiles(json)
+    assertEquals(1, parsed.size)
+    val loaded = parsed[0]
+    assertEquals("cv_test_123", loaded.id)
+    assertEquals("Appalachian Co-Pilot", loaded.name)
+    assertEquals(1.08f, loaded.pitch, 0.01f)
+    assertEquals(0.94f, loaded.speechRate, 0.01f)
+    assertEquals(VoiceDspProfile.WARM_PORCH, loaded.dspProfile)
+    assertEquals("custom_ref.wav", loaded.audioSampleFileName)
+    assertEquals(4500L, loaded.audioSampleDurationMs)
+
+    val settings = MasterSettings(
+      customVoiceProfilesJson = json,
+      activeCustomVoiceId = "cv_test_123",
+      ttsPreloadBufferEnabled = true,
+      ttsPreloadBufferDepth = 3,
+    )
+    val active = settings.getActiveCustomVoice()
+    assertNotNull(active)
+    assertEquals("Appalachian Co-Pilot", active?.name)
+    assertEquals(AiVoiceProfile.WARM_RURAL_PORCH, active?.resolveEffectiveBase())
+  }
+
+  @Test
+  fun `streaming sentence splitter preserves telemetry decimals and splits punctuation correctly`() {
+    val sentences = mutableListOf<String>()
+    val splitter = VoiceAudioManager.StreamingSentenceSplitter { sentences.add(it) }
+
+    splitter.feed("Battery is at 72.4V and remaining range is 58.2km today.")
+    assertEquals(1, sentences.size)
+    assertEquals("Battery is at 72.4V and remaining range is 58.2km today.", sentences[0])
+
+    splitter.feed(" Keep eyes on the curve ahead! Creek crossing is clear.")
+    splitter.flush()
+    assertEquals(3, sentences.size)
+    assertEquals("Keep eyes on the curve ahead!", sentences[1])
+    assertEquals("Creek crossing is clear.", sentences[2])
   }
 }

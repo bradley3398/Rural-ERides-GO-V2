@@ -545,7 +545,7 @@ fun GravelVoltGameScreen(
         }
         .testTag("gravel_volt_game_viewport"),
   ) {
-    // NATIVE ANDROID VULKAN 3D PBR GAME ENGINE (GOOGLE FILAMENT 1.81.0 • ACES • 4x MSAA • SSAO • PCF SHADOWS)
+    // NATIVE ANDROID OPENGL ES 3D ENGINE
     val renderEntities = entities.map { e ->
       val code = when (e.kind) {
         TrackEntityKind.HAY_BALE -> 0
@@ -556,6 +556,7 @@ fun GravelVoltGameScreen(
       }
       GameEntityRenderItem(e.lane, e.z, code)
     }
+    var gameBackendBadge by remember { mutableStateOf("OPENGL ES 3D") }
     GravelVoltVulkanViewport(
       vehicleName = vehicleName,
       lanePos = lanePos,
@@ -570,6 +571,7 @@ fun GravelVoltGameScreen(
       intersectionZs = FloatArray(intersections.size) { intersections[it].z },
       entities = renderEntities,
       onAssetStateChanged = { gameAssetState = it },
+      onBackendReady = { gameBackendBadge = it },
       modifier = Modifier.fillMaxSize(),
     )
 
@@ -647,7 +649,7 @@ fun GravelVoltGameScreen(
             border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.65f)),
           ) {
             Text(
-              "VULKAN • FILAMENT PBR",
+              gameBackendBadge,
               color = Color.White,
               fontSize = 10.sp,
               fontWeight = FontWeight.Black,
@@ -871,11 +873,26 @@ fun GravelVoltGameScreen(
             fontWeight = FontWeight.Bold,
           )
           Text(
-            "Native Vulkan Filament 1.81.0 PBR • Turn onto any street • Complete rotating Trail Missions • Fire 72V Boost!",
+            "$gameBackendBadge • Turn onto any street • Complete rotating Trail Missions • Fire 72V Boost!",
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFFCBD5E1),
             textAlign = TextAlign.Center,
           )
+          (gameAssetState as? Pev3dAssetLoadState.EngineUnavailable)?.let { gpuErr ->
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = Color(0xFF331419),
+              border = BorderStroke(1.dp, Color(0xFFF43F5E)),
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Text(
+                "3D GPU notice: ${gpuErr.reason}. You can go back cleanly or use standard telemetry views.",
+                color = Color(0xFFFDA4AF),
+                fontSize = 10.sp,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+              )
+            }
+          }
           (gameAssetState as? Pev3dAssetLoadState.MissingGlb)?.let { missing ->
             Surface(
               shape = RoundedCornerShape(10.dp),

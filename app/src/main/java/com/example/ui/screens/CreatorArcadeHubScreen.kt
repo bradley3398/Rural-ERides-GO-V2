@@ -51,7 +51,6 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -127,7 +126,6 @@ private enum class StudioHubTab(val label: String, val icon: ImageVector, val ac
   VOICE_LIVE("Voice AI", Icons.Default.Mic, Color(0xFF39FF14)),
   SEARCH_MAPS("Maps & Web", Icons.Default.Public, Color(0xFFF59E0B)),
   MUSIC_LAB("Music Lab", Icons.Default.MusicNote, Color(0xFFEC4899)),
-  RIG_3D("3D Rig Lab", Icons.Default.ViewInAr, Color(0xFFA855F7)),
   ARCADE_GAME("Volt Game", Icons.Default.SportsEsports, Color(0xFF10B981)),
 }
 
@@ -331,7 +329,7 @@ fun CreatorArcadeHubScreen(
     },
   ) { pad ->
     Column(modifier = Modifier.fillMaxSize().padding(pad)) {
-      // Fitted 6-tab horizontal studio selector
+      // Fitted 5-tab horizontal studio selector
       LazyRow(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -355,8 +353,8 @@ fun CreatorArcadeHubScreen(
       ) {
         when (activeTab) {
           StudioHubTab.IMAGE_STUDIO -> {
-            item {
-              TacticalCard(highlight = true, title = "AI IMAGE CREATION & PHOTO EDIT (Nano Banana 2.1)") {
+                item {
+                  TacticalCard(highlight = true, title = "AI IMAGE CREATION & PHOTO EDIT (Nano Banana 2.1)") {
                 Text(
                   "Create custom rural PEV liveries, trail posters, or upload a photo of your rig to restyle it with Gemini Nano Banana 2.1.",
                   style = MaterialTheme.typography.bodySmall,
@@ -514,7 +512,6 @@ fun CreatorArcadeHubScreen(
               }
             }
           }
-
           StudioHubTab.VOICE_LIVE -> {
             item {
               TacticalCard(highlight = true, title = "LIVE VOICE CONVERSATION & AUDIO TRANSCRIBER") {
@@ -977,15 +974,6 @@ fun CreatorArcadeHubScreen(
                   }
                 }
               }
-            }
-          }
-
-          StudioHubTab.RIG_3D -> {
-            item {
-              Pev3dGarageViewer(
-                activeVehicleName = activeVehicle?.name ?: "Rural Hyper-PEV",
-                activeVoltage = activeVehicle?.voltage ?: 60.0,
-              )
             }
           }
 

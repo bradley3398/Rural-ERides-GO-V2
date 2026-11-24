@@ -84,6 +84,7 @@ fun EngineeringLabTab(
         EngBayEntry(9, "Unit Converter", "Wiring & Legal"),
         EngBayEntry(13, "Connectors & AWG", "Wiring & Legal"),
         EngBayEntry(14, "Legal Class", "Wiring & Legal"),
+        EngBayEntry(18, "Maintenance", "Diagnostics & AI"),
       )
     }
   val categories = remember { listOf("All", "Diagnostics & AI", "Battery & Power", "Drivetrain & Speed", "Chassis & Aero", "Wiring & Legal") }
@@ -151,6 +152,7 @@ fun EngineeringLabTab(
         15 -> item { ChargeCostAndDualChargerBay() }
         16 -> item { RegenDownhillRecoveryBay() }
         17 -> item { UpgradeCompatibilityAdvisorCard(mechanicVm, activeRigSummary, aiModelId) }
+        18 -> item { MaintenanceScheduleBay(mechanicVm) }
       }
     }
   }
@@ -858,6 +860,58 @@ private fun UpgradeCompatibilityAdvisorCard(
         }
       }
       null -> Unit
+    }
+  }
+}
+
+@Composable
+private fun MaintenanceScheduleBay(mechanicVm: MechanicViewModel) {
+  val ctx = LocalContext.current
+  val maintenanceItems by mechanicVm.maintenanceItems.collectAsStateWithLifecycle()
+  val chrome = LocalTacticalChrome.current
+
+  TacticalCard(highlight = true, title = "PROACTIVE PEV MAINTENANCE SCHEDULE & ALERTS") {
+    Text(
+      "Track component wear intervals based on cumulative odometer mileage. Keep your 72V hyper-rig safe and dialed in.",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(10.dp))
+
+    maintenanceItems.forEach { item ->
+      val currentOdomKm = 124.5
+      val kmSinceService = currentOdomKm - item.lastServicedKm
+      val progress = (kmSinceService / item.intervalKm).coerceIn(0.0, 1.0).toFloat()
+      val isDue = kmSinceService >= item.intervalKm
+
+      Surface(
+        color = if (isDue) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = chrome.smallShape,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+      ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(item.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+            AssistChip(
+              onClick = {
+                mechanicVm.markMaintenanceServiced(item.key, currentOdomKm)
+                Toast.makeText(ctx, "Marked '${item.title}' as serviced!", Toast.LENGTH_SHORT).show()
+              },
+              label = { Text(if (isDue) "SERVICE DUE" else "Mark Serviced", fontWeight = FontWeight.Bold) },
+            )
+          }
+          Text(item.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          LinearProgressIndicator(
+            progress = { progress },
+            color = if (isDue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.fillMaxWidth().height(6.dp),
+          )
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Logged: ${"%.1f".format(kmSinceService)} / ${item.intervalKm.toInt()} km", style = MaterialTheme.typography.labelSmall)
+            Text(if (isDue) "OVERDUE" else "${(item.intervalKm - kmSinceService).toInt()} km remaining", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = if (isDue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+          }
+        }
+      }
     }
   }
 }

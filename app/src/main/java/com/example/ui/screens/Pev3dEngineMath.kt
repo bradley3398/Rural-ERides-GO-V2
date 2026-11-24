@@ -16,11 +16,50 @@ enum class Pev3dArchetype {
   HYDROFOIL,
 }
 
+enum class Pev3dBlueprintType(
+  val shortLabel: String,
+  val chassisClass: String,
+) {
+  EMOTO_MX_DIRT("MX Dirt Enduro", "Perimeter + High Beak"),
+  EMOTO_STREET_NAKED("Street / Café Moto", "Sculpted Tank + Hugger"),
+  EBIKE_SCRAMBLER_MOPED("Scrambler Moped", "Moto Halo + Fat 20x4"),
+  EBIKE_MOUNTAIN_FULLSUSP("Enduro e-MTB", "Diamond 29er + Horst Link"),
+  EBIKE_COMPACT_FOLDING("Utility / Folding", "Step-Thru + Rear Rack"),
+  SCOOTER_DUAL_STEM_OFFROAD("Dual-Stem Off-Road", "Twin Fork + Crash Bars"),
+  SCOOTER_TUBULAR_RACING("Tubular Racing", "Trellis Neck + C-Arm"),
+  SCOOTER_MONOCOQUE_AERO("Aero Monocoque", "Sculpted Fairing + LED"),
+  EUC_ARMORED_ROLLCAGE("Armored Roll-Cage", "Twin Bumper + Top Seat"),
+  EUC_AERO_TRAIL("Aero Suspension", "Molded Shell + Power Pads"),
+  HYDROFOIL_EFOIL("Carbon eFoil", "Hydrofoil Mast + Wings"),
+}
+
+data class Pev3dBlueprintSpecs(
+  val blueprintType: Pev3dBlueprintType,
+  val wheelbaseMm: Int,
+  val suspensionTravelMm: Int,
+  val wheelProfile: String,
+)
+
 enum class Pev3dRenderMode(val label: String, val shaderId: Int) {
-  SOLID("Vulkan PBR", 0),
+  SOLID("PBR Solid", 0),
   CARBON_SHOWROOM("Carbon Gloss", 3),
+  THERMAL_IR("Thermal IR", 4),
   WIREFRAME("CAD Wire", 1),
   XRAY("X-Ray Shader", 2),
+  BLUEPRINT("Blueprint CAD", 5),
+}
+
+enum class Pev3dTechEngine(val label: String, val subtitle: String) {
+  OPENGL_ES3("OpenGL PBR", "GGX + Normal Maps + IBL"),
+  WEBGL_2("WebGL 2.0 GLB", "Chromium PBR + Clearcoat"),
+  VECTOR_CAD("Compose 3D", "GPU Shaded Triangle Mesh"),
+}
+
+enum class Pev3dInspectMethod(val label: String) {
+  ORBIT_TOUCH("Touch Orbit"),
+  GYRO_TILT("Gyro Tilt"),
+  DYNO_SWEEP("Dyno Sweep"),
+  TEARDOWN_EXPLODE("Explode CAD"),
 }
 
 enum class Pev3dTurnSignalMode(val label: String) {
@@ -28,6 +67,12 @@ enum class Pev3dTurnSignalMode(val label: String) {
   LEFT("Left <"),
   RIGHT("Right >"),
   HAZARD("Hazards"),
+}
+
+enum class Pev3dLightingPreset(val label: String) {
+  STUDIO("Studio Key"),
+  SUNSET("Golden Dusk"),
+  NEON("Cyber Neon"),
 }
 
 data class Vec3(val x: Float, val y: Float, val z: Float) {
@@ -60,11 +105,12 @@ data class Pev3dModelFinish(
   val bodyLengthScale: Float = 1.0f,
   val secondaryRgb: FloatArray = floatArrayOf(0.24f, 0.26f, 0.29f),
   val paintMetallic: Float = 0.52f,
+  val blueprintType: Pev3dBlueprintType = Pev3dBlueprintType.EMOTO_MX_DIRT,
 )
 
 /**
  * Pure Kotlin column-major 4x4 matrix math (zero android.opengl dependencies)
- * matching Filament's right-handed camera and transform conventions.
+ * using right-handed camera and transform conventions across all 3D engines.
  */
 internal object Mat4Math {
   fun setIdentity(m: FloatArray) {
@@ -205,31 +251,90 @@ internal object Pev3dEngine {
       Pev3dArchetype.HYDROFOIL -> "hydrofoil.glb"
     }
 
+  fun resolveBlueprint(name: String, category: String): Pev3dBlueprintType {
+    val n = name.lowercase()
+    val c = category.lowercase()
+    val arch = archetypeForCategory("$name $category")
+    return when (arch) {
+      Pev3dArchetype.HYDROFOIL -> Pev3dBlueprintType.HYDROFOIL_EFOIL
+      Pev3dArchetype.EUC -> {
+        if (n.contains("sherman") || n.contains("patton") || n.contains("lynx") || n.contains("v13") || n.contains("leaperkim")) {
+          Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE
+        } else {
+          Pev3dBlueprintType.EUC_AERO_TRAIL
+        }
+      }
+      Pev3dArchetype.SCOOTER -> {
+        when {
+          n.contains("kaabo") || n.contains("wolf") || n.contains("dualtron") || n.contains("zero 11") ->
+            Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD
+          n.contains("nami") || n.contains("rion") || n.contains("vsett") || n.contains("teverun") ->
+            Pev3dBlueprintType.SCOOTER_TUBULAR_RACING
+          else -> Pev3dBlueprintType.SCOOTER_MONOCOQUE_AERO
+        }
+      }
+      Pev3dArchetype.EBIKE -> {
+        when {
+          n.contains("turbo levo") || c.contains("mountain") ->
+            Pev3dBlueprintType.EBIKE_MOUNTAIN_FULLSUSP
+          n.contains("lectric") || n.contains("rad") || c.contains("folding") || c.contains("utility") ->
+            Pev3dBlueprintType.EBIKE_COMPACT_FOLDING
+          else -> Pev3dBlueprintType.EBIKE_SCRAMBLER_MOPED
+        }
+      }
+      Pev3dArchetype.EMOTO -> {
+        if (n.contains("sondors") || n.contains("metacycle") || n.contains("ryvid") || n.contains("bmw") ||
+          n.contains("cake") || c.contains("motorcycle")
+        ) {
+          Pev3dBlueprintType.EMOTO_STREET_NAKED
+        } else {
+          Pev3dBlueprintType.EMOTO_MX_DIRT
+        }
+      }
+    }
+  }
+
+  fun blueprintSpecsFor(type: Pev3dBlueprintType): Pev3dBlueprintSpecs =
+    when (type) {
+      Pev3dBlueprintType.EMOTO_MX_DIRT -> Pev3dBlueprintSpecs(type, 1380, 220, "19\"/18\" MX Knobby")
+      Pev3dBlueprintType.EMOTO_STREET_NAKED -> Pev3dBlueprintSpecs(type, 1410, 145, "17\" Street Sport")
+      Pev3dBlueprintType.EBIKE_SCRAMBLER_MOPED -> Pev3dBlueprintSpecs(type, 1280, 120, "20x4.0\" Fat All-Terrain")
+      Pev3dBlueprintType.EBIKE_MOUNTAIN_FULLSUSP -> Pev3dBlueprintSpecs(type, 1245, 160, "29\"/27.5\" Trail Mullet")
+      Pev3dBlueprintType.EBIKE_COMPACT_FOLDING -> Pev3dBlueprintSpecs(type, 1120, 80, "20x3.0\" Utility Cargo")
+      Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD -> Pev3dBlueprintSpecs(type, 1160, 165, "11\" Deep-Lug Off-Road")
+      Pev3dBlueprintType.SCOOTER_TUBULAR_RACING -> Pev3dBlueprintSpecs(type, 1190, 160, "11\"/13\" PMT Track Slick")
+      Pev3dBlueprintType.SCOOTER_MONOCOQUE_AERO -> Pev3dBlueprintSpecs(type, 1140, 125, "11\" Self-Sealing Aero")
+      Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE -> Pev3dBlueprintSpecs(type, 0, 90, "20\"/22\" Armored Trail")
+      Pev3dBlueprintType.EUC_AERO_TRAIL -> Pev3dBlueprintSpecs(type, 0, 130, "16\"/20\" Linkage Trail")
+      Pev3dBlueprintType.HYDROFOIL_EFOIL -> Pev3dBlueprintSpecs(type, 0, 0, "4'9\" Carbon Hydrofoil")
+    }
+
   fun finishForModel(name: String, category: String, voltage: Int): Pev3dModelFinish {
     val n = name.lowercase()
     val c = category.lowercase()
-    // Authentic OEM automotive/motorcycle sRGB paint palettes (converted to linear for Filament PBR)
+    val blueprint = resolveBlueprint(name, category)
+    // Authentic OEM automotive/motorcycle sRGB paint palettes (converted to linear for GLTF PBR)
     val bodyRgb =
       when {
-        n.contains("rion") || n.contains("stealth") || n.contains("black") || n.contains("dualtron") || n.contains("nami") ->
+        n.contains("rion") || n.contains("stealth") || n.contains("black") || n.contains("dualtron") || n.contains("nami") || n.contains("weped") || n.contains("zooz") ->
           floatArrayOf(0.18f, 0.19f, 0.22f) // Obsidian Metallic Carbon
-        n.contains("stark") || n.contains("red") || n.contains("ducati") || n.contains("zero") || n.contains("altis") ->
+        n.contains("stark") || n.contains("red") || n.contains("ducati") || n.contains("zero 11") || n.contains("altis") || n.contains("goat") || n.contains("energica") ->
           floatArrayOf(0.70f, 0.10f, 0.11f) // Factory Corsa Metallic Red
-        n.contains("bmw") || n.contains("ryvid") || n.contains("apollo") || n.contains("white") || n.contains("lectric") ->
+        n.contains("bmw") || n.contains("ryvid") || n.contains("apollo") || n.contains("white") || n.contains("lectric") || n.contains("livewire") || n.contains("rawrr") ->
           floatArrayOf(0.84f, 0.85f, 0.87f) // Mineral Pearl White
-        n.contains("ultra bee") || n.contains("kaabo") || n.contains("green") || n.contains("aventon") || n.contains("vsett") ->
+        n.contains("ultra bee") || n.contains("kaabo") || n.contains("green") || n.contains("aventon") || n.contains("vsett") || n.contains("santa cruz") || n.contains("tern") ->
           floatArrayOf(0.20f, 0.34f, 0.23f) // Satin Forest Olive Metallic
-        n.contains("storm bee") || n.contains("talaria") || n.contains("amber") || n.contains("ktm") || n.contains("komodo") ->
+        n.contains("storm bee") || n.contains("talaria") || n.contains("amber") || n.contains("ktm") || n.contains("komodo") || n.contains("arctic") || n.contains("waydoo") ->
           floatArrayOf(0.82f, 0.31f, 0.09f) // Factory Moto Burnt Orange
-        n.contains("fliteboard") || n.contains("inmotion") || n.contains("blue") || n.contains("eride") || n.contains("e-ride") ->
-          floatArrayOf(0.11f, 0.27f, 0.44f) // Deep Marine Metallic Navy
-        n.contains("sherman") || n.contains("patton") || n.contains("lynx") || n.contains("veteran") || n.contains("teverun") ->
+        n.contains("fliteboard") || n.contains("inmotion") || n.contains("blue") || n.contains("eride") || n.contains("e-ride") || n.contains("lift") || n.contains("yeti") ->
+          floatArrayOf(0.11f, 0.27f, 0.44f) // Deep Marine Metallic Navy / Turquoise
+        n.contains("sherman") || n.contains("patton") || n.contains("lynx") || n.contains("veteran") || n.contains("teverun") || n.contains("oryx") || n.contains("nosfet") ->
           floatArrayOf(0.26f, 0.28f, 0.32f) // Forged Titanium Graphite
-        n.contains("onyx") || n.contains("cake") || n.contains("volcon") || n.contains("super73") || n.contains("revv") ->
-          floatArrayOf(0.56f, 0.44f, 0.28f) // Matte Desert Bronze
-        n.contains("light bee") || n.contains("sur-ron") || n.contains("surron") || n.contains("segway") ->
+        n.contains("onyx") || n.contains("cake") || n.contains("volcon") || n.contains("super73") || n.contains("revv") || n.contains("anza") || n.contains("zero") ->
+          floatArrayOf(0.56f, 0.44f, 0.28f) // Matte Desert Bronze / Satin Copper
+        n.contains("light bee") || n.contains("sur-ron") || n.contains("surron") || n.contains("segway") || n.contains("niu") || n.contains("79bike") ->
           floatArrayOf(0.24f, 0.27f, 0.31f) // Satin Gunmetal Slate
-        n.contains("begode") || n.contains("kingsong") ->
+        n.contains("begode") || n.contains("kingsong") || n.contains("slack") || n.contains("trek") || n.contains("mukuta") ->
           floatArrayOf(0.22f, 0.24f, 0.28f) // Forged Basalt Slate
         voltage >= 100 ->
           floatArrayOf(0.21f, 0.24f, 0.29f) // Anthracite Metallic
@@ -286,7 +391,16 @@ internal object Pev3dEngine {
         n.contains("climber") || n.contains("lectric") -> 0.92f
         else -> 1.0f
       }
-    return Pev3dModelFinish(bodyRgb, accentRgb, caliperRgb, wheelScale, bodyLengthScale, secondaryRgb, paintMetallic)
+    return Pev3dModelFinish(
+      bodyRgb = bodyRgb,
+      accentRgb = accentRgb,
+      caliperRgb = caliperRgb,
+      wheelScale = wheelScale,
+      bodyLengthScale = bodyLengthScale,
+      secondaryRgb = secondaryRgb,
+      paintMetallic = paintMetallic,
+      blueprintType = blueprint,
+    )
   }
 
   fun hotspotsForArchetype(archetype: Pev3dArchetype): List<Pev3dHotspot> =
@@ -334,8 +448,8 @@ internal object Pev3dEngine {
     }
 
   /**
-   * Computes camera position & ViewProjection matrix matching Filament Vulkan Camera.lookAt
-   * so 2D screen hotspots and touch hit-testing align pixel-for-pixel with the 3D scene.
+   * Computes camera position & ViewProjection matrix matching right-handed Camera.lookAt
+   * so 2D screen hotspots and touch hit-testing align pixel-for-pixel with all 3D engines.
    */
   fun buildCameraViewProjection(
     widthPx: Float,

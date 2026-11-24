@@ -165,17 +165,25 @@ internal fun NeonAnimatedChartContainer(
  * 2) Deduplicates index emissions (`idx != lastIdx`) so Compose doesn't recompose on sub-pixel jitter.
  * 3) Uses `rememberUpdatedState` so pointerInput never restarts mid-gesture when callbacks change.
  */
+@Composable
 internal fun Modifier.chartHoverAndScrub(
   itemCount: Int,
   useSlots: Boolean = false,
   onPointFocused: (index: Int, xFrac: Float, isHovering: Boolean) -> Unit,
   onHoverEnded: () -> Unit = {},
-): Modifier =
-  pointerInput(itemCount, useSlots) {
+  onTap: (() -> Unit)? = null,
+): Modifier {
+  val latestOnPointFocused by rememberUpdatedState(onPointFocused)
+  val latestOnHoverEnded by rememberUpdatedState(onHoverEnded)
+  val latestOnTap by rememberUpdatedState(onTap)
+
+  return pointerInput(itemCount, useSlots) {
     if (itemCount <= 0) return@pointerInput
+    val tapSlop = viewConfiguration.touchSlop.coerceAtLeast(24f)
     awaitPointerEventScope {
       var lastIdx = -1
       var pressOrigin: Offset? = null
+      var pressTime = 0L
       var horizontalScrubLocked = false
 
       fun emitForX(x: Float, width: Float) {
@@ -195,7 +203,7 @@ internal fun Modifier.chartHoverAndScrub(
               useSlots -> (idx + 0.5f) / itemCount.toFloat()
               else -> idx.toFloat() / (itemCount - 1).toFloat()
             }
-          onPointFocused(idx, snappedFrac, true)
+          latestOnPointFocused(idx, snappedFrac, true)
         }
       }
 
@@ -211,6 +219,7 @@ internal fun Modifier.chartHoverAndScrub(
           }
           PointerEventType.Press -> {
             pressOrigin = change.position
+            pressTime = System.currentTimeMillis()
             horizontalScrubLocked = false
             lastIdx = -1
             emitForX(change.position.x, w)
@@ -234,6 +243,16 @@ internal fun Modifier.chartHoverAndScrub(
             }
           }
           PointerEventType.Release -> {
+            val origin = pressOrigin
+            val tapCb = latestOnTap
+            if (origin != null && !horizontalScrubLocked && tapCb != null) {
+              val dx = abs(change.position.x - origin.x)
+              val dy = abs(change.position.y - origin.y)
+              val dt = System.currentTimeMillis() - pressTime
+              if (dx <= tapSlop && dy <= tapSlop && dt < 500L) {
+                tapCb()
+              }
+            }
             pressOrigin = null
             horizontalScrubLocked = false
           }
@@ -241,26 +260,37 @@ internal fun Modifier.chartHoverAndScrub(
             lastIdx = -1
             pressOrigin = null
             horizontalScrubLocked = false
-            onHoverEnded()
+            latestOnHoverEnded()
           }
           else -> Unit
         }
       }
     }
   }
+}
 
 /**
  * Non-blocking 2D pointer Hover + Tap detector for scatter plots and polar pie/donut charts.
  * Throttles move emissions so vertical scrolling over charts never stutters or freezes.
  */
+@Composable
 internal fun Modifier.chartPointer2D(
   key: Any?,
   onPointerAt: (position: Offset, width: Float, height: Float, isHovering: Boolean) -> Unit,
   onHoverEnded: () -> Unit = {},
-): Modifier =
-  pointerInput(key) {
+  onTap: (() -> Unit)? = null,
+): Modifier {
+  val latestOnPointerAt by rememberUpdatedState(onPointerAt)
+  val latestOnHoverEnded by rememberUpdatedState(onHoverEnded)
+  val latestOnTap by rememberUpdatedState(onTap)
+
+  return pointerInput(key) {
+    val tapSlop = viewConfiguration.touchSlop.coerceAtLeast(24f)
     awaitPointerEventScope {
       var lastEmitPos = Offset.Unspecified
+      var pressOrigin: Offset? = null
+      var pressTime = 0L
+
       while (true) {
         val event = awaitPointerEvent()
         val change = event.changes.firstOrNull() ?: continue
@@ -269,8 +299,10 @@ internal fun Modifier.chartPointer2D(
         val isMouseOrStylus = change.type == PointerType.Mouse || change.type == PointerType.Stylus
         when (event.type) {
           PointerEventType.Press -> {
+            pressOrigin = change.position
+            pressTime = System.currentTimeMillis()
             lastEmitPos = change.position
-            onPointerAt(change.position, w, h, true)
+            latestOnPointerAt(change.position, w, h, true)
           }
           PointerEventType.Enter,
           PointerEventType.Move -> {
@@ -278,19 +310,34 @@ internal fun Modifier.chartPointer2D(
               val prev = lastEmitPos
               if (prev == Offset.Unspecified || abs(change.position.x - prev.x) > 6f || abs(change.position.y - prev.y) > 6f) {
                 lastEmitPos = change.position
-                onPointerAt(change.position, w, h, true)
+                latestOnPointerAt(change.position, w, h, true)
               }
             }
           }
+          PointerEventType.Release -> {
+            val origin = pressOrigin
+            val tapCb = latestOnTap
+            if (origin != null && tapCb != null) {
+              val dx = abs(change.position.x - origin.x)
+              val dy = abs(change.position.y - origin.y)
+              val dt = System.currentTimeMillis() - pressTime
+              if (dx <= tapSlop && dy <= tapSlop && dt < 500L) {
+                tapCb()
+              }
+            }
+            pressOrigin = null
+          }
           PointerEventType.Exit -> {
             lastEmitPos = Offset.Unspecified
-            onHoverEnded()
+            pressOrigin = null
+            latestOnHoverEnded()
           }
           else -> Unit
         }
       }
     }
   }
+}
 
 internal data class NeonTooltipMetric(
   val label: String,

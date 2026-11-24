@@ -695,7 +695,7 @@ class GeminiAiRepository {
     try {
       val cleanQuery = query.trim()
       if (cleanQuery.length < 2) {
-        return Result.failure(IllegalArgumentException("Enter at least 2 characters to search PEV models."))
+        throw IllegalArgumentException("Enter at least 2 characters to search PEV models.")
       }
       val webCtx =
         LiveCloudServices.webSearchGrounding(
@@ -788,7 +788,7 @@ class GeminiAiRepository {
     try {
       val cleanQuery = makeAndModel.trim()
       if (cleanQuery.length < 3) {
-        return Result.failure(IllegalArgumentException("Enter a PEV make and model first."))
+        throw IllegalArgumentException("Enter a PEV make and model first.")
       }
       val webCtx = LiveCloudServices.webSearchGrounding("$cleanQuery PEV electric scooter ebike EUC battery voltage Ah Wh tire size specs")
       val prompt =
@@ -1332,7 +1332,7 @@ class GeminiAiRepository {
               "verdict" to Schema.string("GO, CAUTION, or HOLD verdict with 1-sentence reason"),
               "weatherRisk" to Schema.string("Wind, precipitation, visibility, and road surface assessment"),
               "batteryStrategy" to Schema.string("Voltage sag reserve, cruise target, and range buffer"),
-              "gearChecklist" to Schema.array(Schema.string("Essential safety gear or tool check"), minItems = 3, maxItems = 5),
+              "gearChecklist" to Schema.array(Schema.string("Essential safety gear or tool check")),
               "routeTip" to Schema.string("Actionable route pacing or rural/road safety tip"),
             )
         )
@@ -1402,8 +1402,8 @@ class GeminiAiRepository {
               "verdict" to Schema.string("DIRECT FIT, NEEDS SUPPORTING MODS, or INCOMPATIBLE summary"),
               "voltageAndAmpsCheck" to Schema.string("Voltage tolerance, BMS discharge amps, MOSFET/phase current analysis"),
               "thermalAndRangeImpact" to Schema.string("Expected range, speed, torque, and stator/controller heat impact"),
-              "requiredSupportingMods" to Schema.array(Schema.string("Required adapter, bracket, BMS, fuse, or tire clearance mod"), minItems = 2, maxItems = 5),
-              "warnings" to Schema.array(Schema.string("Electrical, clearance, or safety hazard warning"), minItems = 1, maxItems = 4),
+              "requiredSupportingMods" to Schema.array(Schema.string("Required adapter, bracket, BMS, fuse, or tire clearance mod")),
+              "warnings" to Schema.array(Schema.string("Electrical, clearance, or safety hazard warning")),
             )
         )
       val prompt =
@@ -1464,4 +1464,75 @@ class GeminiAiRepository {
     } catch (e: Exception) {
       Result.failure(e)
     }
+
+  suspend fun analyze3dSubsystemDiagnostics(
+    vehicleName: String,
+    voltage: Int,
+    partName: String,
+    partSpecs: String,
+    throttlePct: Int,
+    ambientTempC: Double,
+    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+  ): Result<String> =
+    try {
+      val prompt =
+        """
+        You are the Senior High-Voltage PEV CAD & Dyno Chief Engineer.
+        Inspect the selected 3D subsystem below and return 3 crisp technical engineering bullet points (torque specs, failure thermal thresholds, and diagnostic checks):
+        Vehicle: $vehicleName (${voltage}V)
+        Selected Subsystem: $partName
+        Nominal Specs: $partSpecs
+        Live Dyno Load: ${throttlePct}% throttle | Ambient Air: ${"%.1f".format(ambientTempC)}C
+        Keep it factual, concise, and actionable.
+        """
+          .trimIndent()
+      val res =
+        withModelFallback(modelId) { activeModel ->
+          withTimeout(30_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+        }
+      Result.success(res.text?.trim().orEmpty().ifBlank { "No engineering notes returned." })
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+
+  suspend fun analyzeTelemetryGraphSeries(
+    graphTitle: String,
+    unitLabel: String,
+    sampleCount: Int,
+    minVal: Double,
+    maxVal: Double,
+    avgVal: Double,
+    medianVal: Double,
+    stdDev: Double,
+    slopePerStep: Double,
+    outliersCount: Int,
+    recentValuesCsv: String,
+    methodLabel: String,
+    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+  ): Result<String> =
+    try {
+      val prompt =
+        """
+        You are a PEV Telemetry & Statistical Data Scientist.
+        Interpret this live ride telemetry chart using the $methodLabel analytical method:
+        Graph: $graphTitle ($unitLabel) | Samples: $sampleCount
+        Range: ${"%.2f".format(minVal)} .. ${"%.2f".format(maxVal)} | Mean: ${"%.2f".format(avgVal)} | Median: ${"%.2f".format(medianVal)}
+        StdDev (σ): ${"%.2f".format(stdDev)} | OLS Linear Slope: ${"%.3f".format(slopePerStep)}/step | Z-Score (>1.5σ) Anomalies: $outliersCount
+        Recent Values: $recentValuesCsv
+        Give a concise 3-bullet insight covering trend direction, consistency/variance, and practical PEV tuning or riding advice.
+        """
+          .trimIndent()
+      val res =
+        withModelFallback(modelId) { activeModel ->
+          withTimeout(30_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+        }
+      Result.success(res.text?.trim().orEmpty().ifBlank { "Telemetry analysis complete." })
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
 }
+

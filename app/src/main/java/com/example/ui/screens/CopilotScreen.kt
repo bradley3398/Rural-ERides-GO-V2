@@ -103,6 +103,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.core.PevBatteryPhysics
 import com.example.data.AiVoiceProfile
 import com.example.data.UiState
+import com.example.data.getActiveCustomVoice
 import com.example.hardware.VoiceAudioManager
 import com.example.ui.components.RuralPevIcons
 import com.example.ui.components.SocialShareDialog
@@ -129,6 +130,7 @@ fun CopilotScreen(
   sessionVm: SessionViewModel,
   cockpitVm: CockpitViewModel,
   socialVm: CopilotSocialViewModel,
+  onOpenVoiceStudio: () -> Unit = {},
 ) {
   val ctx = LocalContext.current
   val clipboard = LocalClipboardManager.current
@@ -482,8 +484,19 @@ fun CopilotScreen(
                 showSettingsDialog = true
               },
               leadingIcon = { Icon(Icons.Default.Settings, contentDescription = "Co-Pilot Calibration", modifier = Modifier.size(15.dp)) },
-              label = { Text("Voice/Tune", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
+              label = { Text("Calibration", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
               modifier = Modifier.testTag("copilot_settings_button"),
+            )
+          }
+          item {
+            AssistChip(
+              onClick = {
+                tapCue()
+                onOpenVoiceStudio()
+              },
+              leadingIcon = { Icon(Icons.Default.RecordVoiceOver, contentDescription = "Custom Voice Studio", modifier = Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary) },
+              label = { Text("Voice Studio", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
+              modifier = Modifier.testTag("copilot_header_voice_studio_button"),
             )
           }
         }
@@ -516,7 +529,8 @@ fun CopilotScreen(
             }
           }
 
-          // 8 AI VOICE TYPES + RURAL FEEL TOGGLE
+          // 8 AI VOICE TYPES + RURAL FEEL TOGGLE + CUSTOM VOICE STUDIO
+          val activeCustomVoice = settings.getActiveCustomVoice()
           LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             item {
               TacticalFilterChip(
@@ -530,11 +544,24 @@ fun CopilotScreen(
                 label = if (settings.ruralPersonaMode) "Rural Feel ✓" else "Rural Feel",
               )
             }
+            if (activeCustomVoice != null) {
+              item {
+                TacticalFilterChip(
+                  selected = true,
+                  onClick = {
+                    val ok = socialVm.audio.previewCustomVoice(activeCustomVoice, settings.globalVolume)
+                    Toast.makeText(ctx, if (ok) "Custom voice: ${activeCustomVoice.name}" else "Custom voice set", Toast.LENGTH_SHORT).show()
+                  },
+                  leadingIcon = Icons.Default.RecordVoiceOver,
+                  label = "Custom: ${activeCustomVoice.name} ✓",
+                )
+              }
+            }
             items(AiVoiceProfile.entries, key = { it.id }) { vp ->
               TacticalFilterChip(
-                selected = settings.aiVoiceProfile == vp,
+                selected = activeCustomVoice == null && settings.aiVoiceProfile == vp,
                 onClick = {
-                  sessionVm.updateSettings { it.copy(aiVoiceProfile = vp) }
+                  sessionVm.updateSettings { it.copy(aiVoiceProfile = vp, activeCustomVoiceId = "") }
                   val ok = socialVm.audio.previewVoiceProfile(vp, settings.globalVolume)
                   Toast.makeText(
                     ctx,
@@ -828,15 +855,20 @@ fun CopilotScreen(
                 IconButton(
                   onClick = {
                     tapCue()
+                    val customVoice = settings.getActiveCustomVoice()
                     val ok =
-                      socialVm.audio.speakWithVoiceProfile(
-                        text = m.text,
-                        profile = settings.aiVoiceProfile,
-                        volumePct = settings.globalVolume,
-                      )
+                      if (customVoice != null) {
+                        socialVm.audio.speakWithCustomVoice(m.text, customVoice, settings.globalVolume)
+                      } else {
+                        socialVm.audio.speakWithVoiceProfile(
+                          text = m.text,
+                          profile = settings.aiVoiceProfile,
+                          volumePct = settings.globalVolume,
+                        )
+                      }
                     Toast.makeText(
                       ctx,
-                      if (ok) "Speaking with ${settings.aiVoiceProfile.label}..." else "Global Volume is 0% — raise volume in Settings",
+                      if (ok) "Speaking (${customVoice?.name ?: settings.aiVoiceProfile.label})..." else "Global Volume is 0% — raise volume in Settings",
                       Toast.LENGTH_SHORT,
                     ).show()
                   },
@@ -1307,8 +1339,8 @@ fun CopilotScreen(
   if (showSettingsDialog) {
     TacticalDialog(
       onDismissRequest = { showSettingsDialog = false },
-      title = "Co-Pilot Voice & Persona Calibration",
-      subtitle = "Tune AI voice, detail depth & live rural feel",
+      title = "Co-Pilot Calibration",
+      subtitle = "Tune answer depth, toolbar layout & riding directive",
       icon = Icons.Default.Tune,
       confirmButton = { TacticalButton(onClick = { showSettingsDialog = false }) { Text("Done") } },
     ) {
@@ -1316,17 +1348,6 @@ fun CopilotScreen(
         modifier = Modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-          Text("Auto-Speak Replies (TTS)")
-          Switch(checked = autoSpeak, onCheckedChange = { autoSpeak = it })
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-          Text("Warm Rural Hospitality Feel")
-          Switch(
-            checked = settings.ruralPersonaMode,
-            onCheckedChange = { v -> sessionVm.updateSettings { it.copy(ruralPersonaMode = v) } },
-          )
-        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           Text("Compact Tools Drawer")
           Switch(
@@ -1337,24 +1358,7 @@ fun CopilotScreen(
             },
           )
         }
-        Text("AI Voice Type (${settings.aiVoiceProfile.label})", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          items(AiVoiceProfile.entries, key = { it.id }) { vp ->
-            TacticalFilterChip(
-              selected = settings.aiVoiceProfile == vp,
-              onClick = {
-                sessionVm.updateSettings { it.copy(aiVoiceProfile = vp) }
-                val ok = socialVm.audio.previewVoiceProfile(vp, settings.globalVolume)
-                Toast.makeText(
-                  ctx,
-                  if (ok) "Previewing ${vp.label} voice" else "Voice set: ${vp.label} (check device volume)",
-                  Toast.LENGTH_SHORT,
-                ).show()
-              },
-              label = vp.label,
-            )
-          }
-        }
+        Text("Response Depth", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           listOf("Concise", "Balanced", "Deep Tech").forEach { v ->
             TacticalFilterChip(selected = verbosity == v, onClick = { verbosity = v }, label = v)

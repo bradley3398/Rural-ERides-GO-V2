@@ -1,7 +1,10 @@
 package com.example.ui.screens
 
+import com.example.core.PevBatteryPhysics
+
 import android.content.Intent
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -78,6 +81,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.ai.GeminiModelCatalog
 import com.example.core.AppLocale
@@ -96,6 +100,7 @@ import com.example.data.PevWallpaper
 import com.example.data.RingtonePreset
 import com.example.data.VibrationPatternPreset
 import com.example.data.VisualStyleMode
+import com.example.data.getActiveCustomVoice
 import com.example.hardware.VoiceAudioManager
 import com.example.ui.components.RuralPevIcons
 import com.example.ui.components.TacticalButton
@@ -308,6 +313,8 @@ fun DisplayThemesSettingsContent(
   }
 
   if (subCat == "All" || subCat == "Themes & Wallpapers") {
+    val activeHolidays = remember { com.example.ui.theme.activeHolidayStyles() }
+    val unlockedStyles = remember { com.example.ui.theme.availableVisualStyles() }
     var themeFilter by remember { mutableStateOf("All") }
     LiveThemePreviewStudioCard(
       settings = settings,
@@ -315,21 +322,73 @@ fun DisplayThemesSettingsContent(
       onOpenWindowsStudio = { onSelectSubCategory("Windows & Icons") },
     )
     Spacer(Modifier.height(12.dp))
+    val filterCategories =
+      remember(activeHolidays) {
+        buildList {
+          add("All")
+          if (activeHolidays.isNotEmpty()) add("Holiday")
+          addAll(listOf("Windows OS", "Rural Country", "PEV Racing", "Modern & Dark"))
+        }
+      }
     val filteredStyles =
-      remember(themeFilter) {
+      remember(themeFilter, unlockedStyles) {
         when (themeFilter) {
-          "Windows OS" -> VisualStyleMode.entries.filter { it.name.startsWith("WINDOWS_") }
-          "Rural Country" -> VisualStyleMode.entries.filter { it.name.startsWith("RURAL_") || it == VisualStyleMode.PEV_GRAVEL_DUST }
-          "PEV Racing" -> VisualStyleMode.entries.filter { it.name.startsWith("PEV_") }
-          "Modern & Dark" -> VisualStyleMode.entries.filter { !it.name.startsWith("WINDOWS_") && !it.name.startsWith("RURAL_") && !it.name.startsWith("PEV_") }
-          else -> VisualStyleMode.entries
+          "Holiday" -> unlockedStyles.filter { it.name.startsWith("HOLIDAY_") }
+          "Windows OS" -> unlockedStyles.filter { it.name.startsWith("WINDOWS_") }
+          "Rural Country" -> unlockedStyles.filter { it.name.startsWith("RURAL_") || it == VisualStyleMode.PEV_GRAVEL_DUST }
+          "PEV Racing" -> unlockedStyles.filter { it.name.startsWith("PEV_") }
+          "Modern & Dark" -> unlockedStyles.filter {
+            !it.name.startsWith("WINDOWS_") &&
+              !it.name.startsWith("RURAL_") &&
+              !it.name.startsWith("PEV_") &&
+              !it.name.startsWith("HOLIDAY_")
+          }
+          else -> unlockedStyles
         }
       }
     TacticalCard(highlight = true, title = "Themes & Wallpapers") {
-      Text("App Look & Style (${filteredStyles.size} of ${VisualStyleMode.entries.size} Themes)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+      if (activeHolidays.isNotEmpty()) {
+        val primaryHoliday = activeHolidays.first()
+        val info = com.example.ui.theme.holidayBadgeInfo(primaryHoliday)
+        if (info != null) {
+          Surface(
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  info.badgeText,
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                  "${info.holidayName} unlocked (${info.activeWindowLabel})",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+              }
+              com.example.ui.components.TacticalFilterChip(
+                selected = settings.visualStyle == primaryHoliday,
+                onClick = { sessionVm.updateSettings { it.copy(visualStyle = primaryHoliday) } },
+                label = if (settings.visualStyle == primaryHoliday) "Active" else "Equip",
+                modifier = Modifier.testTag("equip_active_holiday_theme_btn"),
+              )
+            }
+          }
+          Spacer(Modifier.height(8.dp))
+        }
+      }
+      Text("App Look & Style (${filteredStyles.size} of ${unlockedStyles.size} Themes)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
       Spacer(Modifier.height(6.dp))
       LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(listOf("All", "Windows OS", "Rural Country", "PEV Racing", "Modern & Dark")) { catLabel ->
+        items(filterCategories) { catLabel ->
           com.example.ui.components.TacticalFilterChip(
             selected = themeFilter == catLabel,
             onClick = { themeFilter = catLabel },
@@ -835,13 +894,13 @@ fun SoundRingtonesNotifySettingsContent(
             accentColor = Color(0xFFFF9F1C),
           ),
         ),
-      secondaryHeader = "Voice, Wind Filter & Reminders",
+      secondaryHeader = "Alerts, Wind Filter & Reminders",
       secondaryItems =
         listOf(
           AndroidSubCategorySpec(
-            id = "Voice & Reminders",
-            title = "Spoken Voice & Care Reminders",
-            summary = "Speed ${"%.2fx".format(settings.ttsSpeechRate)} • PSI every ${settings.psiReminderDays}d • ${if (settings.remindersEnabled) "Active" else "Off"}",
+            id = "Alerts & Reminders",
+            title = "Alerts & Care Reminders",
+            summary = "PSI every ${settings.psiReminderDays}d • Service ${settings.maintReminderKm}km • ${if (settings.remindersEnabled) "Active" else "Off"}",
             icon = Icons.Default.NotificationsActive,
             accentColor = Color(0xFF39FF14),
           ),
@@ -1145,29 +1204,9 @@ fun SoundRingtonesNotifySettingsContent(
     Spacer(Modifier.height(12.dp))
   }
 
-  if (subCat == "All" || subCat == "Voice & Reminders") {
-    TacticalCard(title = "Spoken Voice & Care Reminders") {
-      Text("SPOKEN VOICE & MAINTENANCE REMINDERS", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-      Spacer(Modifier.height(6.dp))
-      Text("Voice Speed: ${"%.2fx".format(settings.ttsSpeechRate)} • Voice Pitch: ${"%.2f".format(settings.ttsPitch)}", style = MaterialTheme.typography.labelSmall)
-      TacticalSlider(value = settings.ttsSpeechRate, onValueChange = { v -> sessionVm.updateSettings { it.copy(ttsSpeechRate = v) } }, valueRange = 0.6f..1.6f)
-      TacticalSlider(value = settings.ttsPitch, onValueChange = { v -> sessionVm.updateSettings { it.copy(ttsPitch = v) } }, valueRange = 0.6f..1.5f)
-      TacticalOutlinedButton(
-        onClick = {
-          sessionVm.voiceAudio.speakWithVoiceProfile(
-            text = "Rural E Rides Go spoken voice and directions are ready.",
-            profile = settings.aiVoiceProfile,
-            volumePct = settings.globalVolume,
-            speechRateMult = settings.ttsSpeechRate,
-            pitchMult = settings.ttsPitch,
-          )
-        },
-        modifier = Modifier.fillMaxWidth().testTag("test_tts_voice_button"),
-      ) {
-        Icon(Icons.Default.RecordVoiceOver, null)
-        Spacer(Modifier.width(8.dp))
-        Text("Test Spoken Voice Speed & Pitch")
-      }
+  if (subCat == "All" || subCat == "Alerts & Reminders") {
+    TacticalCard(title = "Riding Alerts & Care Reminders") {
+      Text("ALERTS & MAINTENANCE REMINDERS", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
       Spacer(Modifier.height(6.dp))
       AndroidSettingSwitch("Classic Retro Sound Effects", checked = settings.retroAudioCuesEnabled) { v -> sessionVm.updateSettings { it.copy(retroAudioCuesEnabled = v) } }
       AndroidSettingSwitch("Mute Non-Urgent Alerts While Riding", checked = settings.autoMuteAlertsWhileRiding) { v -> sessionVm.updateSettings { it.copy(autoMuteAlertsWhileRiding = v) } }
@@ -1207,6 +1246,84 @@ fun SoundRingtonesNotifySettingsContent(
         Icon(Icons.Default.NotificationsActive, null)
         Spacer(Modifier.width(8.dp))
         Text("Send Test Reminder")
+      }
+      Spacer(Modifier.height(8.dp))
+      HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+      Spacer(Modifier.height(8.dp))
+      Text("PUSH NOTIFICATION CHANNELS", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+      AndroidSettingSwitch("AI Intelligence & Insights", checked = settings.aiNotifsEnabled) { v ->
+        if (v && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !ReminderScheduler.hasNotificationPermission(ctx)) {
+          onRequestNotifPermission()
+        }
+        sessionVm.updateSettings { it.copy(aiNotifsEnabled = v) }
+      }
+      AndroidSettingSwitch("Social Board Dispatches", checked = settings.socialNotifsEnabled) { v ->
+        if (v && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !ReminderScheduler.hasNotificationPermission(ctx)) {
+          onRequestNotifPermission()
+        }
+        sessionVm.updateSettings { it.copy(socialNotifsEnabled = v) }
+      }
+      AndroidSettingSwitch("Direct Messages (DM)", checked = settings.dmNotifsEnabled) { v ->
+        if (v && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !ReminderScheduler.hasNotificationPermission(ctx)) {
+          onRequestNotifPermission()
+        }
+        sessionVm.updateSettings { it.copy(dmNotifsEnabled = v) }
+      }
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        TacticalOutlinedButton(
+          onClick = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !ReminderScheduler.hasNotificationPermission(ctx)) {
+              onRequestNotifPermission()
+            } else {
+              val posted = ReminderScheduler.postAiNotification(
+                context = ctx,
+                title = "AI Co-Pilot: Ridge Intelligence",
+                body = "Battery efficiency is 96%. Regen braking generated +14 Wh on recent descent.",
+                targetTab = "COPILOT",
+              )
+              onStatusMessage(if (posted) "Test AI notification sent!" else "Notifications disabled in system settings.")
+            }
+          },
+          modifier = Modifier.weight(1f).testTag("test_ai_notification_button"),
+        ) {
+          Text("Test AI", fontSize = 11.sp, maxLines = 1)
+        }
+        TacticalOutlinedButton(
+          onClick = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !ReminderScheduler.hasNotificationPermission(ctx)) {
+              onRequestNotifPermission()
+            } else {
+              val posted = ReminderScheduler.postSocialNotification(
+                context = ctx,
+                title = "Board Dispatch: TrailBoss",
+                body = "Upper Ridge Trail is clear and dry. Excellent grip conditions today.",
+                targetTab = "BOARD",
+              )
+              onStatusMessage(if (posted) "Test Social notification sent!" else "Notifications disabled in system settings.")
+            }
+          },
+          modifier = Modifier.weight(1f).testTag("test_social_notification_button"),
+        ) {
+          Text("Test Social", fontSize = 11.sp, maxLines = 1)
+        }
+        TacticalOutlinedButton(
+          onClick = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !ReminderScheduler.hasNotificationPermission(ctx)) {
+              onRequestNotifPermission()
+            } else {
+              val posted = ReminderScheduler.postDmNotification(
+                context = ctx,
+                senderCallsign = "PilotEcho",
+                body = "Want to ride the sunset loop at 18:30?",
+                threadId = "test_dm_thread",
+              )
+              onStatusMessage(if (posted) "Test DM notification sent!" else "Notifications disabled in system settings.")
+            }
+          },
+          modifier = Modifier.weight(1f).testTag("test_dm_notification_button"),
+        ) {
+          Text("Test DM", fontSize = 11.sp, maxLines = 1)
+        }
       }
     }
   }
@@ -1325,6 +1442,7 @@ fun AiCoreChatSettingsContent(
   sessionVm: SessionViewModel,
   selectedSubCategory: String? = null,
   onSelectSubCategory: (String) -> Unit = {},
+  onOpenVoiceStudio: () -> Unit = {},
 ) {
   if (selectedSubCategory == null) {
     AndroidSettingsSubCategoryMenu(
@@ -1340,8 +1458,8 @@ fun AiCoreChatSettingsContent(
           ),
           AndroidSubCategorySpec(
             id = "Voice & Rural Warmth",
-            title = "AI Voice & Rural Hospitality",
-            summary = "${settings.aiVoiceProfile.label} • ${if (settings.ruralPersonaMode) "Warm Rural Tone" else "Standard"}",
+            title = "AI Voice, Speed & Pre-load Buffer",
+            summary = "${settings.aiVoiceProfile.label} • ${"%.2fx".format(settings.ttsSpeechRate)} • ${if (settings.ttsPreloadBufferEnabled) "Pre-load On" else "Standard"}",
             icon = Icons.Default.RecordVoiceOver,
             accentColor = Color(0xFFFF9F1C),
           ),
@@ -1431,12 +1549,20 @@ fun AiCoreChatSettingsContent(
       Spacer(Modifier.height(8.dp))
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TacticalOutlinedButton(
-          onClick = { sessionVm.voiceAudio.previewVoiceProfile(settings.aiVoiceProfile, settings.globalVolume) },
-          modifier = Modifier.weight(1f).testTag("settings_preview_ai_voice_button"),
+          onClick = {
+            sessionVm.voiceAudio.speakWithVoiceProfile(
+              text = "Rural E Rides Go spoken voice and directions are ready.",
+              profile = settings.aiVoiceProfile,
+              volumePct = settings.globalVolume,
+              speechRateMult = settings.ttsSpeechRate,
+              pitchMult = settings.ttsPitch,
+            )
+          },
+          modifier = Modifier.weight(1f).testTag("test_tts_voice_button"),
         ) {
           Icon(Icons.Default.RecordVoiceOver, null, Modifier.size(16.dp))
           Spacer(Modifier.width(6.dp))
-          Text("Preview Voice")
+          Text("Test Voice")
         }
         TacticalOutlinedButton(
           onClick = { sessionVm.voiceAudio.stopSpeaking() },
@@ -1445,6 +1571,50 @@ fun AiCoreChatSettingsContent(
           Icon(Icons.Default.Stop, null, Modifier.size(16.dp))
           Spacer(Modifier.width(4.dp))
           Text("Stop")
+        }
+      }
+      Spacer(Modifier.height(8.dp))
+      Text("Voice Speed: ${"%.2fx".format(settings.ttsSpeechRate)} • Voice Pitch: ${"%.2f".format(settings.ttsPitch)}", style = MaterialTheme.typography.labelSmall)
+      TacticalSlider(value = settings.ttsSpeechRate, onValueChange = { v -> sessionVm.updateSettings { it.copy(ttsSpeechRate = v) } }, valueRange = 0.6f..1.6f)
+      TacticalSlider(value = settings.ttsPitch, onValueChange = { v -> sessionVm.updateSettings { it.copy(ttsPitch = v) } }, valueRange = 0.6f..1.5f)
+      AndroidSettingSwitch(
+        label = "TTS Sentence Pre-load Buffer",
+        subtitle = "Pre-synthesizes sentences into an asynchronous queue during generation for ~85ms speech start",
+        checked = settings.ttsPreloadBufferEnabled,
+      ) { v -> sessionVm.updateSettings { it.copy(ttsPreloadBufferEnabled = v) } }
+      val activeCustomVoice = settings.getActiveCustomVoice()
+      Spacer(Modifier.height(10.dp))
+      HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+      Spacer(Modifier.height(8.dp))
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Column(Modifier.weight(1f)) {
+          Text(
+            text = if (activeCustomVoice != null) "Custom Voice: ${activeCustomVoice.name}" else "Custom AI Voice Studio",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+          )
+          Text(
+            text = if (activeCustomVoice != null)
+              "Neural: ${activeCustomVoice.geminiVoiceName} • DSP: ${activeCustomVoice.dspProfile.name} • ${"%.2f".format(activeCustomVoice.speechRate)}x / ${"%.2f".format(activeCustomVoice.pitch)}x"
+            else
+              "Create custom voices, upload audio samples, and tune the zero-latency pre-load buffer",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        Spacer(Modifier.width(8.dp))
+        TacticalOutlinedButton(
+          onClick = onOpenVoiceStudio,
+          modifier = Modifier.testTag("settings_open_custom_voice_studio_button"),
+        ) {
+          Icon(Icons.Default.RecordVoiceOver, null, Modifier.size(16.dp))
+          Spacer(Modifier.width(4.dp))
+          Text("Open Studio")
         }
       }
     }
@@ -1617,6 +1787,8 @@ fun AboutDeveloperSettingsContent() {
     ) {
       Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text("Package ID: ${BuildConfig.APPLICATION_ID}", style = MaterialTheme.typography.labelSmall)
+        Text("GitHub: https://github.com/bradley3398/Rural-ERides-GO-V2", style = MaterialTheme.typography.labelSmall)
+        Text("Download Page: https://bradley3398.github.io/Rural-ERides-GO-V2/", style = MaterialTheme.typography.labelSmall)
         Text("Device: ${Build.MANUFACTURER.uppercase()} ${Build.MODEL}", style = MaterialTheme.typography.labelSmall)
         Text("System: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})", style = MaterialTheme.typography.labelSmall)
         Text("Powered by: Kotlin • Jetpack Compose • Live GPS & GNSS Satellites • 9-DOF Sensors • Live AR Camera • Firebase AI & Cloud Sync", style = MaterialTheme.typography.labelSmall)
@@ -1626,8 +1798,33 @@ fun AboutDeveloperSettingsContent() {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
       TacticalOutlinedButton(
         onClick = {
+          val repoIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bradley3398/Rural-ERides-GO-V2"))
+          runCatching { ctx.startActivity(repoIntent) }
+        },
+        modifier = Modifier.weight(1f).testTag("settings_open_github_button"),
+      ) {
+        Icon(Icons.Default.Code, null, Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("GitHub")
+      }
+      TacticalOutlinedButton(
+        onClick = {
+          val pagesIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://bradley3398.github.io/Rural-ERides-GO-V2/"))
+          runCatching { ctx.startActivity(pagesIntent) }
+        },
+        modifier = Modifier.weight(1f).testTag("settings_open_pages_button"),
+      ) {
+        Icon(Icons.Default.Explore, null, Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Downloads")
+      }
+    }
+    Spacer(Modifier.height(10.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+      TacticalOutlinedButton(
+        onClick = {
           clipboard.setText(
-            AnnotatedString("Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison (${BuildConfig.APPLICATION_ID})")
+            AnnotatedString("Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison (${BuildConfig.APPLICATION_ID}) • https://github.com/bradley3398/Rural-ERides-GO-V2")
           )
           Toast.makeText(ctx, "Copied developer info", Toast.LENGTH_SHORT).show()
         },
@@ -1645,7 +1842,7 @@ fun AboutDeveloperSettingsContent() {
               putExtra(Intent.EXTRA_SUBJECT, "Rural ERides GO v${BuildConfig.VERSION_NAME}")
               putExtra(
                 Intent.EXTRA_TEXT,
-                "Rural ERides GO v${BuildConfig.VERSION_NAME} — Built by Lord Bradley Callison. Electric Ride Dashboard, Live GPS Satellites, AR Camera, Repair Shop & AI Helper.",
+                "Rural ERides GO v${BuildConfig.VERSION_NAME} — Built by Lord Bradley Callison. Electric Ride Dashboard, Live GPS Satellites, AR Camera, Repair Shop & AI Helper.\nDownload: https://bradley3398.github.io/Rural-ERides-GO-V2/\nGitHub: https://github.com/bradley3398/Rural-ERides-GO-V2",
               )
             }
           runCatching { ctx.startActivity(Intent.createChooser(intent, "Share App Info")) }

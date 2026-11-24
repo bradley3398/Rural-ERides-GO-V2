@@ -1,0 +1,233 @@
+name: Android Signed Release (Google Play)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      deploy_to_play:
+        description: 'Upload signed App Bundle (.aab) to Google Play Console'
+        type: boolean
+        default: true
+      play_track:
+        description: 'Google Play release track'
+        type: choice
+        default: production
+        options:
+          - production
+          - beta
+          - alpha
+          - internal
+      release_status:
+        description: 'Google Play release status'
+        type: choice
+        default: completed
+        options:
+          - completed
+          - draft
+          - halted
+          - inProgress
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-sign-release:
+    name: Build, Sign & Publish Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate required signing & Google Play secrets
+        id: validate_secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          IS_TAG_PUSH: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          MANUAL_PLAY_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_to_play == true }}
+        run: |
+          missing=0
+          for var in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required GitHub Actions secret: $var"
+              missing=1
+            fi
+          done
+
+          should_deploy_play="false"
+          if [ "$IS_TAG_PUSH" = "true" ] || [ "$MANUAL_PLAY_DEPLOY" = "true" ]; then
+            should_deploy_play="true"
+            if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
+              echo "::error::Missing required GitHub Actions secret: PLAY_SERVICE_ACCOUNT_JSON for automatic Google Play upload."
+              missing=1
+            fi
+          fi
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD, and PLAY_SERVICE_ACCOUNT_JSON in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+          echo "should_deploy_play=$should_deploy_play" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Decode and validate release keystore from GitHub Secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          KEYSTORE_PATH="${RUNNER_TEMP}/release-upload.jks"
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "RELEASE_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+          # Validate keystore readability and alias before invoking Gradle
+          keytool -list \
+            -keystore "$KEYSTORE_PATH" \
+            -storepass:env KEYSTORE_PASSWORD \
+            -alias "$KEY_ALIAS" > /dev/null
+
+          # Materialize debug.keystore if present for Gradle configuration consistency
+          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
+            base64 --decode debug.keystore.base64 > debug.keystore
+          fi
+
+      - name: Create Gradle release signing init script
+        run: |
+          INIT_SCRIPT="${RUNNER_TEMP}/release-signing.init.gradle"
+          cat << 'EOF' > "$INIT_SCRIPT"
+          allprojects {
+              plugins.withId("com.android.application") {
+                  def androidComponents = extensions.findByName("androidComponents")
+                  if (androidComponents != null) {
+                      androidComponents.finalizeDsl { ext ->
+                          def keystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+                          def storePass = System.getenv("KEYSTORE_PASSWORD")
+                          def alias = System.getenv("KEY_ALIAS")
+                          def keyPass = System.getenv("KEY_PASSWORD")
+
+                          if (keystorePath == null || keystorePath.isEmpty()) {
+                              throw new GradleException("RELEASE_KEYSTORE_PATH environment variable is missing.")
+                          }
+
+                          def releaseSigning = ext.signingConfigs.findByName("release")
+                          if (releaseSigning == null) {
+                              releaseSigning = ext.signingConfigs.create("release")
+                          }
+                          releaseSigning.storeFile = new File(keystorePath)
+                          releaseSigning.storePassword = storePass
+                          releaseSigning.keyAlias = alias
+                          releaseSigning.keyPassword = keyPass
+
+                          ext.buildTypes.getByName("release").signingConfig = releaseSigning
+                      }
+                  }
+              }
+          }
+          EOF
+          echo "SIGNING_INIT_SCRIPT=$INIT_SCRIPT" >> "$GITHUB_ENV"
+
+      - name: Build signed Release AAB and APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          gradle --init-script "$SIGNING_INIT_SCRIPT" \
+            :app:bundleRelease \
+            :app:assembleRelease \
+            --no-daemon \
+            --stacktrace
+
+      - name: Verify AAB and APK signatures for Google Play
+        run: |
+          AAB_FILE=$(find app/build/outputs/bundle/release -maxdepth 1 -name '*.aab' | head -n 1)
+          APK_FILE=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
+
+          if [ -z "$AAB_FILE" ] || [ ! -f "$AAB_FILE" ]; then
+            echo "::error::Release App Bundle (.aab) was not generated."
+            exit 1
+          fi
+
+          echo "Verifying App Bundle signature: $AAB_FILE"
+          VERIFY_OUTPUT=$(jarsigner -verify -verbose -certs "$AAB_FILE")
+          echo "$VERIFY_OUTPUT" | tail -n 20
+
+          if echo "$VERIFY_OUTPUT" | grep -q "CN=Android Debug"; then
+            echo "::error::Bundle is signed with the Android Debug certificate instead of the release upload key."
+            exit 1
+          fi
+
+          echo "SIGNED_AAB_PATH=$AAB_FILE" >> "$GITHUB_ENV"
+
+          if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
+            APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+            if [ -n "$APKSIGNER" ]; then
+              echo "Verifying Release APK signature: $APK_FILE"
+              "$APKSIGNER" verify --verbose --print-certs "$APK_FILE"
+            fi
+            echo "SIGNED_APK_PATH=$APK_FILE" >> "$GITHUB_ENV"
+          fi
+
+      - name: Upload signed release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rural-erides-go-signed-release-${{ github.run_number }}
+          path: |
+            app/build/outputs/bundle/release/*.aab
+            app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish public GitHub Release with signed APK & AAB
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          files: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+
+      - name: Deploy signed AAB to Google Play Console (Auto on v* tags)
+        if: steps.validate_secrets.outputs.should_deploy_play == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.aistudio.volttrail.kqrmvx
+          releaseFiles: ${{ env.SIGNED_AAB_PATH }}
+          track: ${{ inputs.play_track || 'production' }}
+          status: ${{ inputs.release_status || 'completed' }}
+
+      - name: Clean up temporary keystore and signing files
+        if: always()
+        run: |
+          rm -f "${RUNNER_TEMP}/release-upload.jks" \
+                "${RUNNER_TEMP}/release-signing.init.gradle" \
+                debug.keystore

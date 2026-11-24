@@ -56,10 +56,13 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldColors
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -99,6 +102,10 @@ import com.example.ui.theme.LocalTacticalChrome
 import com.example.ui.theme.LocalTacticalSettings
 import com.example.ui.theme.TacticalChromeFamily
 import com.example.ui.theme.TacticalColors
+import com.example.ui.theme.drawHolidayCardOrnament
+import com.example.ui.theme.holidayDecorationSpec
+import com.example.ui.theme.isHolidayTheme
+import com.example.ui.theme.sanitizeVisualStyleForSeason
 import com.example.ui.theme.tacticalBorder
 import com.example.ui.theme.tacticalCardColors
 import kotlin.math.abs
@@ -295,11 +302,19 @@ fun TacticalButton(
   isDestructive: Boolean = false,
   content: @Composable RowScope.() -> Unit,
 ) {
+  var lastClickTime by remember { mutableStateOf(0L) }
+  val debouncedOnClick = {
+    val now = System.currentTimeMillis()
+    if (now - lastClickTime >= 400L) {
+      lastClickTime = now
+      onClick()
+    }
+  }
   val settings = LocalTacticalSettings.current
   val chrome = LocalTacticalChrome.current
   if (isWindowsXpActive(settings)) {
     WindowsXpStyledButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier,
       enabled = enabled,
       isPrimary = true,
@@ -311,7 +326,7 @@ fun TacticalButton(
   }
   if (isWindows7Active(settings)) {
     Windows7AeroStyledButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier,
       enabled = enabled,
       isPrimary = true,
@@ -323,7 +338,7 @@ fun TacticalButton(
   }
   if (isWindows10Active(settings)) {
     Windows10FluentButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier,
       enabled = enabled,
       isPrimary = true,
@@ -335,7 +350,7 @@ fun TacticalButton(
   }
   if (isWindows11Active(settings)) {
     Windows11MicaButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier,
       enabled = enabled,
       isPrimary = true,
@@ -412,7 +427,7 @@ fun TacticalButton(
           }
           .then(shadowMod)
           .then(effectiveFillModifier)
-          .clickable(enabled = enabled, onClick = onClick)
+          .clickable(enabled = enabled, onClick = debouncedOnClick)
           .padding(contentPadding),
     ) {
       CompositionLocalProvider(LocalContentColor provides fgColor) {
@@ -457,7 +472,7 @@ fun TacticalButton(
           enabled = enabled,
           interactionSource = interactionSource,
           indication = null,
-          onClick = onClick,
+          onClick = debouncedOnClick,
         )
         .padding(contentPadding),
   ) {
@@ -481,11 +496,19 @@ fun TacticalOutlinedButton(
   contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
   content: @Composable RowScope.() -> Unit,
 ) {
+  var lastClickTime by remember { mutableStateOf(0L) }
+  val debouncedOnClick = {
+    val now = System.currentTimeMillis()
+    if (now - lastClickTime >= 400L) {
+      lastClickTime = now
+      onClick()
+    }
+  }
   val settings = LocalTacticalSettings.current
   val chrome = LocalTacticalChrome.current
   if (isWindowsXpActive(settings)) {
     WindowsXpStyledButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier,
       enabled = enabled,
       isPrimary = false,
@@ -496,7 +519,7 @@ fun TacticalOutlinedButton(
   }
   if (isWindows7Active(settings)) {
     Windows7AeroStyledButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier,
       enabled = enabled,
       isPrimary = false,
@@ -507,7 +530,7 @@ fun TacticalOutlinedButton(
   }
   if (isWindows10Active(settings)) {
     Windows10FluentButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier,
       enabled = enabled,
       isPrimary = false,
@@ -518,7 +541,7 @@ fun TacticalOutlinedButton(
   }
   if (isWindows11Active(settings)) {
     Windows11MicaButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier,
       enabled = enabled,
       isPrimary = false,
@@ -556,7 +579,7 @@ fun TacticalOutlinedButton(
           .clip(chrome.buttonShape)
           .background(bgColor, chrome.buttonShape)
           .border(chrome.buttonBorderWidth, borderBrush, chrome.buttonShape)
-          .clickable(enabled = enabled, onClick = onClick)
+          .clickable(enabled = enabled, onClick = debouncedOnClick)
           .padding(contentPadding),
     ) {
       CompositionLocalProvider(LocalContentColor provides fgColor) {
@@ -590,7 +613,7 @@ fun TacticalOutlinedButton(
           enabled = enabled,
           interactionSource = interactionSource,
           indication = null,
-          onClick = onClick,
+          onClick = debouncedOnClick,
         )
         .padding(contentPadding),
   ) {
@@ -613,11 +636,19 @@ fun TacticalIconButton(
   enabled: Boolean = true,
   content: @Composable () -> Unit,
 ) {
+  var lastClickTime by remember { mutableStateOf(0L) }
+  val debouncedOnClick = {
+    val now = System.currentTimeMillis()
+    if (now - lastClickTime >= 350L) {
+      lastClickTime = now
+      onClick()
+    }
+  }
   val settings = LocalTacticalSettings.current
   val chrome = LocalTacticalChrome.current
   if (isWindowsXpActive(settings)) {
     WindowsXpStyledButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier.size(48.dp),
       enabled = enabled,
       isPrimary = false,
@@ -629,7 +660,7 @@ fun TacticalIconButton(
   }
   if (isWindows7Active(settings)) {
     Windows7AeroStyledButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier.size(48.dp),
       enabled = enabled,
       isPrimary = false,
@@ -641,7 +672,7 @@ fun TacticalIconButton(
   }
   if (isWindows10Active(settings)) {
     Windows10FluentButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier.size(48.dp),
       enabled = enabled,
       isPrimary = false,
@@ -653,7 +684,7 @@ fun TacticalIconButton(
   }
   if (isWindows11Active(settings)) {
     Windows11MicaButton(
-      onClick = onClick,
+      onClick = debouncedOnClick,
       modifier = modifier.size(48.dp),
       enabled = enabled,
       isPrimary = false,
@@ -666,15 +697,26 @@ fun TacticalIconButton(
   val isClassic = isWindowsClassicActive(settings)
   if (!isClassic) {
     val cs = MaterialTheme.colorScheme
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
     Box(
       contentAlignment = Alignment.Center,
       modifier =
         modifier
           .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+          .graphicsLayer {
+            scaleX = if (isPressed) 0.94f else 1f
+            scaleY = if (isPressed) 0.94f else 1f
+          }
           .clip(chrome.smallShape)
           .background(cs.surfaceVariant.copy(alpha = 0.42f), chrome.smallShape)
           .border(1.dp, cs.outline.copy(alpha = 0.45f), chrome.smallShape)
-          .clickable(enabled = enabled, onClick = onClick),
+          .clickable(
+            enabled = enabled,
+            interactionSource = interactionSource,
+            indication = ripple(),
+            onClick = debouncedOnClick,
+          ),
     ) {
       CompositionLocalProvider(LocalContentColor provides if (enabled) cs.primary else cs.onSurface.copy(alpha = 0.4f)) {
         content()
@@ -696,7 +738,7 @@ fun TacticalIconButton(
           enabled = enabled,
           interactionSource = interactionSource,
           indication = null,
-          onClick = onClick,
+          onClick = debouncedOnClick,
         ),
   ) {
     CompositionLocalProvider(LocalContentColor provides fgColor, content = content)
@@ -832,6 +874,12 @@ fun TacticalCard(
       tacticalBorder(highlight)
     }
 
+  val effectiveStyle = sanitizeVisualStyleForSeason(settings.visualStyle)
+  val holidaySpec =
+    if (!settings.nightVisionMode && !settings.sunVisibilityMode && effectiveStyle.isHolidayTheme()) {
+      holidayDecorationSpec(effectiveStyle)
+    } else null
+
   val chromeDecorationMod =
     Modifier.drawBehind {
       val w = size.width
@@ -866,6 +914,9 @@ fun TacticalCard(
           end = Offset(w - 12.dp.toPx(), 1.dp.toPx()),
           strokeWidth = 1.2.dp.toPx(),
         )
+      }
+      if (holidaySpec != null) {
+        drawHolidayCardOrnament(mode = effectiveStyle, highlight = highlight)
       }
     }
 
@@ -927,6 +978,24 @@ fun TacticalCard(
                   style = MaterialTheme.typography.labelSmall,
                   fontWeight = FontWeight.Black,
                   color = cs.primary,
+                  maxLines = 1,
+                  softWrap = false,
+                )
+              }
+            } else if (holidaySpec != null) {
+              Box(
+                modifier =
+                  Modifier
+                    .padding(start = 8.dp)
+                    .background(holidaySpec.ornamentColor.copy(alpha = 0.16f), chrome.smallShape)
+                    .border(0.8.dp, holidaySpec.ornamentColor.copy(alpha = 0.55f), chrome.smallShape)
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+              ) {
+                Text(
+                  text = holidaySpec.trimLabel,
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Black,
+                  color = holidaySpec.ornamentColor,
                   maxLines = 1,
                   softWrap = false,
                 )
@@ -1678,7 +1747,7 @@ fun RoadSpeedSignWidget(
   legalComplianceMode: Boolean = false,
   pevLegalClass: PevLegalClass = PevLegalClass.CLASS_2_20,
 ) {
-  val validRoadLimit = speedLimitMph?.takeIf { it in 5..85 }
+  val validRoadLimit = speedLimitMph?.takeIf { it in 5..85 } ?: 25
   val classCap =
     if (legalComplianceMode && pevLegalClass != PevLegalClass.OFFROAD_UNLIMITED) {
       pevLegalClass.maxMph

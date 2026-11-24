@@ -2,11 +2,14 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -45,10 +48,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.core.PevBatteryPhysics
 import com.example.data.MasterSettings
 import com.example.data.PevVehicle
 import com.example.data.RideSession
+import com.example.ui.compartments.GraphInspectChartType
+import com.example.ui.compartments.GraphInspectData
+import com.example.ui.compartments.GraphInspectModal
+import com.example.ui.compartments.GraphInspectSlice
 import com.example.ui.components.RuralPevIcons
 import com.example.ui.components.distUnitLabel
 import com.example.ui.components.formatDistValue
@@ -68,7 +76,15 @@ internal fun parseRideTrackPoints(ride: RideSession): List<GeoPoint> =
     if (parts.size < 2) return@mapNotNull null
     val lat = parts[0].trim().toDoubleOrNull()
     val lng = parts[1].trim().toDoubleOrNull()
-    if (lat != null && lng != null && (lat != 0.0 || lng != 0.0)) GeoPoint(lat, lng) else null
+    if (lat != null && lng != null &&
+      lat.isFinite() && lng.isFinite() &&
+      lat in -85.0..85.0 && lng in -180.0..180.0 &&
+      (lat != 0.0 || lng != 0.0)
+    ) {
+      GeoPoint(lat, lng)
+    } else {
+      null
+    }
   }
 
 @Composable
@@ -94,6 +110,15 @@ fun RideRecordsAnalyticsSuite(
   }
   var compareLeftIdx by remember(rides) { mutableIntStateOf(0) }
   var compareRightIdx by remember(rides) { mutableIntStateOf(if (rides.size > 1) 1 else 0) }
+  var activeInspectData by remember { mutableStateOf<GraphInspectData?>(null) }
+  val fleetGpsPoints = remember(rides) {
+    rides.firstOrNull { parseRideTrackPoints(it).size >= 2 }
+      ?.let { r -> parseRideTrackPoints(r).map { it.latitude to it.longitude } }
+      .orEmpty()
+  }
+
+  val primaryThemeColor = MaterialTheme.colorScheme.primary
+  val secondaryThemeColor = MaterialTheme.colorScheme.secondary
 
   val totalKm = remember(rides) { rides.sumOf { it.distanceKm } }
   val topSpeedKmh = remember(rides) { rides.maxOfOrNull { it.maxSpeedKmh } ?: 0.0 }
@@ -376,6 +401,36 @@ fun RideRecordsAnalyticsSuite(
                 }
               }
             }
+          fun openPieInspect() {
+            activeInspectData = GraphInspectData(
+              title = "Fleet Energy & Distance Breakdown",
+              subtitle = "Sector Distribution (${rides.size} total rides)",
+              chartType = GraphInspectChartType.PIE_DONUT,
+              icon = Icons.Default.PieChart,
+              primaryColor = palette[0],
+              unitLabel = when (pieMode) { 0 -> distUnit; 1 -> "rides"; else -> "Wh" },
+              peakMetric = when (pieMode) { 0 -> "%.1f %s".format(formatDistValue(totalKm, settings.distanceUnit), distUnit); 1 -> "${rides.size} rides"; else -> "${totalWh.toInt()} Wh" },
+              totalMetric = "${totalWh.toInt()} Wh",
+              pieSlices = slices.map { GraphInspectSlice(it.label, it.value, it.color) },
+              gpsPoints = fleetGpsPoints,
+            )
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Tap chart to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(
+              onClick = { openPieInspect() },
+              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+              modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+              Icon(Icons.Default.OpenInFull, contentDescription = "Pop up Pie Chart", modifier = Modifier.size(14.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Pop up Graph", style = MaterialTheme.typography.labelSmall)
+            }
+          }
           TelemetryDonutPieChart(
             slices = slices,
             centerValue =
@@ -392,27 +447,191 @@ fun RideRecordsAnalyticsSuite(
               },
             reducedMotion = settings.reducedMotion,
             chartSize = 132.dp,
+            onTap = { openPieInspect() },
           )
         }
 
         // 2. INTERACTIVE SPEED PROFILES SPLINE GRAPH
         1 -> {
-          HistoricalSpeedProfileChart(rides = rides, settings = settings, chartHeight = 160.dp)
+          val series = remember(rides) { rides.take(16).reversed() }
+          fun openSpeedInspect() {
+            val maxSpd = series.map { formatSpeedValue(it.maxSpeedKmh, settings.distanceUnit) }
+            val avgSpd = series.map { formatSpeedValue(it.avgSpeedKmh, settings.distanceUnit) }
+            activeInspectData = GraphInspectData(
+              title = "Historical Speed Profiles",
+              subtitle = "Peak & Average Speed Progression (${series.size} rides)",
+              chartType = GraphInspectChartType.SPEED,
+              icon = Icons.AutoMirrored.Filled.ShowChart,
+              primaryColor = primaryThemeColor,
+              secondaryColor = secondaryThemeColor,
+              unitLabel = spdUnit,
+              values = maxSpd,
+              secondaryValues = avgSpd,
+              peakMetric = "%.1f %s".format(maxSpd.maxOrNull() ?: 0.0, spdUnit),
+              avgMetric = "%.1f %s".format(avgSpd.average().takeIf { !it.isNaN() } ?: 0.0, spdUnit),
+              minMetric = "%.1f %s".format(maxSpd.minOrNull() ?: 0.0, spdUnit),
+              referenceValue = avgSpd.average().takeIf { !it.isNaN() },
+              timestamps = series.map { it.title },
+              gpsPoints = fleetGpsPoints,
+            )
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Tap chart to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(
+              onClick = { openSpeedInspect() },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+              Icon(Icons.Default.OpenInFull, contentDescription = "Pop up Speed Profile", modifier = Modifier.size(14.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Pop up Graph", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+          HistoricalSpeedProfileChart(
+            rides = rides,
+            settings = settings,
+            chartHeight = 160.dp,
+            onTap = { openSpeedInspect() },
+          )
         }
 
         // 3. ELEVATION GAINS & CLIMB RATE GRAPH
         2 -> {
-          HistoricalElevationGainChart(rides = rides, settings = settings, chartHeight = 160.dp)
+          val series = remember(rides) { rides.take(16).reversed() }
+          val elevUnit = if (settings.distanceUnit == "mi") "ft" else "m"
+          fun openElevInspect() {
+            val elevVals = series.map { formatElevationValue(it.elevationGainM, settings.distanceUnit) }
+            activeInspectData = GraphInspectData(
+              title = "Elevation Gain & Climb Dynamics",
+              subtitle = "Cumulative Ascent (${series.size} rides)",
+              chartType = GraphInspectChartType.ELEVATION,
+              icon = Icons.Default.Terrain,
+              primaryColor = Color(0xFF00E5FF),
+              unitLabel = elevUnit,
+              values = elevVals,
+              peakMetric = "+%.0f %s".format(elevVals.maxOrNull() ?: 0.0, elevUnit),
+              avgMetric = "+%.0f %s".format(elevVals.average().takeIf { !it.isNaN() } ?: 0.0, elevUnit),
+              totalMetric = "+%.0f %s".format(elevVals.sum(), elevUnit),
+              referenceValue = elevVals.average().takeIf { !it.isNaN() },
+              timestamps = series.map { it.title },
+              gpsPoints = fleetGpsPoints,
+            )
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Tap chart to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(
+              onClick = { openElevInspect() },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+              Icon(Icons.Default.OpenInFull, contentDescription = "Pop up Elevation Graph", modifier = Modifier.size(14.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Pop up Graph", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+          HistoricalElevationGainChart(
+            rides = rides,
+            settings = settings,
+            chartHeight = 160.dp,
+            onTap = { openElevInspect() },
+          )
         }
 
         // 4. EFFICIENCY (Wh/mi) & PACK VOLTAGE DRAIN GRAPH
         3 -> {
-          HistoricalEfficiencyVoltageChart(rides = rides, activeVehicle = activeVehicle, settings = settings, chartHeight = 160.dp)
+          val series = remember(rides) { rides.take(16).reversed() }
+          fun openEffInspect() {
+            val effVals = series.map { r ->
+              val dist = formatDistValue(r.distanceKm, settings.distanceUnit)
+              if (dist > 0.05) r.whUsed / dist else 0.0
+            }
+            activeInspectData = GraphInspectData(
+              title = "Energy Efficiency & Pack Drain",
+              subtitle = "Wh per $distUnit consumption rate",
+              chartType = GraphInspectChartType.EFFICIENCY_VOLTAGE,
+              icon = Icons.Default.ElectricBolt,
+              primaryColor = Color(0xFFFFB300),
+              unitLabel = "Wh/$distUnit",
+              values = effVals,
+              peakMetric = "%.1f Wh/%s".format(effVals.maxOrNull() ?: 0.0, distUnit),
+              avgMetric = "%.1f Wh/%s".format(effVals.average().takeIf { !it.isNaN() } ?: 0.0, distUnit),
+              minMetric = "%.1f Wh/%s".format(effVals.minOrNull() ?: 0.0, distUnit),
+              referenceValue = effVals.average().takeIf { !it.isNaN() },
+              timestamps = series.map { it.title },
+              gpsPoints = fleetGpsPoints,
+            )
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Tap chart to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(
+              onClick = { openEffInspect() },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+              Icon(Icons.Default.OpenInFull, contentDescription = "Pop up Efficiency Graph", modifier = Modifier.size(14.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Pop up Graph", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+          HistoricalEfficiencyVoltageChart(
+            rides = rides,
+            activeVehicle = activeVehicle,
+            settings = settings,
+            chartHeight = 160.dp,
+            onTap = { openEffInspect() },
+          )
         }
 
         // 5. DISTANCE & ENERGY BAR CHART
         4 -> {
-          HistoricalDistanceEnergyChart(rides = rides, settings = settings, chartHeight = 148.dp)
+          val series = remember(rides) { rides.take(16).reversed() }
+          fun openDistInspect() {
+            val distVals = series.map { formatDistValue(it.distanceKm, settings.distanceUnit) }
+            activeInspectData = GraphInspectData(
+              title = "Distance & Energy Distribution",
+              subtitle = "Trip lengths across recent logs",
+              chartType = GraphInspectChartType.DISTANCE_ENERGY,
+              icon = Icons.Default.BarChart,
+              primaryColor = Color(0xFF39FF14),
+              unitLabel = distUnit,
+              values = distVals,
+              peakMetric = "%.1f %s".format(distVals.maxOrNull() ?: 0.0, distUnit),
+              avgMetric = "%.1f %s".format(distVals.average().takeIf { !it.isNaN() } ?: 0.0, distUnit),
+              totalMetric = "%.1f %s".format(distVals.sum(), distUnit),
+              timestamps = series.map { it.title },
+              gpsPoints = fleetGpsPoints,
+            )
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Tap chart to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(
+              onClick = { openDistInspect() },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+              Icon(Icons.Default.OpenInFull, contentDescription = "Pop up Distance Graph", modifier = Modifier.size(14.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Pop up Graph", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+          HistoricalDistanceEnergyChart(
+            rides = rides,
+            settings = settings,
+            chartHeight = 148.dp,
+            onTap = { openDistInspect() },
+          )
         }
 
         // 6. RECORDED GPS TRACKS ON A SMOOTH-PANNING, LIFECYCLE-SAFE MAP
@@ -439,22 +658,183 @@ fun RideRecordsAnalyticsSuite(
 
         // 7. PACE VS EFFICIENCY SCATTER PLOT
         6 -> {
-          SpeedVsEfficiencyScatterChart(rides = rides, settings = settings, chartHeight = 160.dp)
+          val series = remember(rides) { rides.take(16).reversed() }
+          fun openScatterInspect() {
+            val spdVals = series.map { formatSpeedValue(it.avgSpeedKmh, settings.distanceUnit) }
+            val whVals = series.map { r ->
+              val dist = formatDistValue(r.distanceKm, settings.distanceUnit)
+              if (dist > 0.05) r.whUsed / dist else 0.0
+            }
+            activeInspectData = GraphInspectData(
+              title = "Pace vs Efficiency Scatter",
+              subtitle = "Speed ($spdUnit) vs Consumption (Wh/$distUnit)",
+              chartType = GraphInspectChartType.SCATTER,
+              icon = Icons.Default.BubbleChart,
+              primaryColor = Color(0xFF39FF14),
+              secondaryColor = Color(0xFF00C2FF),
+              unitLabel = "Wh/$distUnit",
+              values = spdVals,
+              secondaryValues = whVals,
+              peakMetric = "%.1f %s".format(spdVals.maxOrNull() ?: 0.0, spdUnit),
+              avgMetric = "%.1f Wh/%s".format(whVals.average().takeIf { !it.isNaN() } ?: 0.0, distUnit),
+              timestamps = series.map { it.title },
+              gpsPoints = fleetGpsPoints,
+            )
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Tap chart to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(
+              onClick = { openScatterInspect() },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+              Icon(Icons.Default.OpenInFull, contentDescription = "Pop up Scatter Graph", modifier = Modifier.size(14.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Pop up Graph", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+          SpeedVsEfficiencyScatterChart(
+            rides = rides,
+            settings = settings,
+            chartHeight = 160.dp,
+            onTap = { openScatterInspect() },
+          )
         }
 
         // 8. RIDE DURATION DISTRIBUTION HISTOGRAM
         7 -> {
-          RideDurationHistogramChart(rides = rides, reducedMotion = settings.reducedMotion, chartHeight = 130.dp)
+          val series = remember(rides) { rides.take(16).reversed() }
+          fun openDurationInspect() {
+            val durationsMin = series.map { (it.durationSec / 60.0).coerceAtLeast(1.0) }
+            activeInspectData = GraphInspectData(
+              title = "Ride Duration Histogram",
+              subtitle = "Distribution of ride time in minutes",
+              chartType = GraphInspectChartType.HISTOGRAM,
+              icon = Icons.Default.Schedule,
+              primaryColor = Color(0xFFA855F7),
+              unitLabel = "mins",
+              values = durationsMin,
+              peakMetric = "%.0f mins".format(durationsMin.maxOrNull() ?: 0.0),
+              avgMetric = "%.0f mins".format(durationsMin.average().takeIf { !it.isNaN() } ?: 0.0),
+              totalMetric = "%.0f mins".format(durationsMin.sum()),
+              timestamps = series.map { it.title },
+              gpsPoints = fleetGpsPoints,
+            )
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Tap chart to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(
+              onClick = { openDurationInspect() },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+              Icon(Icons.Default.OpenInFull, contentDescription = "Pop up Duration Graph", modifier = Modifier.size(14.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Pop up Graph", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+          RideDurationHistogramChart(
+            rides = rides,
+            reducedMotion = settings.reducedMotion,
+            chartHeight = 130.dp,
+            onTap = { openDurationInspect() },
+          )
         }
 
         // 9. POWER (WATTS) & PACK AMPS DRAW
         9 -> {
-          HistoricalPowerAmpsChart(rides = rides, activeVehicle = activeVehicle, settings = settings, chartHeight = 160.dp)
+          val series = remember(rides) { rides.take(16).reversed() }
+          fun openPowerInspect() {
+            val wattsSeries = series.map { r ->
+              val h = (r.durationSec / 3600.0).coerceAtLeast(0.01)
+              r.whUsed / h
+            }
+            activeInspectData = GraphInspectData(
+              title = "Power (Watts) & Current Demand",
+              subtitle = "Continuous power demand across fleet",
+              chartType = GraphInspectChartType.POWER_AMPS,
+              icon = Icons.Default.Speed,
+              primaryColor = Color(0xFFFF5252),
+              unitLabel = "Watts",
+              values = wattsSeries,
+              peakMetric = "%.0f W".format(wattsSeries.maxOrNull() ?: 0.0),
+              avgMetric = "%.0f W".format(wattsSeries.average().takeIf { !it.isNaN() } ?: 0.0),
+              minMetric = "%.0f W".format(wattsSeries.minOrNull() ?: 0.0),
+              timestamps = series.map { it.title },
+              gpsPoints = fleetGpsPoints,
+            )
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Tap chart to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(
+              onClick = { openPowerInspect() },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+              Icon(Icons.Default.OpenInFull, contentDescription = "Pop up Power Graph", modifier = Modifier.size(14.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Pop up Graph", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+          HistoricalPowerAmpsChart(
+            rides = rides,
+            activeVehicle = activeVehicle,
+            settings = settings,
+            chartHeight = 160.dp,
+            onTap = { openPowerInspect() },
+          )
         }
 
         // 10. 5-AXIS PERFORMANCE RADAR
         10 -> {
-          RiderPerformanceRadarChart(rides = rides, settings = settings, chartHeight = 195.dp)
+          fun openRadarInspect() {
+            val radar = computeRiderRadarScores(rides)
+            activeInspectData = GraphInspectData(
+              title = "5-Axis Rider Performance Radar",
+              subtitle = "Latest Ride vs Fleet Benchmark (${rides.size} logs)",
+              chartType = GraphInspectChartType.RADAR_5AXIS,
+              icon = Icons.Default.Radar,
+              primaryColor = Color(0xFF00E5FF),
+              unitLabel = "%",
+              values = radar.latest.map { it.toDouble() },
+              secondaryValues = radar.fleetAvg.map { it.toDouble() },
+              peakMetric = radar.peakLabel,
+              avgMetric = radar.avgPctLabel,
+              minMetric = radar.minLabel,
+              timestamps = radar.axisLabels,
+              gpsPoints = fleetGpsPoints,
+            )
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Tap chart to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(
+              onClick = { openRadarInspect() },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+              Icon(Icons.Default.OpenInFull, contentDescription = "Pop up Radar Graph", modifier = Modifier.size(14.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Pop up Graph", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+          RiderPerformanceRadarChart(
+            rides = rides,
+            settings = settings,
+            chartHeight = 195.dp,
+            onTap = { openRadarInspect() },
+          )
         }
 
         // 11. SIDE-BY-SIDE 2-RIDE COMPARISON
@@ -498,6 +878,13 @@ fun RideRecordsAnalyticsSuite(
         }
       }
     }
+  }
+
+  if (activeInspectData != null) {
+    GraphInspectModal(
+      data = activeInspectData!!,
+      onDismiss = { activeInspectData = null },
+    )
   }
 }
 

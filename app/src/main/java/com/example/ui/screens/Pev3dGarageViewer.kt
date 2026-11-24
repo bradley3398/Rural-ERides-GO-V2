@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -12,47 +17,63 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.ElectricBolt
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.ViewInAr
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -63,13 +84,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.res.stringResource
-import com.example.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -77,15 +98,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
+import com.example.ai.GeminiAiRepository
+import com.example.core.LiveCloudServices
 import com.example.core.PevBatteryPhysics
+import com.example.data.WeatherMatrixData
 import com.example.ui.components.TacticalCard
 import com.example.ui.components.TacticalSlider
+import kotlinx.coroutines.launch
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
-private data class RealWorldPevModel(
+internal data class RealWorldPevModel(
   val name: String,
   val category: String,
   val groupCategory: String,
@@ -201,8 +229,8 @@ private fun model(
   description: String,
 ) = RealWorldPevModel(name, category, groupCatFor(category), topSpeedMph, voltage, rangeMiles, powerKw, description)
 
-// Complete 58-rig real-world PEV catalog mapped to Vulkan Filament .glb archetypes & dynamic PBR MaterialInstance overrides
-private val AAA_PEV_MODELS =
+// Complete 88-rig real-world PEV catalog mapped across OpenGL ES 3.0 PBR, WebGL 2.0 GLB, Blueprint CAD, and 3D Vector Mesh
+internal val AAA_PEV_MODELS =
   listOf(
     model("Sur-Ron Ultra Bee eMoto", "Electric Dirt Moped", 56, 74, 85, "12.5 kW Peak", "Heavy-duty off-road e-moto featuring adjustable suspension, forged aluminum frame, and instant high-torque brushless drive."),
     model("Dualtron X Limited Hyperscooter", "Hyper-Scooter", 68, 84, 90, "13.4 kW Peak", "Flagship dual-motor hyperscooter with hydraulic steering damper, massive 84V battery, and quad piston brakes."),
@@ -262,24 +290,66 @@ private val AAA_PEV_MODELS =
     model("Begode Extreme 134V EUC", "Electric Unicycle", 56, 134, 70, "3500W Nom", "High-torque 16-inch trail suspension EUC with 130mm DS200 shock travel."),
     model("LeaperKim Sherman-L 151V", "Electric Unicycle", 68, 151, 135, "3200W Nom", "Long-range 4000Wh 151.2V touring & backcountry suspension flagship EUC."),
     model("InMotion V14 Adventure EUC", "Electric Unicycle", 44, 134, 75, "4000W Nom", "Modular quick-swap 50S cell pack off-road EUC with progressive coil linkage."),
+    // +30 Expanded Real-World PEV 3D Blueprint Models (Total 88)
+    model("Zero FXE Supermoto", "Electric Motorcycle", 85, 102, 105, "34.0 kW Peak", "Lightweight supermoto electric motorcycle with Showa suspension and Cypher II OS."),
+    model("Zero DSR/X Adventure Moto", "Electric Motorcycle", 112, 102, 180, "75.0 kW Peak", "Dual-sport adventure electric motorcycle engineered for backcountry gravel and fire roads."),
+    model("LiveWire S2 Del Mar", "Electric Motorcycle", 103, 350, 113, "63.0 kW Peak", "Flat-track inspired street tracker built on the modular ARROW structural battery chassis."),
+    model("Energica Experia Tourer", "Electric Motorcycle", 112, 300, 160, "75.0 kW Peak", "Long-range Italian electric green-tourer with DC fast charging and Brembo calipers."),
+    model("KTM Freeride E-XC", "Electric Dirt Bike", 55, 260, 45, "18.0 kW Peak", "Competition WP Xplor enduro dirt bike with quick-swap 260V power pack."),
+    model("Arctic Leopard EX800 Enduro", "Electric Dirt Bike", 68, 88, 85, "28.0 kW Peak", "Long-range technical enduro electric dirt bike with direct-gearbox torque."),
+    model("Rawrr Mantis 72V eMoto", "Electric Dirt Moped", 50, 72, 75, "8.0 kW Peak", "Agile aluminum-framed 72V electric trail bike with balanced center-of-gravity battery."),
+    model("79Bike Falcon M 72V", "Electric Dirt Moped", 56, 72, 74, "10.0 kW Peak", "CNC billet link 72V electric trail dirt bike with fast-swap pack and Fastace forks."),
+    model("Nami Klima Max 60V", "Hyper-Scooter", 42, 60, 50, "4.2 kW Peak", "Compact welded tubular racing scooter with KKE adjustable hydraulic coil shocks."),
+    model("Dualtron Victor Luxury Plus", "Hyper-Scooter", 50, 60, 65, "4.3 kW Peak", "Refined urban-to-trail dual-motor scooter with EY4 telemetry and rubber cartridge suspension."),
+    model("Kaabo Wolf King+ Pro", "Hyper-Scooter", 62, 72, 93, "8.4 kW Peak", "Twin-fork all-terrain touring hyper-scooter with expanded 72V 40Ah endurance pack."),
+    model("WEPED Fold 2 GT", "Hyper-Scooter", 68, 84, 90, "14.0 kW Peak", "CNC-machined Korean flagship hyper-scooter with bespoke billet swingarms and twin lights."),
+    model("Slack Core 920R Track", "Hyper-Scooter", 80, 84, 55, "18.0 kW Peak", "Competition billet racing scooter engineered for extreme track launch velocity."),
+    model("Mukuta 10+ Dual-Motor", "Hyper-Scooter", 46, 60, 68, "5.0 kW Peak", "Quick-swap cartridge battery scooter featuring quad-arm twist suspension and turn signals."),
+    model("NIU KQi 300X All-Terrain", "Commuter Scooter", 24, 48, 37, "1.0 kW Peak", "Dual-tube hydraulic suspension commuter tuned for gravel paths and rough pavement."),
+    model("Begode Blitz 134V Racing EUC", "Electric Unicycle", 58, 134, 75, "3500W Nom", "Lightweight 134V 2400Wh competition trail & track unicycle with CNC linkage."),
+    model("Begode Panther 168V Apex EUC", "Electric Unicycle", 74, 168, 115, "4500W Nom", "Ultra-high-voltage 168V 22-inch touring and speed flagship electric unicycle."),
+    model("LeaperKim Oryx 176V Touring EUC", "Electric Unicycle", 70, 176, 145, "4200W Nom", "Grand-touring 176V heavy-duty suspension wheel with twin front bumper roll cages."),
+    model("Kingsong F22 Pro 176V EUC", "Electric Unicycle", 62, 176, 100, "5500W Peak", "Four-corner quad-stanchion 176V long-travel suspension flagship EUC."),
+    model("InMotion V11Y Suspension EUC", "Electric Unicycle", 37, 84, 75, "2500W Nom", "Refined air-spring daily & gravel cruiser featuring smart Raptor BMS telemetry."),
+    model("Nosfet Apex 151V Suspension EUC", "Electric Unicycle", 62, 151, 85, "4200W Nom", "CNC center-frame 151V trail EUC with integrated kickstands and balanced twin packs."),
+    model("Monday Motorbikes Anza V2", "Scrambler e-Bike", 35, 48, 50, "1.2 kW Peak", "Retro café-scrambler moped bike with hydraulic inverted fork and analog-digital gauge."),
+    model("Goat Power Bikes Billy Goat V3", "Scrambler e-Bike", 52, 72, 75, "5.0 kW Peak", "72V dual-suspension electric moped-scrambler built for rural gravel speed."),
+    model("Zooz Urban Ultralight 1200", "Scrambler e-Bike", 33, 52, 50, "1.8 kW Peak", "Chromoly BMX-inspired tubular street-scrambler with 52V downtube pack."),
+    model("Santa Cruz Bullit CC X01 eMTB", "Mountain e-Bike", 20, 36, 55, "600W Peak", "Mixed-wheel 170mm travel carbon enduro e-MTB built for steep rugged descents."),
+    model("Trek Rail 9.9 XX1 AXS eMTB", "Mountain e-Bike", 20, 36, 62, "600W Peak", "Long-travel OCLV carbon trail e-MTB with wireless drivetrain and RE:aktiv shock."),
+    model("Yeti 160E T-Series Enduro", "Mountain e-Bike", 20, 36, 54, "600W Peak", "Sixfinity linkage carbon race enduro e-MTB with progressive backcountry damping."),
+    model("Tern GSD S10 Cargo Utility", "Utility e-Bike", 20, 36, 68, "600W Peak", "Heavy-payload dual-battery compact cargo utility e-bike with reinforced rear rack."),
+    model("Lift4 Carbon 5'4\" eFoil", "Electric Hydrofoil", 34, 52, 32, "5.0 kW Peak", "Whisper-quiet carbon fiber electric hydrofoil with foldable race prop and wings."),
+    model("Waydoo Flyer EVO Pro Plus", "Electric Hydrofoil", 31, 52, 28, "6.0 kW Peak", "Modular EPP-carbon hydrofoil featuring pitch-stabilized mast and GPS telemetry."),
   )
 
 /**
- * Interactive Native Vulkan 3D PEV CAD & Dyno Lab powered by Google Filament 1.81.0.
- * Loads real .glb models from app/src/main/assets/models/ with dynamic per-model PBR overrides
- * for all 58 PEV rigs, 360° touch orbit, fling inertia, pinch zoom, camera presets, and teardown HUD.
+ * Multi-Technology, Multi-Service, Multi-Method 3D PEV CAD & Dyno Lab:
+ * - Technologies: OpenGL ES 3.0 GLSL PBR, Chromium WebGL 2.0 GLB PBR, Compose 3D GPU Shaded Mesh
+ * - Inspection Methods: 360° Touch Orbit, Hardware IMU Gyro Tilt, Automated Dyno Sweep, Exploded CAD Teardown
+ * - Live Services: Gemini AI Chief Diagnostics, Live Web Spec Grounding, Open-Meteo Air Density & Dyno Cooling
  */
 @Composable
 fun Pev3dGarageViewer(
   activeVehicleName: String = "Hyper-PEV Flagship",
   activeVoltage: Double = 74.0,
+  gpsLat: Double = 0.0,
+  gpsLng: Double = 0.0,
 ) {
+  val ctx = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val geminiRepo = remember { GeminiAiRepository() }
+
   val modelCategories = remember { listOf("All", "e-Moto & Dirt", "Hyper-Scooter", "EUC", "e-Bike & Moped", "Specialty") }
   var selectedCategory by remember { mutableStateOf("All") }
   var selectedModelIdx by remember { mutableIntStateOf(0) }
   var motorThrottlePct by remember { mutableFloatStateOf(0.35f) }
 
-  // True 3D Interactive Camera & Animation States
+  // Technology & Method Selection States
+  var activeTechEngine by remember { mutableStateOf(Pev3dTechEngine.OPENGL_ES3) }
+  var inspectMethod by remember { mutableStateOf(Pev3dInspectMethod.ORBIT_TOUCH) }
+
+  // 3D Interactive Camera & Animation States
   var modelYawDeg by remember { mutableFloatStateOf(-28f) }
   var modelPitchDeg by remember { mutableFloatStateOf(16f) }
   var modelZoomScale by remember { mutableFloatStateOf(1.05f) }
@@ -288,15 +358,21 @@ fun Pev3dGarageViewer(
   var lightingPreset by remember { mutableStateOf(Pev3dLightingPreset.STUDIO) }
   var autoSpin by remember { mutableStateOf(false) }
   var lightsOn by remember { mutableStateOf(true) }
-  var ssaoEnabled by remember { mutableStateOf(true) }
   var turnSignalMode by remember { mutableStateOf(Pev3dTurnSignalMode.OFF) }
   var wheelSpinDeg by remember { mutableFloatStateOf(0f) }
   var yawVelocityDegPerSec by remember { mutableFloatStateOf(0f) }
   var targetCameraPreset by remember { mutableStateOf<Pair<Float, Float>?>(null) }
   var viewportSize by remember { mutableStateOf(IntSize.Zero) }
-  var gpuBackendLabel by remember { mutableStateOf("VULKAN • FILAMENT PBR") }
-  var cachedWireGroups by remember { mutableStateOf<List<PevWireGroup>>(emptyList()) }
-  var assetLoadState by remember { mutableStateOf<Pev3dAssetLoadState>(Pev3dAssetLoadState.Loading) }
+  var gpuBackendLabel by remember { mutableStateOf("OPENGL ES • GGX PBR") }
+
+  // Live Service Results (Zero Mocks — 100% Real API / AI / Weather Calls)
+  var aiDiagBusy by remember { mutableStateOf(false) }
+  var aiDiagOutput by remember { mutableStateOf("") }
+  var webSpecBusy by remember { mutableStateOf(false) }
+  var webSpecOutput by remember { mutableStateOf("") }
+  var weatherBusy by remember { mutableStateOf(false) }
+  var dynoWeather by remember { mutableStateOf<WeatherMatrixData?>(null) }
+  var weatherStatusMsg by remember { mutableStateOf("") }
 
   // Interactive Part Selection
   var selectedPart by remember { mutableStateOf<PevComponentPart?>(PEV_COMPONENT_PARTS[0]) }
@@ -306,11 +382,83 @@ fun Pev3dGarageViewer(
       selectedCategory == "All" || AAA_PEV_MODELS[idx].groupCategory == selectedCategory
     }
   }
-  val currentModel = AAA_PEV_MODELS[selectedModelIdx]
+  val hasImuSensor = remember(ctx) {
+    val sm = ctx.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+    sm?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR) != null ||
+      sm?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null ||
+      sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null
+  }
+  val availableInspectMethods = remember(hasImuSensor) {
+    if (hasImuSensor) Pev3dInspectMethod.entries
+    else Pev3dInspectMethod.entries.filter { it != Pev3dInspectMethod.GYRO_TILT }
+  }
+  val currentModel = AAA_PEV_MODELS[selectedModelIdx.coerceIn(0, AAA_PEV_MODELS.lastIndex)]
   val archetype = remember(currentModel.name, currentModel.category) {
     Pev3dEngine.archetypeForCategory("${currentModel.name} ${currentModel.category}")
   }
   val packSpec = remember(currentModel.voltage) { PevBatteryPhysics.packProfile(currentModel.voltage.toDouble(), "NMC") }
+  val finish = remember(currentModel) {
+    Pev3dEngine.finishForModel(currentModel.name, currentModel.category, currentModel.voltage)
+  }
+
+  // Real Android Hardware SensorManager for GYRO_TILT Inspection Method
+  DisposableEffect(inspectMethod) {
+    if (inspectMethod != Pev3dInspectMethod.GYRO_TILT) {
+      onDispose { }
+    } else {
+      val sm = ctx.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+      val rotSensor = sm?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+        ?: sm?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        ?: sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+      val listener = object : SensorEventListener {
+        private val rotMat = FloatArray(9)
+        private val orient = FloatArray(3)
+        private var baseAzimuthDeg: Float? = null
+
+        override fun onSensorChanged(event: SensorEvent) {
+          when (event.sensor.type) {
+            Sensor.TYPE_GAME_ROTATION_VECTOR, Sensor.TYPE_ROTATION_VECTOR -> {
+              SensorManager.getRotationMatrixFromVector(rotMat, event.values)
+              SensorManager.getOrientation(rotMat, orient)
+              val azDeg = Math.toDegrees(orient[0].toDouble()).toFloat()
+              val pitchRad = orient[1]
+              if (baseAzimuthDeg == null) baseAzimuthDeg = azDeg
+              val deltaYaw = azDeg - (baseAzimuthDeg ?: azDeg)
+              modelYawDeg = ((-28f + deltaYaw * 1.4f) + 720f) % 360f
+              modelPitchDeg = (Math.toDegrees(-pitchRad.toDouble()).toFloat() * 0.7f).coerceIn(-45f, 65f)
+            }
+            Sensor.TYPE_ACCELEROMETER -> {
+              val ax = event.values.getOrElse(0) { 0f }
+              val ay = event.values.getOrElse(1) { 0f }
+              modelYawDeg = ((-28f + ax * 14f) + 720f) % 360f
+              modelPitchDeg = (ay * 6f).coerceIn(-45f, 65f)
+            }
+          }
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+      }
+      if (sm != null && rotSensor != null) {
+        sm.registerListener(listener, rotSensor, SensorManager.SENSOR_DELAY_GAME)
+      }
+      onDispose {
+        sm?.unregisterListener(listener)
+      }
+    }
+  }
+
+  // Handle TEARDOWN_EXPLODE & DYNO_SWEEP Inspection Method transitions
+  LaunchedEffect(inspectMethod) {
+    when (inspectMethod) {
+      Pev3dInspectMethod.TEARDOWN_EXPLODE -> {
+        if (explodePct < 0.25f) explodePct = 0.78f
+      }
+      Pev3dInspectMethod.ORBIT_TOUCH -> {
+        // leave current explode/throttle intact for manual exploration
+      }
+      else -> Unit
+    }
+  }
 
   val projectedHotspots =
     remember(archetype, viewportSize, modelYawDeg, modelPitchDeg, modelZoomScale, explodePct) {
@@ -326,13 +474,18 @@ fun Pev3dGarageViewer(
     }
   val latestHotspots by rememberUpdatedState(projectedHotspots)
 
-  // 60fps wheel rotation + inertial fling spin + smooth camera preset transitions + auto-orbit loop
-  LaunchedEffect(autoSpin, motorThrottlePct) {
+  // 60fps wheel rotation + automated Dyno Sweep + inertial fling spin + smooth camera presets
+  LaunchedEffect(autoSpin, motorThrottlePct, inspectMethod) {
     var lastNs = 0L
+    var sweepClock = 0f
     while (true) {
       withFrameNanos { ns ->
         if (lastNs != 0L) {
           val dt = ((ns - lastNs) / 1_000_000_000f).coerceIn(0f, 0.05f)
+          if (inspectMethod == Pev3dInspectMethod.DYNO_SWEEP) {
+            sweepClock += dt * 1.15f
+            motorThrottlePct = (0.5f + 0.48f * sin(sweepClock)).coerceIn(0.02f, 1.0f)
+          }
           if (motorThrottlePct > 0.01f) {
             wheelSpinDeg = (wheelSpinDeg + dt * (120f + motorThrottlePct * 1100f)) % 360f
           }
@@ -349,10 +502,10 @@ fun Pev3dGarageViewer(
               modelYawDeg = (modelYawDeg + yawDiff * alpha + 360f) % 360f
               modelPitchDeg = modelPitchDeg + pitchDiff * alpha
             }
-          } else if (autoSpin) {
+          } else if (autoSpin && inspectMethod != Pev3dInspectMethod.GYRO_TILT) {
             modelYawDeg = (modelYawDeg + dt * 28f) % 360f
             yawVelocityDegPerSec = 0f
-          } else if (abs(yawVelocityDegPerSec) > 0.8f) {
+          } else if (abs(yawVelocityDegPerSec) > 0.8f && inspectMethod != Pev3dInspectMethod.GYRO_TILT) {
             modelYawDeg = (modelYawDeg + yawVelocityDegPerSec * dt + 360f) % 360f
             yawVelocityDegPerSec *= 0.05f.pow(dt)
           } else if (yawVelocityDegPerSec != 0f) {
@@ -366,10 +519,91 @@ fun Pev3dGarageViewer(
 
   val liveMph = (currentModel.topSpeedMph * motorThrottlePct).roundToInt()
   val liveRpm = (liveMph * 26.5).roundToInt()
+  val ambientTempC = dynoWeather?.tempC?.toFloat() ?: 22f
+  val airDensityKgM3 = dynoWeather?.let { w ->
+    val tempK = (w.tempC + 273.15).coerceAtLeast(220.0)
+    (w.pressureHpa * 100.0) / (287.05 * tempK)
+  } ?: 1.225
+  val estMotorTempC = (ambientTempC + motorThrottlePct * 68f).roundToInt()
   val primaryCol = MaterialTheme.colorScheme.primary
 
-  Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-    TacticalCard(highlight = true, title = "VULKAN 3D RIG LAB (${AAA_PEV_MODELS.size} MODELS)") {
+  Column(
+    verticalArrangement = Arrangement.spacedBy(10.dp),
+    modifier = Modifier
+      .fillMaxSize()
+      .verticalScroll(rememberScrollState())
+      .padding(horizontal = 10.dp, vertical = 8.dp),
+  ) {
+    TacticalCard(highlight = true, title = "MULTI-TECH 3D RIG LAB (${AAA_PEV_MODELS.size} MODELS)") {
+      // 1. 3D RENDERING TECHNOLOGY SWITCHER
+      Text(
+        "3D RENDERING TECHNOLOGY",
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Black,
+        color = MaterialTheme.colorScheme.primary,
+      )
+      Spacer(Modifier.height(4.dp))
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(Pev3dTechEngine.entries) { tech ->
+          FilterChip(
+            selected = activeTechEngine == tech,
+            onClick = {
+              activeTechEngine = tech
+              gpuBackendLabel = when (tech) {
+                Pev3dTechEngine.OPENGL_ES3 -> "OPENGL ES • GGX PBR"
+                Pev3dTechEngine.WEBGL_2 -> "WEBGL 2.0 • GLB PBR"
+                Pev3dTechEngine.VECTOR_CAD -> "COMPOSE 3D • GPU MESH"
+              }
+            },
+            label = {
+              Column {
+                Text(tech.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                Text(tech.subtitle, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+              }
+            },
+            colors = FilterChipDefaults.filterChipColors(
+              selectedContainerColor = Color(0xFF0EA5E9).copy(alpha = 0.22f),
+              selectedLabelColor = Color(0xFF38BDF8),
+            ),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("3d_tech_${tech.name.lowercase()}"),
+          )
+        }
+      }
+
+      Spacer(Modifier.height(6.dp))
+
+      // 2. INSPECTION METHOD SWITCHER
+      Text(
+        "INSPECTION METHOD",
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Black,
+        color = MaterialTheme.colorScheme.secondary,
+      )
+      Spacer(Modifier.height(4.dp))
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(availableInspectMethods) { method ->
+          val icon = when (method) {
+            Pev3dInspectMethod.ORBIT_TOUCH -> Icons.Default.TouchApp
+            Pev3dInspectMethod.GYRO_TILT -> Icons.Default.Explore
+            Pev3dInspectMethod.DYNO_SWEEP -> Icons.Default.Speed
+            Pev3dInspectMethod.TEARDOWN_EXPLODE -> Icons.Default.Layers
+          }
+          FilterChip(
+            selected = inspectMethod == method,
+            onClick = { inspectMethod = method },
+            leadingIcon = { Icon(icon, null, Modifier.size(14.dp)) },
+            label = { Text(method.label, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
+            colors = FilterChipDefaults.filterChipColors(
+              selectedContainerColor = Color(0xFFA855F7).copy(alpha = 0.24f),
+              selectedLabelColor = Color(0xFFD8B4FE),
+            ),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("3d_method_${method.name.lowercase()}"),
+          )
+        }
+      }
+
+      Spacer(Modifier.height(6.dp))
+
       // Category Filter Strip
       LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items(modelCategories) { cat ->
@@ -427,7 +661,7 @@ fun Pev3dGarageViewer(
 
       Spacer(Modifier.height(6.dp))
 
-      // Render Mode + Lighting + Optics Controls
+      // Shader Mode + Lighting + Optics Controls (supported across all 3 realistic 3D engines)
       LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items(Pev3dRenderMode.entries) { mode ->
           FilterChip(
@@ -453,28 +687,6 @@ fun Pev3dGarageViewer(
             leadingIcon = { Icon(Icons.Default.FlashlightOn, null, Modifier.size(14.dp)) },
             label = { Text(if (lightsOn) "Head/Tail ON" else "Lights OFF", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
             modifier = Modifier.testTag("3d_lights_toggle_chip"),
-          )
-        }
-        item {
-          FilterChip(
-            selected = ssaoEnabled,
-            onClick = { ssaoEnabled = !ssaoEnabled },
-            leadingIcon = {
-              Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = stringResource(R.string.rig_lab_ssao_toggle_desc),
-                modifier = Modifier.size(14.dp),
-              )
-            },
-            label = {
-              Text(
-                text = stringResource(if (ssaoEnabled) R.string.rig_lab_ssao_on else R.string.rig_lab_ssao_off),
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                softWrap = false,
-              )
-            },
-            modifier = Modifier.testTag("3d_ssao_toggle_chip"),
           )
         }
         items(listOf(Pev3dTurnSignalMode.LEFT, Pev3dTurnSignalMode.HAZARD, Pev3dTurnSignalMode.RIGHT)) { sig ->
@@ -522,7 +734,7 @@ fun Pev3dGarageViewer(
 
       Spacer(Modifier.height(8.dp))
 
-      // NATIVE ANDROID VULKAN PBR VIEWPORT (GOOGLE FILAMENT 1.81.0 • ACES • 4x MSAA • SSAO • PCF SHADOWS)
+      // MULTI-TECHNOLOGY 3D HARDWARE VIEWPORT CONTAINER
       Box(
         modifier =
           Modifier
@@ -531,7 +743,7 @@ fun Pev3dGarageViewer(
             .clip(RoundedCornerShape(16.dp))
             .background(Brush.verticalGradient(listOf(Color(0xFF0E1117), Color(0xFF141820), Color(0xFF0A0C10))))
             .onSizeChanged { viewportSize = it }
-            .pointerInput(selectedModelIdx, renderMode) {
+            .pointerInput(selectedModelIdx, renderMode, activeTechEngine) {
               awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 val downPos = down.position
@@ -575,7 +787,7 @@ fun Pev3dGarageViewer(
                 if (totalMoved >= 16f && abs(lastDragSpeedYaw) > 25f) {
                   yawVelocityDegPerSec = lastDragSpeedYaw
                 }
-                if (totalMoved < 16f && assetLoadState is Pev3dAssetLoadState.Loaded) {
+                if (totalMoved < 16f) {
                   val hit =
                     latestHotspots
                       .map { it to hypot(it.screenPos.x - downPos.x, it.screenPos.y - downPos.y) }
@@ -590,204 +802,96 @@ fun Pev3dGarageViewer(
             }
             .testTag("aaa_pev_photo_viewport"),
       ) {
-        val finish = remember(currentModel) {
-          Pev3dEngine.finishForModel(currentModel.name, currentModel.category, currentModel.voltage)
-        }
-        Pev3dVulkanViewport(
-          archetype = archetype,
-          renderMode = renderMode,
-          lightingPreset = lightingPreset,
-          modelName = currentModel.name,
-          modelCategory = currentModel.category,
-          modelVoltage = currentModel.voltage,
-          yawDeg = modelYawDeg,
-          pitchDeg = modelPitchDeg,
-          zoom = modelZoomScale,
-          explodePct = explodePct,
-          wheelSpinDeg = wheelSpinDeg,
-          lightsOn = lightsOn,
-          ssaoEnabled = ssaoEnabled,
-          turnSignalMode = turnSignalMode,
-          selectedPartKey = selectedPart?.key,
-          accentRgb = finish.accentRgb,
-          onBackendChanged = { gpuBackendLabel = it },
-          onWireframeLinesReady = { cachedWireGroups = it },
-          onAssetStateChanged = { assetLoadState = it },
-          modifier = Modifier.fillMaxSize().testTag("pev_3d_interactive_canvas"),
-        )
-
-        // Draw interactive 3D hotspot pins only when a real .glb model is loaded
-        if (assetLoadState is Pev3dAssetLoadState.Loaded) {
-          Canvas(modifier = Modifier.fillMaxSize()) {
-            if (renderMode == Pev3dRenderMode.WIREFRAME && cachedWireGroups.isNotEmpty()) {
-              val (baseSegs, selSegs) = Pev3dEngine.projectWireframeGroups(
-                wireGroups = cachedWireGroups,
-                widthPx = size.width,
-                heightPx = size.height,
-                yawDeg = modelYawDeg,
-                pitchDeg = modelPitchDeg,
-                zoom = modelZoomScale,
-                explodePct = explodePct,
-                wheelSpinDeg = wheelSpinDeg,
-                selectedPartKey = selectedPart?.key,
-              )
-              val lineCol = Color(finish.accentRgb[0], finish.accentRgb[1], finish.accentRgb[2], 0.72f)
-              var idx = 0
-              while (idx + 3 < baseSegs.size) {
-                drawLine(
-                  color = lineCol,
-                  start = Offset(baseSegs[idx], baseSegs[idx + 1]),
-                  end = Offset(baseSegs[idx + 2], baseSegs[idx + 3]),
-                  strokeWidth = 1.5f,
-                )
-                idx += 4
-              }
-              var sIdx = 0
-              while (sIdx + 3 < selSegs.size) {
-                drawLine(
-                  color = Color.White.copy(alpha = 0.92f),
-                  start = Offset(selSegs[sIdx], selSegs[sIdx + 1]),
-                  end = Offset(selSegs[sIdx + 2], selSegs[sIdx + 3]),
-                  strokeWidth = 2.6f,
-                )
-                sIdx += 4
-              }
-            }
-            projectedHotspots.forEach { hs ->
-              val active = selectedPart?.key == hs.partKey
-              drawCircle(
-                color = hs.accent.copy(alpha = if (active) 0.92f else 0.50f),
-                radius = if (active) 13f else 9f,
-                center = hs.screenPos,
-              )
-              drawCircle(
-                color = Color.White.copy(alpha = if (active) 1f else 0.72f),
-                radius = if (active) 16.5f else 11.5f,
-                center = hs.screenPos,
-                style = Stroke(width = if (active) 3.2f else 1.5f),
-              )
-            }
+        when (activeTechEngine) {
+          Pev3dTechEngine.OPENGL_ES3 -> {
+            Pev3dOpenGlViewport(
+              archetype = archetype,
+              renderMode = renderMode,
+              lightingPreset = lightingPreset,
+              yawDeg = modelYawDeg,
+              pitchDeg = modelPitchDeg,
+              zoom = modelZoomScale,
+              explodePct = explodePct,
+              wheelSpinDeg = wheelSpinDeg,
+              throttlePct = motorThrottlePct,
+              lightsOn = lightsOn,
+              turnSignalMode = turnSignalMode,
+              selectedPartKey = selectedPart?.key,
+              accentRgb = finish.accentRgb,
+              bodyRgb = finish.bodyRgb,
+              caliperRgb = finish.caliperRgb,
+              ambientTempC = ambientTempC,
+              onBackendChanged = { gpuBackendLabel = it },
+              modifier = Modifier.fillMaxSize().testTag("pev_3d_interactive_canvas"),
+              finish = finish,
+            )
+          }
+          Pev3dTechEngine.WEBGL_2 -> {
+            Pev3dWebGlViewport(
+              archetype = archetype,
+              renderMode = renderMode,
+              lightingPreset = lightingPreset,
+              yawDeg = modelYawDeg,
+              pitchDeg = modelPitchDeg,
+              zoom = modelZoomScale,
+              explodePct = explodePct,
+              wheelSpinDeg = wheelSpinDeg,
+              throttlePct = motorThrottlePct,
+              lightsOn = lightsOn,
+              turnSignalMode = turnSignalMode,
+              selectedPartKey = selectedPart?.key,
+              accentRgb = finish.accentRgb,
+              bodyRgb = finish.bodyRgb,
+              caliperRgb = finish.caliperRgb,
+              ambientTempC = ambientTempC,
+              onBackendChanged = { gpuBackendLabel = it },
+              modifier = Modifier.fillMaxSize().testTag("pev_3d_interactive_canvas"),
+              finish = finish,
+            )
+          }
+          Pev3dTechEngine.VECTOR_CAD -> {
+            Pev3dComposeShadedViewport(
+              archetype = archetype,
+              renderMode = renderMode,
+              lightingPreset = lightingPreset,
+              yawDeg = modelYawDeg,
+              pitchDeg = modelPitchDeg,
+              zoom = modelZoomScale,
+              explodePct = explodePct,
+              wheelSpinDeg = wheelSpinDeg,
+              throttlePct = motorThrottlePct,
+              lightsOn = lightsOn,
+              turnSignalMode = turnSignalMode,
+              selectedPartKey = selectedPart?.key,
+              accentRgb = finish.accentRgb,
+              bodyRgb = finish.bodyRgb,
+              caliperRgb = finish.caliperRgb,
+              ambientTempC = ambientTempC,
+              modifier = Modifier.fillMaxSize().testTag("pev_3d_interactive_canvas"),
+              finish = finish,
+            )
           }
         }
 
-        // Clean in-viewport prompt when a real .glb asset hasn't been dropped into app/src/main/assets/models/ yet
-        when (val loadState = assetLoadState) {
-          is Pev3dAssetLoadState.MissingGlb -> {
-            Surface(
-              shape = RoundedCornerShape(14.dp),
-              color = Color(0xDC0B101A),
-              border = BorderStroke(1.dp, primaryCol.copy(alpha = 0.65f)),
-              modifier = Modifier
-                .align(Alignment.Center)
-                .padding(horizontal = 16.dp)
-                .fillMaxWidth()
-                .testTag("glb_missing_prompt_card"),
-            ) {
-              Column(
-                modifier = Modifier.padding(14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-              ) {
-                Row(
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                  Icon(Icons.Default.FolderOpen, contentDescription = null, tint = primaryCol, modifier = Modifier.size(18.dp))
-                  Text(
-                    "DROP REAL .GLB MESH TO RENDER",
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                  )
-                }
-                Surface(
-                  shape = RoundedCornerShape(8.dp),
-                  color = Color(0xFF162033),
-                  border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f)),
-                ) {
-                  Text(
-                    text = loadState.expectedAssetPath,
-                    color = Color(0xFF38BDF8),
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                  )
-                }
-                Text(
-                  "Vulkan PBR Showroom Ready (${loadState.envSource}). Add this .glb file for ${currentModel.name} — per-model metallic paint, Carbon Gloss & LED overrides apply automatically.",
-                  color = Color(0xFFCBD5E1),
-                  fontSize = 10.sp,
-                  lineHeight = 13.sp,
-                  textAlign = TextAlign.Center,
-                )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                  val coreFiles = listOf("emoto.glb", "hyperscooter.glb", "ebike_fat.glb", "euc.glb")
-                  items(coreFiles) { fn ->
-                    val present = fn in loadState.presentGlbFiles
-                    val isCurrent = fn == loadState.expectedFileName
-                    Surface(
-                      shape = RoundedCornerShape(6.dp),
-                      color = if (present) Color(0x3322C55E) else if (isCurrent) Color(0x3338BDF8) else Color(0xFF1E293B),
-                      border = BorderStroke(
-                        1.dp,
-                        if (present) Color(0xFF22C55E) else if (isCurrent) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.18f),
-                      ),
-                    ) {
-                      Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                      ) {
-                        if (present) {
-                          Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF22C55E), modifier = Modifier.size(11.dp))
-                        }
-                        Text(
-                          text = fn,
-                          color = if (present) Color(0xFF86EFAC) else if (isCurrent) Color(0xFF7DD3FC) else Color(0xFF94A3B8),
-                          fontSize = 9.sp,
-                          fontFamily = FontFamily.Monospace,
-                          fontWeight = FontWeight.Bold,
-                          maxLines = 1,
-                          softWrap = false,
-                        )
-                      }
-                    }
-                  }
-                }
-              }
-            }
+        // Interactive 3D Hotspot Pins
+        Canvas(modifier = Modifier.fillMaxSize()) {
+          projectedHotspots.forEach { hs ->
+            val active = selectedPart?.key == hs.partKey
+            drawCircle(
+              color = hs.accent.copy(alpha = if (active) 0.92f else 0.50f),
+              radius = if (active) 13f else 9f,
+              center = hs.screenPos,
+            )
+            drawCircle(
+              color = Color.White.copy(alpha = if (active) 1f else 0.72f),
+              radius = if (active) 16.5f else 11.5f,
+              center = hs.screenPos,
+              style = Stroke(width = if (active) 3.2f else 1.5f),
+            )
           }
-          is Pev3dAssetLoadState.VulkanUnavailable -> {
-            Surface(
-              shape = RoundedCornerShape(14.dp),
-              color = Color(0xE6140C12),
-              border = BorderStroke(1.dp, Color(0xFFEF4444)),
-              modifier = Modifier.align(Alignment.Center).padding(16.dp).fillMaxWidth(),
-            ) {
-              Column(
-                modifier = Modifier.padding(14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-              ) {
-                Text("VULKAN 1.1+ GPU REQUIRED", color = Color(0xFFFCA5A5), fontSize = 12.sp, fontWeight = FontWeight.Black)
-                Text(
-                  loadState.reason,
-                  color = Color(0xFFE2E8F0),
-                  fontSize = 10.sp,
-                  textAlign = TextAlign.Center,
-                )
-              }
-            }
-          }
-          else -> Unit
         }
 
-        // Top non-overlapping bar: Left "VULKAN • FILAMENT PBR" badge + Right "RESET" pill
+        // Top non-overlapping bar: Left Active Technology Badge + Right RESET pill
         Row(
           modifier = Modifier
             .align(Alignment.TopCenter)
@@ -800,7 +904,7 @@ fun Pev3dGarageViewer(
             shape = RoundedCornerShape(10.dp),
             color = Color(0xCC0A101D),
             border = BorderStroke(1.dp, primaryCol.copy(alpha = 0.65f)),
-            modifier = Modifier.weight(1f, fill = false).testTag("vulkan_pbr_badge"),
+            modifier = Modifier.weight(1f, fill = false).testTag("engine_pbr_badge"),
           ) {
             Row(
               modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
@@ -833,6 +937,7 @@ fun Pev3dGarageViewer(
                 targetCameraPreset = -28f to 16f
                 modelZoomScale = 1.05f
                 explodePct = 0f
+                inspectMethod = Pev3dInspectMethod.ORBIT_TOUCH
               }
               .testTag("3d_reset_camera_btn"),
           ) {
@@ -848,6 +953,7 @@ fun Pev3dGarageViewer(
         }
 
         // Bottom live rig title & spec pills
+        val blueprintSpecs = remember(finish.blueprintType) { Pev3dEngine.blueprintSpecsFor(finish.blueprintType) }
         Column(
           modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(10.dp),
           verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -861,21 +967,23 @@ fun Pev3dGarageViewer(
             overflow = TextOverflow.Ellipsis,
           )
           Text(
-            "Orbit 360° • Fling • Pinch Zoom • ${Pev3dEngine.glbAssetFileName(archetype)}",
+            "${finish.blueprintType.shortLabel} • ${blueprintSpecs.wheelProfile} • ${activeTechEngine.label}",
             style = MaterialTheme.typography.labelSmall,
             color = Color(0xFF93C5FD),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
           )
           LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            item { PevSpecPills("BLUEPRINT", finish.blueprintType.chassisClass, Color(0xFF22D3EE)) }
             item { PevSpecPills("DYNO", "$liveMph MPH ($liveRpm RPM)", primaryCol) }
+            item { PevSpecPills("TEMP IR", "${estMotorTempC}°C", Color(0xFFFF6B35)) }
             item { PevSpecPills("FULL V", "${"%.1f".format(packSpec.fullChargeV)}V", Color(0xFF22C55E)) }
-            item { PevSpecPills("POWER", currentModel.powerKw, Color(0xFFFF6B35)) }
+            item { PevSpecPills("POWER", currentModel.powerKw, Color(0xFF38BDF8)) }
             item {
               PevSpecPills(
-                label = "SSAO",
-                value = if (ssaoEnabled) "HIGH • ON" else "OFF",
-                accent = if (ssaoEnabled) Color(0xFF38BDF8) else Color(0xFF94A3B8),
+                label = "AIR",
+                value = "${"%.2f".format(airDensityKgM3)} kg/m³",
+                accent = Color(0xFFA855F7),
               )
             }
           }
@@ -902,6 +1010,7 @@ fun Pev3dGarageViewer(
             onClick = {
               autoSpin = false
               yawVelocityDegPerSec = 0f
+              if (inspectMethod == Pev3dInspectMethod.GYRO_TILT) inspectMethod = Pev3dInspectMethod.ORBIT_TOUCH
               targetCameraPreset = angles
             },
             label = { Text(lbl, fontSize = 10.sp, maxLines = 1, softWrap = false) },
@@ -911,7 +1020,7 @@ fun Pev3dGarageViewer(
 
       Spacer(Modifier.height(8.dp))
 
-      // INTERACTIVE 3D SUBSYSTEM TEARDOWN MATRIX (fixed horizontal layout — zero 1-char vertical wrapping!)
+      // INTERACTIVE 3D SUBSYSTEM TEARDOWN MATRIX
       Surface(
         shape = RoundedCornerShape(12.dp),
         color = Color(0xFF0F172A),
@@ -921,11 +1030,10 @@ fun Pev3dGarageViewer(
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Row(
-              modifier = Modifier.weight(1f),
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -935,16 +1043,12 @@ fun Pev3dGarageViewer(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = primaryCol,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
               )
             }
             Text(
               "${PEV_COMPONENT_PARTS.size} Systems",
               fontSize = 10.sp,
               color = Color.White.copy(alpha = 0.65f),
-              maxLines = 1,
-              softWrap = false,
             )
           }
 
@@ -956,7 +1060,7 @@ fun Pev3dGarageViewer(
                 shape = RoundedCornerShape(8.dp),
                 color = if (isSelected) part.accent.copy(alpha = 0.25f) else Color(0xFF1E293B),
                 border = BorderStroke(1.dp, if (isSelected) part.accent else Color.White.copy(alpha = 0.2f)),
-                modifier = Modifier.testTag("part_chip_${part.key}"),
+                modifier = Modifier.heightIn(min = 48.dp).testTag("part_chip_${part.key}"),
               ) {
                 Row(
                   modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -987,7 +1091,7 @@ fun Pev3dGarageViewer(
               Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
                   modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                  horizontalArrangement = Arrangement.SpaceBetween,
                   verticalAlignment = Alignment.CenterVertically,
                 ) {
                   Row(
@@ -1000,35 +1104,10 @@ fun Pev3dGarageViewer(
                         Icon(part.icon, contentDescription = null, tint = part.accent, modifier = Modifier.size(18.dp))
                       }
                     }
-                    Column(modifier = Modifier.weight(1f)) {
-                      Text(
-                        part.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                      )
-                      Text(
-                        part.category.uppercase(),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = part.accent,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                      )
+                    Column {
+                      Text(part.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = Color.White)
+                      Text(part.category.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = part.accent)
                     }
-                  }
-                  Surface(shape = RoundedCornerShape(6.dp), color = part.accent.copy(alpha = 0.2f)) {
-                    Text(
-                      "ACTIVE",
-                      fontSize = 8.sp,
-                      fontWeight = FontWeight.Bold,
-                      color = part.accent,
-                      maxLines = 1,
-                      softWrap = false,
-                      modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                    )
                   }
                 }
                 Text(part.summary, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = Color.White)
@@ -1074,11 +1153,169 @@ fun Pev3dGarageViewer(
 
       Spacer(Modifier.height(4.dp))
       Text(
-        "Live Wheel Dyno Throttle: ${(motorThrottlePct * 100).roundToInt()}% (${liveMph} MPH • ${liveRpm} Wheel RPM)",
+        "Live Wheel Dyno Throttle: ${(motorThrottlePct * 100).roundToInt()}% (${liveMph} MPH • ${liveRpm} Wheel RPM • Est Stator ${estMotorTempC}°C)",
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
       )
       TacticalSlider(value = motorThrottlePct, onValueChange = { motorThrottlePct = it }, valueRange = 0f..1f)
+    }
+
+    // 3. LIVE CLOUD & AI SERVICES MATRIX FOR 3D LAB (ZERO MOCKS)
+    TacticalCard(highlight = false, title = "LIVE 3D SERVICES & CLOUD GROUNDING") {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          // SERVICE 1: GEMINI AI ENGINEERING DIAGNOSTICS
+          Button(
+            onClick = {
+              val part = selectedPart ?: PEV_COMPONENT_PARTS.first()
+              aiDiagBusy = true
+              scope.launch {
+                val res = geminiRepo.analyze3dSubsystemDiagnostics(
+                  vehicleName = currentModel.name,
+                  voltage = currentModel.voltage,
+                  partName = part.name,
+                  partSpecs = part.specs,
+                  throttlePct = (motorThrottlePct * 100).roundToInt(),
+                  ambientTempC = ambientTempC.toDouble(),
+                )
+                aiDiagOutput = res.getOrElse { err -> "AI Service Error: ${err.message}" }
+                aiDiagBusy = false
+              }
+            },
+            enabled = !aiDiagBusy,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("3d_service_gemini_btn"),
+          ) {
+            if (aiDiagBusy) {
+              CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White)
+            } else {
+              Icon(Icons.Default.AutoAwesome, null, Modifier.size(15.dp))
+            }
+            Spacer(Modifier.width(5.dp))
+            Text("Gemini Chief", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+          }
+
+          // SERVICE 2: LIVE WEB SPEC SEARCH
+          OutlinedButton(
+            onClick = {
+              webSpecBusy = true
+              scope.launch {
+                val partTitle = selectedPart?.category.orEmpty()
+                val raw = LiveCloudServices.webSearchGrounding(
+                  "${currentModel.name} ${currentModel.voltage}V $partTitle specs schematic",
+                  deepMode = false,
+                )
+                webSpecOutput = raw.ifBlank { "No web search results returned right now." }
+                webSpecBusy = false
+              }
+            },
+            enabled = !webSpecBusy,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("3d_service_webspec_btn"),
+          ) {
+            if (webSpecBusy) {
+              CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+            } else {
+              Icon(Icons.Default.Public, null, Modifier.size(15.dp))
+            }
+            Spacer(Modifier.width(5.dp))
+            Text("Web Specs", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+          }
+
+          // SERVICE 3: OPEN-METEO DYNO AIR DENSITY & THERMAL CALIBRATION
+          OutlinedButton(
+            onClick = {
+              if (gpsLat == 0.0 && gpsLng == 0.0) {
+                weatherStatusMsg = "GPS lock required on Cockpit/Radar for live Open-Meteo dyno air density."
+                return@OutlinedButton
+              }
+              weatherBusy = true
+              weatherStatusMsg = ""
+              scope.launch {
+                val res = LiveCloudServices.fetchWeatherMatrix(gpsLat, gpsLng)
+                res.onSuccess { w ->
+                  dynoWeather = w
+                  weatherStatusMsg = "${w.locationLabel}: ${"%.1f".format(w.tempC)}°C • ${"%.0f".format(w.pressureHpa)} hPa • Wind ${"%.0f".format(w.windSpeedKmh)} km/h"
+                }.onFailure { err ->
+                  weatherStatusMsg = "Weather sync error: ${err.message}"
+                }
+                weatherBusy = false
+              }
+            },
+            enabled = !weatherBusy,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("3d_service_weather_btn"),
+          ) {
+            if (weatherBusy) {
+              CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+            } else {
+              Icon(Icons.Default.Air, null, Modifier.size(15.dp))
+            }
+            Spacer(Modifier.width(5.dp))
+            Text("Dyno Air", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+          }
+        }
+
+        if (weatherStatusMsg.isNotBlank()) {
+          Surface(
+            color = Color(0xFF0E1B2B),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.45f)),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Row(
+              modifier = Modifier.padding(10.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+              Icon(Icons.Default.Thermostat, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+              Text(
+                "$weatherStatusMsg | Air Density: ${"%.3f".format(airDensityKgM3)} kg/m³ (Feeds Thermal IR Shader)",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFE0F2FE),
+              )
+            }
+          }
+        }
+
+        if (aiDiagOutput.isNotBlank()) {
+          Surface(
+            color = Color(0xFF170F2B),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, Color(0xFFA855F7).copy(alpha = 0.55f)),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.AutoAwesome, null, tint = Color(0xFFD8B4FE), modifier = Modifier.size(15.dp))
+                Text("GEMINI AI ENGINEERING TEARDOWN", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color(0xFFD8B4FE))
+              }
+              Text(aiDiagOutput, style = MaterialTheme.typography.bodySmall, color = Color.White)
+            }
+          }
+        }
+
+        if (webSpecOutput.isNotBlank()) {
+          Surface(
+            color = Color(0xFF0C1814),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, Color(0xFF22C55E).copy(alpha = 0.45f)),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.CloudSync, null, tint = Color(0xFF4ADE80), modifier = Modifier.size(15.dp))
+                Text("LIVE WEB SPEC GROUNDING", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color(0xFF4ADE80))
+              }
+              Text(webSpecOutput.take(900), style = MaterialTheme.typography.bodySmall, color = Color(0xFFE2E8F0))
+            }
+          }
+        }
+      }
     }
   }
 }

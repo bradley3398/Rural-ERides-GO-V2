@@ -627,21 +627,11 @@ fun MissionLogsCard(
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.weight(1f),
       )
-      Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        TextButton(
-          onClick = { playCue(VoiceAudioManager.TouchCue.ACTION_CONFIRM); onOpenTelemetryStudio(null) },
-          modifier = Modifier.testTag("logbook_open_studio_button"),
-        ) {
-          Icon(Icons.Default.Analytics, null, Modifier.size(16.dp))
+      if (rides.isNotEmpty()) {
+        TextButton(onClick = { playCue(); onExportAllCsv() }, modifier = Modifier.testTag("export_rides_csv_button")) {
+          Icon(Icons.Default.Download, null, Modifier.size(16.dp))
           Spacer(Modifier.width(4.dp))
-          Text("Studio", maxLines = 1, softWrap = false)
-        }
-        if (rides.isNotEmpty()) {
-          TextButton(onClick = { playCue(); onExportAllCsv() }, modifier = Modifier.testTag("export_rides_csv_button")) {
-            Icon(Icons.Default.Download, null, Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text("CSV", maxLines = 1, softWrap = false)
-          }
+          Text("CSV", maxLines = 1, softWrap = false)
         }
       }
     }
@@ -1018,17 +1008,6 @@ fun MissionLogsCard(
                   modifier = Modifier.testTag("share_text_${ride.id}"),
                 ) {
                   Text("Share Social", maxLines = 1, softWrap = false)
-                }
-              }
-              if (ride.polylinePoints.isNotEmpty()) {
-                item {
-                  OutlinedButton(
-                    onClick = { playCue(); focusedTrackRideId = ride.id },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    modifier = Modifier.testTag("view_track_map_${ride.id}"),
-                  ) {
-                    Text("Track Map", maxLines = 1, softWrap = false)
-                  }
                 }
               }
               item {

@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -193,7 +194,7 @@ fun AppInfoAndChangelogScreen(
           }
           Spacer(Modifier.height(8.dp))
           Text(
-            "Package: ${BuildConfig.APPLICATION_ID}\nArchitecture: Kotlin • Jetpack Compose Material 3 • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • Supabase GoTrue • CameraX • OSMDroid",
+            "Package: ${BuildConfig.APPLICATION_ID}\nGitHub: https://github.com/bradley3398/Rural-ERides-GO-V2\nWeb: https://bradley3398.github.io/Rural-ERides-GO-V2/\nArchitecture: Kotlin • Jetpack Compose Material 3 • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • Supabase GoTrue • CameraX • OSMDroid",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -201,9 +202,34 @@ fun AppInfoAndChangelogScreen(
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             TacticalOutlinedButton(
               onClick = {
+                val repoIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bradley3398/Rural-ERides-GO-V2"))
+                runCatching { ctx.startActivity(repoIntent) }
+              },
+              modifier = Modifier.weight(1f).testTag("open_github_repo_button"),
+            ) {
+              Icon(Icons.Default.Code, null, Modifier.size(16.dp))
+              Spacer(Modifier.width(6.dp))
+              Text("GitHub Repo", maxLines = 1)
+            }
+            TacticalOutlinedButton(
+              onClick = {
+                val pagesIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://bradley3398.github.io/Rural-ERides-GO-V2/"))
+                runCatching { ctx.startActivity(pagesIntent) }
+              },
+              modifier = Modifier.weight(1f).testTag("open_download_page_button"),
+            ) {
+              Icon(Icons.Default.NewReleases, null, Modifier.size(16.dp))
+              Spacer(Modifier.width(6.dp))
+              Text("Download Page", maxLines = 1)
+            }
+          }
+          Spacer(Modifier.height(8.dp))
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            TacticalOutlinedButton(
+              onClick = {
                 clipboard.setText(
                   AnnotatedString(
-                    "Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison (${BuildConfig.APPLICATION_ID})"
+                    "Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison (${BuildConfig.APPLICATION_ID}) • https://github.com/bradley3398/Rural-ERides-GO-V2"
                   )
                 )
                 Toast.makeText(ctx, "Copied developer & build info", Toast.LENGTH_SHORT).show()
@@ -222,7 +248,7 @@ fun AppInfoAndChangelogScreen(
                     putExtra(Intent.EXTRA_SUBJECT, "Rural ERides GO v${BuildConfig.VERSION_NAME}")
                     putExtra(
                       Intent.EXTRA_TEXT,
-                      "Rural ERides GO v${BuildConfig.VERSION_NAME} — Tactical PEV Telemetry, 9-DOF AHRS, Radar, Vision AR Mechanic & AI Co-Pilot. Created by Lord Bradley Callison.",
+                      "Rural ERides GO v${BuildConfig.VERSION_NAME} — Tactical PEV Telemetry, 9-DOF AHRS, Radar, Vision AR Mechanic & AI Co-Pilot. Created by Lord Bradley Callison.\nDownload: https://bradley3398.github.io/Rural-ERides-GO-V2/\nGitHub: https://github.com/bradley3398/Rural-ERides-GO-V2",
                     )
                   }
                 runCatching { ctx.startActivity(Intent.createChooser(shareIntent, "Share Rural ERides GO")) }

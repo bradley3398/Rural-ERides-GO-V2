@@ -230,7 +230,6 @@ private fun VisionArMechanicTab(
   var detailLevel by remember(settings.mechanicDefaultDepth) { mutableStateOf(settings.mechanicDefaultDepth) }
   var thermalOverlay by remember { mutableStateOf(false) }
   var showBenchDrawer by remember(settings.aiChatCompactTools) { mutableStateOf(!settings.aiChatCompactTools) }
-  var showBottomToolsTray by remember { mutableStateOf(false) }
   var showLiveBenchCam by remember { mutableStateOf(false) }
   var showCameraSheet by remember { mutableStateOf(false) }
   var showCameraFallbackDialog by remember { mutableStateOf(false) }
@@ -568,7 +567,7 @@ private fun VisionArMechanicTab(
                 showHistorySheet = true
               },
               leadingIcon = { Icon(Icons.Default.History, contentDescription = "Workshop Chat History", modifier = Modifier.size(15.dp)) },
-              label = { Text("History", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
+              label = { Text("History (${diagSessions.size})", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
               modifier = Modifier.testTag("mechanic_chat_history_button"),
             )
           }
@@ -626,14 +625,6 @@ private fun VisionArMechanicTab(
       ) {
         Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
           LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            item {
-              AssistChip(
-                onClick = { showHistorySheet = true },
-                leadingIcon = { Icon(Icons.Default.History, null, Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary) },
-                label = { Text("History (${diagSessions.size})", style = MaterialTheme.typography.labelSmall) },
-                modifier = Modifier.testTag("mechanic_history_chip"),
-              )
-            }
             item {
               AssistChip(
                 onClick = { showPevProSuite = true },
@@ -1054,113 +1045,12 @@ private fun VisionArMechanicTab(
           }
         }
 
-        // COLLAPSIBLE BOTTOM BENCH TOOLS TRAY (OPENS RIGHT ABOVE THE COMPOSER WHEN TOOLS IS TAPPED)
-        AnimatedVisibility(visible = showBottomToolsTray) {
-          Surface(
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)),
-            shape = chrome.cardShape,
-            modifier = Modifier.fillMaxWidth(),
-          ) {
-            Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-              Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("WORKSHOP BENCH TOOLS • $opticalScope", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-                IconButton(onClick = { showBottomToolsTray = false }, modifier = Modifier.size(32.dp)) {
-                  Icon(Icons.Default.Close, contentDescription = "Close Tools Tray", modifier = Modifier.size(16.dp))
-                }
-              }
-              LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(listOf("GENERAL", "ELECTRICAL", "BRAKING", "TIRES_CHASSIS", "THERMAL")) { sc ->
-                  TacticalFilterChip(
-                    selected = opticalScope == sc,
-                    onClick = {
-                      tapCue()
-                      opticalScope = sc
-                      Toast.makeText(ctx, "Inspection scope: $sc", Toast.LENGTH_SHORT).show()
-                    },
-                    label = sc,
-                  )
-                }
-              }
-              LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                item {
-                  TacticalFilterChip(
-                    selected = detailLevel == "DEEP_TECH",
-                    onClick = {
-                      tapCue()
-                      detailLevel = if (detailLevel == "DEEP_TECH") "STANDARD" else "DEEP_TECH"
-                      Toast.makeText(ctx, "Mechanic depth: $detailLevel", Toast.LENGTH_SHORT).show()
-                    },
-                    label = if (detailLevel == "DEEP_TECH") "Deep Tech ✓" else "Standard Depth",
-                  )
-                }
-                item {
-                  AssistChip(
-                    onClick = { tapCue(); showPevProSuite = true },
-                    label = { Text("Pro Suite 470+", style = MaterialTheme.typography.labelSmall) },
-                  )
-                }
-                item {
-                  AssistChip(
-                    onClick = { tapCue(); showEcodeDbDialog = true },
-                    label = { Text("OEM E-Codes", style = MaterialTheme.typography.labelSmall) },
-                  )
-                }
-                item {
-                  AssistChip(
-                    onClick = { tapCue(); showVoltmeterDialog = true },
-                    label = { Text("Voltmeter", style = MaterialTheme.typography.labelSmall) },
-                  )
-                }
-                item {
-                  AssistChip(
-                    onClick = { tapCue(); showLiveArHud = true },
-                    label = { Text("Live AR", style = MaterialTheme.typography.labelSmall) },
-                  )
-                }
-                item {
-                  AssistChip(
-                    onClick = { tapCue(); showHistorySheet = true },
-                    label = { Text("History (${diagSessions.size})", style = MaterialTheme.typography.labelSmall) },
-                  )
-                }
-              }
-              LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(presetPrompts.take(6)) { (lbl, text) ->
-                  AssistChip(
-                    onClick = {
-                      showBottomToolsTray = false
-                      launchDiagnosis(text)
-                    },
-                    leadingIcon = { Icon(Icons.Default.AutoAwesome, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary) },
-                    label = { Text(lbl, style = MaterialTheme.typography.labelSmall) },
-                  )
-                }
-              }
-            }
-          }
-        }
-
-        // Fitted 5-slot tool strip — every button fits 100% cleanly on screen with zero clipped text
+        // Fitted 3-slot media capture strip — camera & hardware photo attachments
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(5.dp),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          MechanicComposerActionPill(
-            icon = if (showLiveBenchCam) Icons.Default.VideocamOff else Icons.Default.Videocam,
-            label = if (showLiveBenchCam) "Cam ON" else "Bench",
-            selected = showLiveBenchCam,
-            modifier = Modifier.weight(1f).testTag("toggle_live_bench_cam_chip"),
-          ) {
-            tapCue(if (showLiveBenchCam) VoiceAudioManager.TouchCue.TOGGLE_OFF else VoiceAudioManager.TouchCue.TOGGLE_ON)
-            if (showLiveBenchCam) {
-              showLiveBenchCam = false
-            } else {
-              openCameraOrFallback(forBenchCam = true)
-            }
-          }
-
           MechanicComposerActionPill(
             icon = Icons.Default.CameraAlt,
             label = "Snap",
@@ -1189,16 +1079,6 @@ private fun VisionArMechanicTab(
           ) {
             tapCue()
             launchPic2Picker()
-          }
-
-          MechanicComposerActionPill(
-            icon = if (showBottomToolsTray) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            label = if (showBottomToolsTray) "Hide" else "Tools",
-            selected = showBottomToolsTray,
-            modifier = Modifier.weight(1f).testTag("mechanic_tools_drawer_chip"),
-          ) {
-            tapCue()
-            showBottomToolsTray = !showBottomToolsTray
           }
         }
 

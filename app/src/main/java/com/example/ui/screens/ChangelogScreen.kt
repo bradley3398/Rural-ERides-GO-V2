@@ -49,6 +49,56 @@ internal fun ChangelogScreen(
   val builds = remember {
     listOf(
       BuildChangelogEntry(
+        versionCode = 45,
+        versionName = "45.0",
+        date = "November 2026",
+        title = "Universal Seasonal Holiday Themes, 3D CAD Blueprint Lab & Live Speedometer GPS HUD Lock",
+        highlights = listOf(
+          "Universal Seasonal Holiday Theme Engine: Automatically injects festive decorations, ornaments, and unique background art across all screens for Christmas, Halloween, Thanksgiving, 4th of July, Memorial Day, Veterans Day, New Year's, Valentine's, St. Patrick's, Easter, and Labor Day.",
+          "Advanced 3D CAD Blueprint & OpenGL ES PBR Lab: Real-time 3D garage viewer with realistic chassis blueprints, enhanced engine upgrades, and high-performance OpenGL ES 3.0 PBR rendering with zero memory leaks.",
+          "Locked GPS Speedometer & Speed Limit HUD: Dedicated ride mission HUD locking mechanism preventing accidental scrolling during active ride telemetry recording while keeping YouTube Music and essential metrics instantly accessible.",
+          "Live Data Integration & Easter Eggs: Fully operational live GPS speed limit signs, sensor telemetry, and multiple hidden easter eggs in the About App screen.",
+        ),
+      ),
+      BuildChangelogEntry(
+        versionCode = 38,
+        versionName = "38.0",
+        date = "November 2026",
+        title = "Custom Synthesized Voice Studio & Zero-Latency TTS Pre-Load Buffer",
+        highlights = listOf(
+          "Custom AI Voice Studio Configuration Screen: Dedicated studio for synthesizing bespoke Co-Pilot voices, uploading reference audio files (*.wav/*.mp3), recording voice samples via mic, and tuning pitch, speech rate, and directives.",
+          "Zero-Latency Streaming Pre-Load Buffer: Eliminates traditional 3–7s TTS wait times by pre-splitting sentence boundaries as Gemini streams, pre-rendering fragments into an async PCM buffer so speech begins in ~85ms with zero-gap playback.",
+          "Full Audio Sample Integration: Pick reference audio files via zero-permission photo/media picker or record 5s microphone samples with in-app PCM playback.",
+          "Custom Neural Base & DSP Profiles: Select from 10 Gemini neural voice bases (Achird, Zephyr, Orus, Fenrir, etc.) and 8 hardware DSP filters (Deep Barn, Warm Porch, Tactical Crisp, CB Radio).",
+          "Seamless Cross-App Co-Pilot Integration: Active custom voice profiles automatically take effect across Co-Pilot chat, turn-by-turn navigation alerts, and maintenance audio briefings.",
+        ),
+      ),
+      BuildChangelogEntry(
+        versionCode = 37,
+        versionName = "37.0",
+        date = "November 2026",
+        title = "Live Push Notifications Architecture & Accessible Tactile UI Experience",
+        highlights = listOf(
+          "Tri-Channel Push Notifications: Real-time system notifications for AI Co-Pilot & Mechanic insights, Community Board dispatches, and peer Direct Messages (DMs).",
+          "Deep-Link Notification Intent Routing: Tapping any notification instantly navigates to the exact tab (Copilot, Board, Mechanic, or Cockpit) and opens direct message threads.",
+          "Global UI Debounce & Tactile Press Audit: Integrated debouncing and accessible >=48dp touch targets across TacticalButton, TacticalOutlinedButton, and TacticalIconButton with Material 3 ripple and tactile press scaling.",
+          "Android 13+ Notification Permissions: Automatic POST_NOTIFICATIONS runtime consent check with in-app test dispatchers for AI, Social, and DM channels.",
+          "Instant Voice Latency Optimization: Low-latency DSP speech synthesis with custom AI voice persona profiles.",
+        ),
+      ),
+      BuildChangelogEntry(
+        versionCode = 36,
+        versionName = "36.0",
+        date = "November 2026",
+        title = "Multi-Engine 3D Viewport Lifecycle Manager & Reactive Telemetry Studio",
+        highlights = listOf(
+          "3D Viewport Lifecycle Manager: Explicitly pauses OpenGL ES & WebGL surfaces and frees GPU buffers when 3D Lab viewports are closed to eliminate native memory leaks and crashes.",
+          "Reactive Flow Telemetry Studio: Dedicated RideTelemetryViewModel handling graph and ride datasets asynchronously via Kotlin Flows to prevent main thread blocking during initialization.",
+          "Comprehensive UI Button Audit & Debouncing: Implemented 400ms duplicate-click guards and state-based tactile press feedback across all buttons, icon buttons, and navigation controls.",
+          "Zero-Crash Safety Bounds: Added robust null/NaN guards, empty-state fallbacks, and safe coordinate scaling across all 10+ Neon analytics charts and 3D garage viewers.",
+        ),
+      ),
+      BuildChangelogEntry(
         versionCode = 21,
         versionName = "21.0",
         date = "November 2026",

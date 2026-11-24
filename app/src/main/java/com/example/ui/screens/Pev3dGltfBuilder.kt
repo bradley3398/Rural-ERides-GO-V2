@@ -41,6 +41,29 @@ internal class PevBuiltGlb(
   val wireGroups: List<PevWireGroup> = emptyList(),
 )
 
+internal class PevSceneMeshPart(
+  val nodeName: String,
+  val partKey: String,
+  val texId: PevPbrMaterialId,
+  val baseRgb: FloatArray,
+  val metallic: Float,
+  val roughness: Float,
+  val emissiveRgb: FloatArray,
+  val clearcoat: Float,
+  val isShell: Boolean,
+  val isScreen: Boolean,
+  val axleCenter: Vec3?,
+  val explodeDir: Vec3,
+  val vertices: FloatArray, // interleaved: px,py,pz, nx,ny,nz, u,v (stride = 8 floats)
+  val indices: ShortArray,
+  val wireframeLines: FloatArray,
+)
+
+internal class PevBuiltScene(
+  val parts: List<PevSceneMeshPart>,
+  val wireGroups: List<PevWireGroup>,
+)
+
 /**
  * Parametric cross-section station for smooth lofted automotive/moto organic bodywork.
  * [exp] controls cross-section curvature: 1.0 = smooth ellipse/oval, 0.55 = sculpted chamfered automotive fairing.
@@ -782,9 +805,15 @@ private class MeshBucket(
 
 internal object Pev3dGltfBuilder {
   /**
-   * Converts sRGB automotive color swatches into true linear light space required by glTF 2.0 / Filament PBR.
+   * Converts sRGB automotive color swatches into true linear light space required by glTF 2.0 PBR.
    */
   private fun srgbToLinear(c: Float): Double = c.coerceIn(0f, 1f).toDouble().pow(2.2)
+
+  private class RawSceneBuckets(
+    val buckets: List<MeshBucket>,
+    val wheelAxleCenters: Map<String, Vec3>,
+    val explodeDirs: Map<String, Vec3>,
+  )
 
   fun buildVehicleGlb(
     archetype: Pev3dArchetype,
@@ -793,6 +822,78 @@ internal object Pev3dGltfBuilder {
     xrayShell: Boolean = false,
     carbonGlossMode: Boolean = false,
   ): PevBuiltGlb {
+    val raw = buildRawSceneBuckets(archetype, finish, lightsOn, xrayShell, carbonGlossMode)
+    return packBucketsToGlb(raw.buckets, raw.wheelAxleCenters, raw.explodeDirs, xrayShell)
+  }
+
+  fun buildSceneMeshes(
+    archetype: Pev3dArchetype,
+    finish: Pev3dModelFinish,
+    lightsOn: Boolean,
+  ): PevBuiltScene {
+    val raw = buildRawSceneBuckets(archetype, finish, lightsOn, xrayShell = false, carbonGlossMode = false)
+    val parts = ArrayList<PevSceneMeshPart>(raw.buckets.size)
+    val wireGroups = ArrayList<PevWireGroup>(raw.buckets.size)
+    for (b in raw.buckets) {
+      val mk = b.matKey
+      val axle = raw.wheelAxleCenters[b.nodeName]
+      val exp = raw.explodeDirs[mk.partKey] ?: raw.explodeDirs[b.nodeName] ?: Vec3(0f, 0f, 0f)
+      val vCount = b.positions.size / 3
+      if (vCount > 0 && b.indices.size >= 3) {
+        if (vCount <= 32760) {
+          val verts = FloatArray(vCount * 8)
+          for (i in 0 until vCount) {
+            val vo = i * 8
+            val po = i * 3
+            val uo = i * 2
+            verts[vo] = b.positions[po]
+            verts[vo + 1] = b.positions[po + 1]
+            verts[vo + 2] = b.positions[po + 2]
+            verts[vo + 3] = b.normals[po]
+            verts[vo + 4] = b.normals[po + 1]
+            verts[vo + 5] = b.normals[po + 2]
+            verts[vo + 6] = b.uvs[uo]
+            verts[vo + 7] = b.uvs[uo + 1]
+          }
+          val idxArr = ShortArray(b.indices.size) { k -> b.indices[k].toShort() }
+          parts += PevSceneMeshPart(
+            nodeName = b.nodeName,
+            partKey = mk.partKey,
+            texId = mk.texId,
+            baseRgb = mk.baseRgb,
+            metallic = mk.metallic,
+            roughness = mk.roughness,
+            emissiveRgb = mk.emissiveRgb,
+            clearcoat = mk.clearcoat,
+            isShell = mk.isShell,
+            isScreen = mk.isScreen,
+            axleCenter = axle,
+            explodeDir = exp,
+            vertices = verts,
+            indices = idxArr,
+            wireframeLines = b.wirePositions.toFloatArray(),
+          )
+        }
+      }
+      if (b.wirePositions.isNotEmpty()) {
+        wireGroups += PevWireGroup(
+          partKey = mk.partKey,
+          axleCenter = axle,
+          explodeDir = exp,
+          lines = b.wirePositions.toFloatArray(),
+        )
+      }
+    }
+    return PevBuiltScene(parts = parts, wireGroups = wireGroups)
+  }
+
+  private fun buildRawSceneBuckets(
+    archetype: Pev3dArchetype,
+    finish: Pev3dModelFinish,
+    lightsOn: Boolean,
+    xrayShell: Boolean,
+    carbonGlossMode: Boolean,
+  ): RawSceneBuckets {
     val buckets = ArrayList<MeshBucket>()
     val wheelAxleCenters = HashMap<String, Vec3>()
     val hsMap = Pev3dEngine.hotspotsForArchetype(archetype).associateBy { it.partKey }
@@ -1007,59 +1108,119 @@ internal object Pev3dGltfBuilder {
 
     val ws = finish.wheelScale
     val ls = finish.bodyLengthScale
+    val bp = finish.blueprintType
 
-    when (archetype) {
-      Pev3dArchetype.SCOOTER -> {
-        addDetailedWheel("wheel_rear", -0.92f * ls, -0.45f, 0f, 0.30f * ws, 0.24f, "motor", true)
-        addDetailedWheel("wheel_front", 0.92f * ls, -0.45f, 0f, 0.30f * ws, 0.24f, "suspension", true)
+    when (bp) {
+      Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD,
+      Pev3dBlueprintType.SCOOTER_TUBULAR_RACING,
+      Pev3dBlueprintType.SCOOTER_MONOCOQUE_AERO -> {
+        val isDualStem = bp == Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD
+        val isTubular = bp == Pev3dBlueprintType.SCOOTER_TUBULAR_RACING
+        val isAero = bp == Pev3dBlueprintType.SCOOTER_MONOCOQUE_AERO
+        val wheelR = (if (isDualStem) 0.32f else if (isAero) 0.28f else 0.30f) * ws
+        val wheelW = if (isDualStem) 0.26f else 0.23f
+        addDetailedWheel("wheel_rear", -0.92f * ls, -0.45f, 0f, wheelR, wheelW, "motor", true)
+        addDetailedWheel("wheel_front", 0.92f * ls, -0.45f, 0f, wheelR, wheelW, "suspension", true)
 
-        // Sculpted Aerodynamic Carbon Deck Hull + Contoured Rear Kicktail + Swan-Neck Twin Stem
         newBucket(
           nodeName = "frame",
           partKey = "frame",
           texId = PevPbrMaterialId.CARBON_WEAVE,
           baseRgb = matteCarbon,
-          metallic = 0.24f,
-          roughness = 0.26f,
-          clearcoat = 0.86f,
+          metallic = 0.28f,
+          roughness = 0.24f,
+          clearcoat = 0.88f,
           isShell = true,
         ) {
-          // Smooth lofted tapered deck chassis (no flat box!)
-          addLoftedBodyX(
-            stations = listOf(
-              LoftStation(-0.76f * ls, -0.22f, 0f, 0.038f, 0.16f, exp = 0.55f),
-              LoftStation(-0.62f * ls, -0.24f, 0f, 0.068f, 0.24f, exp = 0.50f),
-              LoftStation(-0.35f * ls, -0.27f, 0f, 0.072f, 0.28f, exp = 0.48f),
-              LoftStation(0.35f * ls, -0.27f, 0f, 0.072f, 0.28f, exp = 0.48f),
-              LoftStation(0.64f * ls, -0.24f, 0f, 0.064f, 0.22f, exp = 0.52f),
-              LoftStation(0.76f * ls, -0.18f, 0f, 0.038f, 0.13f, exp = 0.62f),
-            ),
-            ringSegs = 20,
-            uTile = 2.6f,
-            vTile = 2.2f,
-          )
-          // Contoured Rear Footrest Kickplate Spoiler
-          addLoftedBodyX(
-            stations = listOf(
-              LoftStation(-0.74f * ls, -0.14f, 0f, 0.022f, 0.17f, exp = 0.60f),
-              LoftStation(-0.60f * ls, -0.18f, 0f, 0.032f, 0.21f, exp = 0.55f),
-              LoftStation(-0.46f * ls, -0.21f, 0f, 0.024f, 0.22f, exp = 0.58f),
-            ),
-            ringSegs = 16,
-          )
-          // Swept Twin Carbon Stem Tubes + Sculpted Neck Gusset
-          addSweptTube(
-            listOf(Vec3(0.71f * ls, -0.20f, -0.075f), Vec3(0.63f * ls, 0.04f, -0.072f), Vec3(0.42f * ls, 0.88f, -0.068f)),
-            listOf(0.036f, 0.032f, 0.027f),
-            16,
-          )
-          addSweptTube(
-            listOf(Vec3(0.71f * ls, -0.20f, 0.075f), Vec3(0.63f * ls, 0.04f, 0.072f), Vec3(0.42f * ls, 0.88f, 0.068f)),
-            listOf(0.036f, 0.032f, 0.027f),
-            16,
-          )
-          addCurvedFender(-0.92f * ls, -0.45f, 0.34f * ws, 52f, 175f, 0.135f)
-          addCurvedFender(0.92f * ls, -0.45f, 0.34f * ws, 18f, 132f, 0.135f)
+          if (isAero) {
+            // Smooth continuous organic monocoque fuselage shell (Segway GT / Apollo Pro)
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(-0.80f * ls, -0.18f, 0f, 0.036f, 0.14f, exp = 0.62f),
+                LoftStation(-0.56f * ls, -0.24f, 0f, 0.072f, 0.23f, exp = 0.56f),
+                LoftStation(0.0f, -0.26f, 0f, 0.078f, 0.26f, exp = 0.54f),
+                LoftStation(0.56f * ls, -0.22f, 0f, 0.088f, 0.22f, exp = 0.58f),
+                LoftStation(0.76f * ls, -0.04f, 0f, 0.115f, 0.14f, exp = 0.68f),
+              ),
+              ringSegs = 22,
+              uTile = 2.6f,
+              vTile = 2.2f,
+            )
+            // Sculpted mono aero blade stem tapering into cockpit
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(0.68f * ls, 0.18f, 0f, 0.26f, 0.078f, exp = 0.72f),
+                LoftStation(0.56f * ls, 0.50f, 0f, 0.24f, 0.064f, exp = 0.72f),
+                LoftStation(0.45f * ls, 0.86f, 0f, 0.12f, 0.056f, exp = 0.72f),
+              ),
+              ringSegs = 18,
+            )
+          } else {
+            // Wide sculpted carbon deck chassis
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(-0.76f * ls, -0.22f, 0f, 0.038f, 0.16f, exp = 0.55f),
+                LoftStation(-0.62f * ls, -0.24f, 0f, 0.068f, 0.25f, exp = 0.50f),
+                LoftStation(-0.35f * ls, -0.27f, 0f, 0.074f, 0.29f, exp = 0.48f),
+                LoftStation(0.35f * ls, -0.27f, 0f, 0.074f, 0.29f, exp = 0.48f),
+                LoftStation(0.64f * ls, -0.24f, 0f, 0.064f, 0.23f, exp = 0.52f),
+                LoftStation(0.76f * ls, -0.18f, 0f, 0.038f, 0.14f, exp = 0.62f),
+              ),
+              ringSegs = 20,
+              uTile = 2.6f,
+              vTile = 2.2f,
+            )
+            // Steep rear kicktail spoiler
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(-0.78f * ls, -0.10f, 0f, 0.022f, 0.18f, exp = 0.58f),
+                LoftStation(-0.62f * ls, -0.17f, 0f, 0.032f, 0.22f, exp = 0.55f),
+                LoftStation(-0.46f * ls, -0.21f, 0f, 0.024f, 0.23f, exp = 0.58f),
+              ),
+              ringSegs = 16,
+            )
+          }
+
+          if (isDualStem) {
+            // Massive twin vertical upper fork columns + quad-clamp crown (Kaabo Wolf / Dualtron X)
+            for (zSign in listOf(-1f, 1f)) {
+              addTube(Vec3(0.78f * ls, -0.18f, zSign * 0.138f), Vec3(0.50f * ls, 0.88f, zSign * 0.135f), 0.038f, 16)
+              // Side steel deck crash-guard bumpers
+              addSweptTube(
+                listOf(
+                  Vec3(-0.72f * ls, -0.23f, zSign * 0.27f),
+                  Vec3(-0.35f * ls, -0.25f, zSign * 0.32f),
+                  Vec3(0.35f * ls, -0.25f, zSign * 0.32f),
+                  Vec3(0.70f * ls, -0.21f, zSign * 0.25f),
+                ),
+                listOf(0.018f, 0.020f, 0.020f, 0.018f),
+                10,
+              )
+            }
+            addRoundedBlock(0.54f * ls, 0.72f, 0f, 0.055f, 0.022f, 0.17f, exp = 0.52f)
+            addRoundedBlock(0.66f * ls, 0.22f, 0f, 0.055f, 0.022f, 0.17f, exp = 0.52f)
+          } else if (isTubular) {
+            // Welded tubular trellis goose-neck & under-deck spaceframe rails (Nami / Rion / Teverun)
+            for (zSign in listOf(-1f, 1f)) {
+              addSweptTube(
+                listOf(
+                  Vec3(0.68f * ls, -0.12f, zSign * 0.078f),
+                  Vec3(0.76f * ls, 0.04f, zSign * 0.088f),
+                  Vec3(0.60f * ls, 0.28f, zSign * 0.072f),
+                  Vec3(0.43f * ls, 0.88f, zSign * 0.058f),
+                ),
+                listOf(0.028f, 0.026f, 0.026f, 0.024f),
+                14,
+              )
+              addTube(Vec3(0.56f * ls, -0.22f, zSign * 0.18f), Vec3(0.72f * ls, 0.04f, zSign * 0.09f), 0.022f, 12)
+              addTube(Vec3(-0.66f * ls, -0.26f, zSign * 0.295f), Vec3(0.58f * ls, -0.26f, zSign * 0.295f), 0.018f, 10)
+            }
+            // Cross trellis braces
+            addTube(Vec3(0.68f * ls, 0.14f, -0.08f), Vec3(0.68f * ls, 0.14f, 0.08f), 0.018f, 10)
+          }
+
+          addCurvedFender(-0.92f * ls, -0.45f, (wheelR + 0.04f), 52f, 175f, wheelW * 0.56f)
+          addCurvedFender(0.92f * ls, -0.45f, (wheelR + 0.04f), 18f, 132f, wheelW * 0.56f)
         }
 
         // Textured Vulcanized Rubber Deck Grip Mat
@@ -1076,8 +1237,8 @@ internal object Pev3dGltfBuilder {
           )
         }
 
-        // Metallic Automotive Clearcoat Side Deck Trim Fairings & Front Stem Wind Deflector
-        newBucket("frame_graphics", "frame", PevPbrMaterialId.RACING_LIVERY, finish.bodyRgb, finish.paintMetallic, 0.16f, clearcoat = 0.96f, isShell = true) {
+        // OEM Metallic Livery Side Fairings + Stem Cowling
+        newBucket("frame_graphics", "frame", PevPbrMaterialId.RACING_LIVERY, finish.bodyRgb, finish.paintMetallic, 0.15f, clearcoat = 0.96f, isShell = true) {
           for (zSign in listOf(-1f, 1f)) {
             addLoftedBodyX(
               stations = listOf(
@@ -1089,36 +1250,47 @@ internal object Pev3dGltfBuilder {
               ringSegs = 14,
             )
           }
-          // Sculpted front stem aero cowl
-          addSculptedPod(0.54f * ls, 0.52f, 0f, 0.032f, 0.20f, 0.095f, exp = 0.68f, rings = 10, segs = 16)
+          if (isAero) {
+            addSculptedPod(0.57f * ls, 0.54f, 0f, 0.044f, 0.26f, 0.112f, exp = 0.68f, rings = 10, segs = 16)
+          } else {
+            addSculptedPod(0.54f * ls, 0.52f, 0f, 0.032f, 0.18f, 0.088f, exp = 0.68f, rings = 10, segs = 16)
+          }
         }
 
-        // Realistic Anodized Graphite Aluminum Battery Enclosure inside Deck
         newBucket("battery", "battery", PevPbrMaterialId.BATTERY_PACK, batteryAlloy, 0.68f, 0.34f) {
           addRoundedBlock(0f, -0.25f, 0f, 0.48f * ls, 0.050f, 0.20f, uvScale = 1.8f, exp = 0.45f)
         }
-
-        // CNC Billet Finned FOC Inverter Heatsink
         newBucket("controller", "controller", PevPbrMaterialId.BRUSHED_METAL, focHeatsink, 0.90f, 0.22f, clearcoat = 0.3f) {
           addFinnedBlock(0.42f * ls, -0.23f, 0f, 0.14f, 0.054f, 0.19f, 8)
         }
 
         // Anodized CNC C-Arm Suspension, Hydraulic Damper & Dual Coiled Shocks
         newBucket("suspension", "suspension", PevPbrMaterialId.BRUSHED_METAL, finish.accentRgb, 0.92f, 0.18f, clearcoat = 0.48f) {
-          addTube(Vec3(-0.66f * ls, -0.26f, 0.292f), Vec3(0.60f * ls, -0.26f, 0.292f), 0.013f, 10)
-          addTube(Vec3(-0.66f * ls, -0.26f, -0.292f), Vec3(0.60f * ls, -0.26f, -0.292f), 0.013f, 10)
-          addSculptedPod(0.61f * ls, 0.08f, 0f, 0.052f, 0.048f, 0.108f, exp = 0.55f)
-          addTube(Vec3(0.56f * ls, -0.10f, 0.12f), Vec3(0.64f * ls, 0.14f, 0.04f), 0.015f, 12)
-          addTube(Vec3(-0.68f * ls, -0.26f, -0.15f), Vec3(-0.92f * ls, -0.45f, -0.15f), 0.028f, 14)
-          addTube(Vec3(-0.68f * ls, -0.26f, 0.15f), Vec3(-0.92f * ls, -0.45f, 0.15f), 0.028f, 14)
-          addTube(Vec3(0.68f * ls, -0.18f, -0.15f), Vec3(0.92f * ls, -0.45f, -0.15f), 0.030f, 14)
-          addTube(Vec3(0.68f * ls, -0.18f, 0.15f), Vec3(0.92f * ls, -0.45f, 0.15f), 0.030f, 14)
-          addHelicalSpring(Vec3(-0.56f * ls, -0.22f, -0.15f), Vec3(-0.82f * ls, -0.40f, -0.15f), 0.034f, 0.008f, 5.5f)
-          addHelicalSpring(Vec3(-0.56f * ls, -0.22f, 0.15f), Vec3(-0.82f * ls, -0.40f, 0.15f), 0.034f, 0.008f, 5.5f)
-          addHelicalSpring(Vec3(0.62f * ls, -0.16f, 0.15f), Vec3(0.84f * ls, -0.38f, 0.15f), 0.034f, 0.008f, 5.5f)
+          if (isDualStem) {
+            // Anodized triple clamps & tall inverted fork lowers
+            addTube(Vec3(0.92f * ls, -0.45f, -0.155f), Vec3(0.68f * ls, 0.16f, -0.145f), 0.034f, 14)
+            addTube(Vec3(0.92f * ls, -0.45f, 0.155f), Vec3(0.68f * ls, 0.16f, 0.145f), 0.034f, 14)
+            addTube(Vec3(-0.68f * ls, -0.26f, -0.15f), Vec3(-0.92f * ls, -0.45f, -0.15f), 0.030f, 14)
+            addTube(Vec3(-0.68f * ls, -0.26f, 0.15f), Vec3(-0.92f * ls, -0.45f, 0.15f), 0.030f, 14)
+            addHelicalSpring(Vec3(-0.56f * ls, -0.20f, -0.15f), Vec3(-0.82f * ls, -0.38f, -0.15f), 0.036f, 0.008f, 6.0f)
+            addHelicalSpring(Vec3(-0.56f * ls, -0.20f, 0.15f), Vec3(-0.82f * ls, -0.38f, 0.15f), 0.036f, 0.008f, 6.0f)
+          } else {
+            addSculptedPod(0.61f * ls, 0.08f, 0f, 0.052f, 0.048f, 0.108f, exp = 0.55f)
+            addTube(Vec3(0.56f * ls, -0.10f, 0.12f), Vec3(0.64f * ls, 0.14f, 0.04f), 0.015f, 12)
+            addTube(Vec3(-0.68f * ls, -0.26f, -0.15f), Vec3(-0.92f * ls, -0.45f, -0.15f), 0.028f, 14)
+            addTube(Vec3(-0.68f * ls, -0.26f, 0.15f), Vec3(-0.92f * ls, -0.45f, 0.15f), 0.028f, 14)
+            addTube(Vec3(0.68f * ls, -0.18f, -0.15f), Vec3(0.92f * ls, -0.45f, -0.15f), 0.030f, 14)
+            addTube(Vec3(0.68f * ls, -0.18f, 0.15f), Vec3(0.92f * ls, -0.45f, 0.15f), 0.030f, 14)
+            addHelicalSpring(Vec3(-0.56f * ls, -0.22f, -0.15f), Vec3(-0.82f * ls, -0.40f, -0.15f), 0.034f, 0.008f, 5.5f)
+            addHelicalSpring(Vec3(-0.56f * ls, -0.22f, 0.15f), Vec3(-0.82f * ls, -0.40f, 0.15f), 0.034f, 0.008f, 5.5f)
+            addHelicalSpring(Vec3(0.62f * ls, -0.16f, 0.15f), Vec3(0.84f * ls, -0.38f, 0.15f), 0.034f, 0.008f, 5.5f)
+          }
+          if (isTubular) {
+            // Exposed CNC rotary & linear steering damper along deck neck
+            addTube(Vec3(0.46f * ls, -0.10f, 0.13f), Vec3(0.74f * ls, -0.02f, 0.05f), 0.016f, 12)
+          }
         }
 
-        // Braided Stainless Brake Lines
         newBucket("brakes", "brakes", PevPbrMaterialId.CARBON_WEAVE, anodizedBlack, 0.35f, 0.42f) {
           addSweptTube(
             listOf(Vec3(0.45f * ls, 0.86f, 0.24f), Vec3(0.55f * ls, 0.42f, 0.14f), Vec3(0.70f * ls, 0.02f, 0.16f), Vec3(0.94f * ls, -0.35f, 0.15f)),
@@ -1133,8 +1305,9 @@ internal object Pev3dGltfBuilder {
         }
 
         newBucket("cockpit", "cockpit", PevPbrMaterialId.BRUSHED_METAL, anodizedBlack, 0.86f, 0.26f) {
+          val barW = if (isDualStem) 0.50f else 0.45f
           addSweptTube(
-            listOf(Vec3(0.39f * ls, 0.89f, -0.46f), Vec3(0.43f * ls, 0.88f, -0.18f), Vec3(0.42f * ls, 0.88f, 0f), Vec3(0.43f * ls, 0.88f, 0.18f), Vec3(0.39f * ls, 0.89f, 0.46f)),
+            listOf(Vec3(0.39f * ls, 0.89f, -barW), Vec3(0.43f * ls, 0.88f, -0.18f), Vec3(0.42f * ls, 0.88f, 0f), Vec3(0.43f * ls, 0.88f, 0.18f), Vec3(0.39f * ls, 0.89f, barW)),
             listOf(0.024f, 0.021f, 0.025f, 0.021f, 0.024f),
             14,
           )
@@ -1145,8 +1318,9 @@ internal object Pev3dGltfBuilder {
           addRoundedBlock(0.45f * ls, 0.94f, 0f, 0.048f, 0.042f, 0.106f, exp = 0.55f)
         }
         newBucket("cockpit_grips", "cockpit", PevPbrMaterialId.TIRE_RUBBER, rubberNeutral, 0.04f, 0.86f) {
-          addTube(Vec3(0.415f * ls, 0.886f, 0.28f), Vec3(0.39f * ls, 0.89f, 0.47f), 0.030f, 12)
-          addTube(Vec3(0.415f * ls, 0.886f, -0.28f), Vec3(0.39f * ls, 0.89f, -0.47f), 0.030f, 12)
+          val barW = if (isDualStem) 0.51f else 0.47f
+          addTube(Vec3(0.415f * ls, 0.886f, 0.28f), Vec3(0.39f * ls, 0.89f, barW), 0.030f, 12)
+          addTube(Vec3(0.415f * ls, 0.886f, -0.28f), Vec3(0.39f * ls, 0.89f, -barW), 0.030f, 12)
         }
         newBucket("cockpit_tft", "cockpit", PevPbrMaterialId.TFT_SCREEN, tftWhite, 0.08f, 0.08f, floatArrayOf(0.55f, 0.58f, 0.62f), isScreen = true) {
           addQuad(
@@ -1162,18 +1336,20 @@ internal object Pev3dGltfBuilder {
         }
       }
 
-      Pev3dArchetype.EUC -> {
-        addDetailedWheel("wheel_rear", 0f, -0.12f, 0f, 0.56f * ws, 0.25f, "motor", true)
+      Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE,
+      Pev3dBlueprintType.EUC_AERO_TRAIL -> {
+        val isArmored = bp == Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE
+        val wheelR = (if (isArmored) 0.57f else 0.54f) * ws
+        addDetailedWheel("wheel_rear", 0f, -0.12f, 0f, wheelR, 0.25f, "motor", true)
 
-        // Realistic Anodized Dark Graphite Twin Side Battery Modules
         newBucket("battery", "battery", PevPbrMaterialId.BATTERY_PACK, batteryAlloy, 0.68f, 0.34f) {
           for (zSign in listOf(-1f, 1f)) {
             addLoftedBodyX(
               stations = listOf(
-                LoftStation(-0.31f, 0.06f, zSign * 0.225f, 0.18f, 0.068f, exp = 0.68f),
-                LoftStation(-0.15f, 0.09f, zSign * 0.235f, 0.25f, 0.082f, exp = 0.58f),
-                LoftStation(0.15f, 0.09f, zSign * 0.235f, 0.25f, 0.082f, exp = 0.58f),
-                LoftStation(0.31f, 0.06f, zSign * 0.225f, 0.18f, 0.068f, exp = 0.68f),
+                LoftStation(-0.31f, 0.06f, zSign * 0.225f, if (isArmored) 0.21f else 0.17f, 0.068f, exp = 0.68f),
+                LoftStation(-0.15f, 0.09f, zSign * 0.235f, if (isArmored) 0.27f else 0.24f, 0.082f, exp = 0.58f),
+                LoftStation(0.15f, 0.09f, zSign * 0.235f, if (isArmored) 0.27f else 0.24f, 0.082f, exp = 0.58f),
+                LoftStation(0.31f, 0.06f, zSign * 0.225f, if (isArmored) 0.21f else 0.17f, 0.068f, exp = 0.68f),
               ),
               ringSegs = 16,
               uTile = 1.6f,
@@ -1182,10 +1358,8 @@ internal object Pev3dGltfBuilder {
           }
         }
 
-        // Smooth Aerodynamic Contoured Carbon EUC Monocoque Shell (curved oval silhouette, NOT flat slabs!)
         newBucket("frame", "frame", PevPbrMaterialId.CARBON_WEAVE, matteCarbon, 0.26f, 0.24f, clearcoat = 0.92f, isShell = true) {
           for (zSign in listOf(-1f, 1f)) {
-            // Curved teardrop outer side shell wrapping smoothly around the battery packs
             addLoftedBodyX(
               stations = listOf(
                 LoftStation(-0.37f, 0.04f, zSign * 0.255f, 0.14f, 0.032f, exp = 0.85f),
@@ -1198,24 +1372,12 @@ internal object Pev3dGltfBuilder {
               uTile = 2.2f,
               vTile = 2.0f,
             )
-            // Contoured Top Arch Bridge over the wheel
             addSweptTube(
               listOf(Vec3(-0.35f, -0.06f, zSign * 0.26f), Vec3(-0.34f, 0.36f, zSign * 0.25f), Vec3(0f, 0.48f, zSign * 0.22f), Vec3(0.34f, 0.36f, zSign * 0.25f), Vec3(0.35f, -0.06f, zSign * 0.26f)),
               listOf(0.024f, 0.028f, 0.030f, 0.028f, 0.024f),
               14,
             )
-          }
-          // Contoured Top Saddle Pad Crown
-          addLoftedBodyX(
-            stations = listOf(
-              LoftStation(-0.30f, 0.48f, 0f, 0.040f, 0.15f, exp = 0.78f),
-              LoftStation(0.0f, 0.53f, 0f, 0.052f, 0.18f, exp = 0.72f),
-              LoftStation(0.30f, 0.48f, 0f, 0.040f, 0.15f, exp = 0.78f),
-            ),
-            ringSegs = 18,
-          )
-          // Beveled CNC Pedals (tapered aerodynamic footplates)
-          for (zSign in listOf(-1f, 1f)) {
+            // Beveled CNC Pedals
             addLoftedBodyX(
               stations = listOf(
                 LoftStation(-0.22f, -0.30f, zSign * 0.35f, 0.016f, 0.088f, exp = 0.52f),
@@ -1225,7 +1387,37 @@ internal object Pev3dGltfBuilder {
               ringSegs = 14,
             )
           }
-          // Rear kickstand & curved wheel fender
+
+          if (isArmored) {
+            // Veteran Sherman / Lynx iconic external tubular steel front + rear roll-cage bars!
+            for (endSign in listOf(-1f, 1f)) {
+              addSweptTube(
+                listOf(
+                  Vec3(endSign * 0.33f, -0.10f, -0.25f),
+                  Vec3(endSign * 0.43f, 0.24f, -0.23f),
+                  Vec3(endSign * 0.40f, 0.52f, -0.16f),
+                  Vec3(endSign * 0.40f, 0.52f, 0.16f),
+                  Vec3(endSign * 0.43f, 0.24f, 0.23f),
+                  Vec3(endSign * 0.33f, -0.10f, 0.25f),
+                ),
+                listOf(0.020f, 0.022f, 0.022f, 0.022f, 0.022f, 0.020f),
+                12,
+              )
+            }
+            // High square MX jump-pad saddle block
+            addRoundedBlock(0f, 0.52f, 0f, 0.28f, 0.055f, 0.175f, exp = 0.65f)
+          } else {
+            // Contoured Top Saddle Pad Crown + Aero Rear Fin
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(-0.30f, 0.48f, 0f, 0.040f, 0.15f, exp = 0.78f),
+                LoftStation(0.0f, 0.53f, 0f, 0.052f, 0.18f, exp = 0.72f),
+                LoftStation(0.30f, 0.48f, 0f, 0.040f, 0.15f, exp = 0.78f),
+              ),
+              ringSegs = 18,
+            )
+          }
+
           addSweptTube(
             listOf(Vec3(-0.32f, -0.18f, -0.14f), Vec3(-0.46f, -0.58f, -0.14f), Vec3(-0.46f, -0.58f, 0.14f), Vec3(-0.32f, -0.18f, 0.14f)),
             listOf(0.015f, 0.015f, 0.015f, 0.015f),
@@ -1234,7 +1426,6 @@ internal object Pev3dGltfBuilder {
           addCurvedFender(0f, -0.12f, 0.60f * ws, 130f, 225f, 0.15f)
         }
 
-        // Sculpted Metallic Paint Side Fairing Panels (OEM automotive finish)
         newBucket("frame_graphics", "frame", PevPbrMaterialId.RACING_LIVERY, finish.bodyRgb, finish.paintMetallic, 0.15f, clearcoat = 0.96f, isShell = true) {
           for (zSign in listOf(-1f, 1f)) {
             addLoftedBodyX(
@@ -1248,7 +1439,6 @@ internal object Pev3dGltfBuilder {
           }
         }
 
-        // Ergonomic Contoured Gripper-Foam Kinetic Power Pads (curved shin & calf hooks!)
         newBucket("frame_pads", "frame", PevPbrMaterialId.QUILTED_LEATHER, saddleVinyl, 0.04f, 0.78f, isShell = true) {
           for (zSign in listOf(-1f, 1f)) {
             addSweptTube(
@@ -1264,25 +1454,32 @@ internal object Pev3dGltfBuilder {
           }
         }
 
-        // Hollow-Bore Hub Stator Collar with Bronze Stator Accent
         newBucket("motor", "motor", PevPbrMaterialId.BRUSHED_METAL, statorBronze, 0.92f, 0.24f) {
           addDisc(0f, -0.12f, 0f, 0.23f * ws, 0.265f, 32)
         }
 
-        // Dual CNC Anodized Suspension Stanchions & Coiled Springs
         newBucket("suspension", "suspension", PevPbrMaterialId.BRUSHED_METAL, finish.accentRgb, 0.93f, 0.18f, clearcoat = 0.45f) {
-          addTube(Vec3(-0.22f, -0.18f, 0.26f), Vec3(-0.22f, 0.50f, 0.26f), 0.034f, 16)
-          addTube(Vec3(-0.22f, -0.18f, -0.26f), Vec3(-0.22f, 0.50f, -0.26f), 0.034f, 16)
-          addHelicalSpring(Vec3(-0.22f, -0.08f, 0.26f), Vec3(-0.22f, 0.34f, 0.26f), 0.046f, 0.0085f, 6.5f)
-          addHelicalSpring(Vec3(-0.22f, -0.08f, -0.26f), Vec3(-0.22f, 0.34f, -0.26f), 0.046f, 0.0085f, 6.5f)
+          if (isArmored) {
+            // Vertical Fastace CNC side stanchions
+            addTube(Vec3(-0.20f, -0.18f, 0.26f), Vec3(-0.20f, 0.54f, 0.26f), 0.036f, 16)
+            addTube(Vec3(-0.20f, -0.18f, -0.26f), Vec3(-0.20f, 0.54f, -0.26f), 0.036f, 16)
+            addTube(Vec3(0.20f, -0.18f, 0.26f), Vec3(0.20f, 0.54f, 0.26f), 0.030f, 14)
+            addTube(Vec3(0.20f, -0.18f, -0.26f), Vec3(0.20f, 0.54f, -0.26f), 0.030f, 14)
+            addHelicalSpring(Vec3(-0.20f, -0.06f, 0.26f), Vec3(-0.20f, 0.36f, 0.26f), 0.046f, 0.0085f, 6.5f)
+            addHelicalSpring(Vec3(-0.20f, -0.06f, -0.26f), Vec3(-0.20f, 0.36f, -0.26f), 0.046f, 0.0085f, 6.5f)
+          } else {
+            // Exposed rear linkage coil shock (S22 / Begode Extreme style)
+            addTube(Vec3(-0.22f, -0.14f, 0.23f), Vec3(-0.22f, 0.46f, 0.23f), 0.028f, 14)
+            addTube(Vec3(-0.22f, -0.14f, -0.23f), Vec3(-0.22f, 0.46f, -0.23f), 0.028f, 14)
+            addTube(Vec3(-0.34f, -0.10f, 0f), Vec3(-0.18f, 0.42f, 0f), 0.034f, 16)
+            addHelicalSpring(Vec3(-0.34f, -0.08f, 0f), Vec3(-0.19f, 0.38f, 0f), 0.056f, 0.010f, 6.0f)
+          }
         }
 
-        // Finned Aluminum Mainboard Heatsink
         newBucket("controller", "controller", PevPbrMaterialId.BRUSHED_METAL, focHeatsink, 0.90f, 0.22f) {
           addFinnedBlock(0f, 0.46f, 0f, 0.22f, 0.068f, 0.17f, 9)
         }
 
-        // Top Flush OLED Display Panel + Retractable Trolley Handle
         newBucket("cockpit", "cockpit", PevPbrMaterialId.TFT_SCREEN, tftWhite, 0.08f, 0.08f, floatArrayOf(0.55f, 0.58f, 0.62f), isScreen = true) {
           addQuad(
             Vec3(-0.10f, 0.585f, 0.085f),
@@ -1304,12 +1501,11 @@ internal object Pev3dGltfBuilder {
         }
       }
 
-      Pev3dArchetype.HYDROFOIL -> {
+      Pev3dBlueprintType.HYDROFOIL_EFOIL -> {
         // Lofted Marine Metallic Gelcoat & Carbon eFoil Surf Hull
         newBucket("frame", "frame", PevPbrMaterialId.RACING_LIVERY, finish.bodyRgb, finish.paintMetallic, 0.14f, clearcoat = 0.98f, isShell = true) {
           addSculptedDeckHull(0f, 0.14f, 0f, 1.10f, 0.072f, 0.39f, 22, 20)
         }
-        // Contoured Dark EVA Hydro Traction Pad & Rider Foot Straps
         newBucket("frame_deckpad", "frame", PevPbrMaterialId.TIRE_RUBBER, rubberNeutral, 0.03f, 0.88f) {
           addLoftedBodyX(
             stations = listOf(
@@ -1338,7 +1534,6 @@ internal object Pev3dGltfBuilder {
         newBucket("controller", "controller", PevPbrMaterialId.BRUSHED_METAL, focHeatsink, 0.90f, 0.20f) {
           addFinnedBlock(0.36f, 0.155f, 0f, 0.13f, 0.040f, 0.14f, 7)
         }
-        // Sculpted Airfoil Carbon Hydrodynamic Mast Strut
         newBucket("suspension", "suspension", PevPbrMaterialId.CARBON_WEAVE, matteCarbon, 0.34f, 0.18f, clearcoat = 0.92f) {
           addLoftedBodyX(
             stations = listOf(
@@ -1351,7 +1546,6 @@ internal object Pev3dGltfBuilder {
           )
           addRoundedBlock(-0.04f, 0.08f, 0f, 0.16f, 0.022f, 0.080f, exp = 0.55f)
         }
-        // Hydrodynamic Brushed Titanium Motor Torpedo Pod + Shroud + 3-Blade Prop
         newBucket("motor", "motor", PevPbrMaterialId.BRUSHED_METAL, satinTitanium, 0.94f, 0.16f) {
           addSweptTube(
             listOf(Vec3(-0.56f, -0.76f, 0f), Vec3(-0.22f, -0.76f, 0f), Vec3(0.28f, -0.76f, 0f), Vec3(0.48f, -0.76f, 0f)),
@@ -1373,7 +1567,6 @@ internal object Pev3dGltfBuilder {
             )
           }
         }
-        // Tapered Swept NACA-0012 Carbon Main Wing & Rear Stabilizer
         newBucket("brakes", "brakes", PevPbrMaterialId.CARBON_WEAVE, matteCarbon, 0.34f, 0.18f, clearcoat = 0.92f) {
           addAirfoilWing(0.26f, -0.76f, 0f, chord = 0.24f, thickness = 0.18f, halfSpan = 0.56f, sweepBack = 0.11f)
           addAirfoilWing(-0.46f, -0.76f, 0f, chord = 0.14f, thickness = 0.14f, halfSpan = 0.28f, sweepBack = 0.06f)
@@ -1383,14 +1576,208 @@ internal object Pev3dGltfBuilder {
         }
       }
 
-      else -> {
-        // EMOTO & EBIKE — Sculpted Motorcycle / Super-eBike Chassis, Organic Tank Shrouds & Contoured Saddle
-        val isBike = archetype == Pev3dArchetype.EBIKE
-        val wheelR = (if (isBike) 0.42f else 0.40f) * ws
-        addDetailedWheel("wheel_rear", -0.92f * ls, -0.34f, 0f, wheelR, 0.22f, if (isBike) "motor" else "frame", isBike)
-        addDetailedWheel("wheel_front", 0.94f * ls, -0.34f, 0f, wheelR, 0.20f, "brakes", false)
+      Pev3dBlueprintType.EBIKE_MOUNTAIN_FULLSUSP -> {
+        // Authentic Sloped Enduro e-MTB (Turbo Levo 29"/27.5" Mullet, diamond chassis, dropper saddle, integrated downtube pack)
+        val wheelR = 0.44f * ws
+        addDetailedWheel("wheel_rear", -0.90f * ls, -0.34f, 0f, wheelR * 0.95f, 0.15f, "motor", false)
+        addDetailedWheel("wheel_front", 0.94f * ls, -0.34f, 0f, wheelR, 0.15f, "brakes", false)
 
-        // Hydroformed 6061 Aluminum / Forged Carbon Perimeter Frame + Subframe + Swingarm + Fenders
+        newBucket("frame", "frame", PevPbrMaterialId.RACING_LIVERY, finish.bodyRgb, finish.paintMetallic, 0.20f, clearcoat = 0.88f, isShell = true) {
+          // Top tube + seat tube + steep downtube integrated diamond triangle
+          addTube(Vec3(0.46f * ls, 0.45f, 0f), Vec3(-0.22f * ls, 0.22f, 0f), 0.034f, 14)
+          addTube(Vec3(-0.22f * ls, 0.26f, 0f), Vec3(-0.18f * ls, -0.22f, 0f), 0.032f, 14)
+          // Tapered headtube
+          addTube(Vec3(0.49f * ls, 0.50f, 0f), Vec3(0.43f * ls, 0.30f, 0f), 0.042f, 14)
+          // Rear Horst-link chainstays & seatstays
+          for (zSign in listOf(-1f, 1f)) {
+            addTube(Vec3(-0.18f * ls, -0.22f, zSign * 0.075f), Vec3(-0.90f * ls, -0.34f, zSign * 0.105f), 0.020f, 10)
+            addTube(Vec3(-0.24f * ls, 0.12f, zSign * 0.068f), Vec3(-0.90f * ls, -0.34f, zSign * 0.105f), 0.017f, 10)
+          }
+          // Seatpost + Dropper stanchion
+          addTube(Vec3(-0.22f * ls, 0.26f, 0f), Vec3(-0.30f * ls, 0.50f, 0f), 0.020f, 12)
+          // Cranks + Pedals
+          addTube(Vec3(-0.18f * ls, -0.22f, -0.11f), Vec3(-0.18f * ls, -0.22f, 0.11f), 0.020f, 10)
+          addTube(Vec3(-0.18f * ls, -0.22f, -0.11f), Vec3(-0.08f * ls, -0.38f, -0.14f), 0.014f, 8)
+          addTube(Vec3(-0.18f * ls, -0.22f, 0.11f), Vec3(-0.28f * ls, -0.06f, 0.14f), 0.014f, 8)
+          addRoundedBlock(-0.08f * ls, -0.38f, -0.20f, 0.048f, 0.011f, 0.042f, exp = 0.55f)
+          addRoundedBlock(-0.28f * ls, -0.06f, 0.20f, 0.048f, 0.011f, 0.042f, exp = 0.55f)
+          addCurvedFender(0.94f * ls, -0.34f, wheelR + 0.04f, 56f, 118f, 0.082f)
+        }
+
+        // Sleek Recessed Integrated Downtube Battery Pack
+        newBucket("battery", "battery", PevPbrMaterialId.BATTERY_PACK, batteryAlloy, 0.65f, 0.34f) {
+          addSweptTube(
+            listOf(Vec3(0.41f * ls, 0.31f, 0f), Vec3(0.14f * ls, 0.04f, 0f), Vec3(-0.12f * ls, -0.18f, 0f)),
+            listOf(0.056f, 0.068f, 0.058f),
+            16,
+          )
+        }
+
+        // Narrow Trail Dropper MTB Saddle
+        newBucket("frame_seat", "frame", PevPbrMaterialId.QUILTED_LEATHER, saddleVinyl, 0.03f, 0.78f, isShell = true) {
+          addLoftedBodyX(
+            stations = listOf(
+              LoftStation(-0.42f * ls, 0.52f, 0f, 0.024f, 0.088f, exp = 0.80f),
+              LoftStation(-0.30f * ls, 0.51f, 0f, 0.028f, 0.072f, exp = 0.82f),
+              LoftStation(-0.18f * ls, 0.52f, 0f, 0.018f, 0.036f, exp = 0.90f),
+            ),
+            ringSegs = 16,
+          )
+        }
+
+        // Single-Crown MTB Suspension Fork + Inclined Inline Piggyback Rear Shock
+        newBucket("suspension", "suspension", PevPbrMaterialId.BRUSHED_METAL, finish.accentRgb, 0.94f, 0.16f, clearcoat = 0.45f) {
+          addTube(Vec3(0.45f * ls, 0.32f, -0.095f), Vec3(0.71f * ls, 0.02f, -0.095f), 0.026f, 14)
+          addTube(Vec3(0.45f * ls, 0.32f, 0.095f), Vec3(0.71f * ls, 0.02f, 0.095f), 0.026f, 14)
+          addRoundedBlock(0.47f * ls, 0.32f, 0f, 0.040f, 0.018f, 0.122f, exp = 0.55f)
+          // Inclined Trunnion Rear Trail Shock under Top Tube
+          addTube(Vec3(0.18f * ls, 0.30f, 0f), Vec3(-0.14f * ls, 0.16f, 0f), 0.028f, 12)
+          addHelicalSpring(Vec3(0.12f * ls, 0.27f, 0f), Vec3(-0.08f * ls, 0.18f, 0f), 0.038f, 0.007f, 5.0f)
+        }
+        newBucket("suspension_chrome", "suspension", PevPbrMaterialId.BRUSHED_METAL, anodizedBlack, 0.86f, 0.22f) {
+          addTube(Vec3(0.71f * ls, 0.02f, -0.095f), Vec3(0.94f * ls, -0.34f, -0.095f), 0.030f, 14)
+          addTube(Vec3(0.71f * ls, 0.02f, 0.095f), Vec3(0.94f * ls, -0.34f, 0.095f), 0.030f, 14)
+        }
+
+        // Compact Brose/Shimano Trail Mid-Drive Motor + Derailleur Chainline
+        newBucket("motor", "motor", PevPbrMaterialId.BRUSHED_METAL, motorHousing, 0.88f, 0.26f) {
+          addTube(Vec3(-0.18f * ls, -0.22f, -0.095f), Vec3(-0.18f * ls, -0.22f, 0.095f), 0.094f, 22)
+        }
+        newBucket("motor_drive", "motor", PevPbrMaterialId.BRUSHED_METAL, steelChain, 0.92f, 0.22f) {
+          addSprocketWithTeeth(-0.18f * ls, -0.22f, -0.105f, 0.068f, 0.010f, 14)
+          addSprocketWithTeeth(-0.90f * ls, -0.34f, -0.105f, 0.120f * ws, 0.010f, 20)
+          addChainDriveLoop(Vec3(-0.18f * ls, -0.22f, -0.105f), Vec3(-0.90f * ls, -0.34f, -0.105f), 0.068f, 0.120f * ws, -0.105f)
+        }
+        newBucket("brakes", "brakes", PevPbrMaterialId.CARBON_WEAVE, anodizedBlack, 0.35f, 0.42f) {
+          addSweptTube(listOf(Vec3(0.50f * ls, 0.62f, 0.24f), Vec3(0.68f * ls, 0.10f, 0.12f), Vec3(0.94f * ls, -0.30f, 0.11f)), listOf(0.006f, 0.006f, 0.006f), 8)
+          addSweptTube(listOf(Vec3(0.50f * ls, 0.62f, -0.24f), Vec3(-0.18f * ls, -0.18f, -0.06f), Vec3(-0.84f * ls, -0.30f, 0.10f)), listOf(0.006f, 0.006f, 0.006f), 8)
+        }
+        newBucket("controller", "controller", PevPbrMaterialId.BRUSHED_METAL, focHeatsink, 0.90f, 0.22f) {
+          addFinnedBlock(0.18f * ls, 0.12f, 0f, 0.075f, 0.042f, 0.065f, 5)
+        }
+        newBucket("cockpit", "cockpit", PevPbrMaterialId.BRUSHED_METAL, anodizedBlack, 0.88f, 0.24f) {
+          addSweptTube(
+            listOf(Vec3(0.45f * ls, 0.62f, -0.44f), Vec3(0.50f * ls, 0.62f, -0.16f), Vec3(0.49f * ls, 0.60f, 0f), Vec3(0.50f * ls, 0.62f, 0.16f), Vec3(0.45f * ls, 0.62f, 0.44f)),
+            listOf(0.020f, 0.018f, 0.022f, 0.018f, 0.020f),
+            12,
+          )
+          addRoundedBlock(0.46f * ls, 0.44f, 0f, 0.040f, 0.025f, 0.056f, exp = 0.55f)
+        }
+        newBucket("cockpit_grips", "cockpit", PevPbrMaterialId.TIRE_RUBBER, rubberNeutral, 0.04f, 0.86f) {
+          addTube(Vec3(0.49f * ls, 0.62f, 0.28f), Vec3(0.45f * ls, 0.62f, 0.45f), 0.027f, 12)
+          addTube(Vec3(0.49f * ls, 0.62f, -0.28f), Vec3(0.45f * ls, 0.62f, -0.45f), 0.027f, 12)
+        }
+        newBucket("cockpit_tft", "cockpit", PevPbrMaterialId.TFT_SCREEN, tftWhite, 0.08f, 0.08f, floatArrayOf(0.55f, 0.58f, 0.62f), isScreen = true) {
+          addQuad(Vec3(0.32f * ls, 0.39f, 0.038f), Vec3(0.32f * ls, 0.39f, -0.038f), Vec3(0.24f * ls, 0.34f, -0.038f), Vec3(0.24f * ls, 0.34f, 0.038f), Vec3(0.5f, 0.86f, 0f), 1f, 1f, wire = false)
+        }
+      }
+
+      Pev3dBlueprintType.EBIKE_COMPACT_FOLDING -> {
+        // Low Step-Through Mono-Tube Utility / Folding Chassis (Lectric XP 3.0 / RadRunner 3 Plus)
+        val wheelR = 0.34f * ws
+        addDetailedWheel("wheel_rear", -0.84f * ls, -0.42f, 0f, wheelR, 0.22f, "motor", true)
+        addDetailedWheel("wheel_front", 0.84f * ls, -0.42f, 0f, wheelR, 0.22f, "brakes", false)
+
+        newBucket("frame", "frame", PevPbrMaterialId.RACING_LIVERY, finish.bodyRgb, finish.paintMetallic, 0.18f, clearcoat = 0.90f, isShell = true) {
+          // Deep step-through swept mono-tube spar + central folding hinge knuckle
+          addSweptTube(
+            listOf(
+              Vec3(0.50f * ls, 0.22f, 0f),
+              Vec3(0.28f * ls, -0.10f, 0f),
+              Vec3(0.02f * ls, -0.20f, 0f),
+              Vec3(-0.24f * ls, -0.18f, 0f),
+            ),
+            listOf(0.056f, 0.062f, 0.062f, 0.056f),
+            16,
+          )
+          // Machined folding center clamp hinge block
+          addRoundedBlock(0.10f * ls, -0.16f, 0f, 0.065f, 0.068f, 0.072f, exp = 0.45f)
+          // Seat tube + Tall folding stem column + headtube
+          addTube(Vec3(-0.22f * ls, -0.20f, 0f), Vec3(-0.32f * ls, 0.40f, 0f), 0.038f, 14)
+          addTube(Vec3(0.54f * ls, 0.32f, 0f), Vec3(0.46f * ls, 0.06f, 0f), 0.048f, 14)
+          addTube(Vec3(0.54f * ls, 0.32f, 0f), Vec3(0.42f * ls, 0.80f, 0f), 0.032f, 14)
+          // Heavy-duty Rear Utility Cargo Rack + Pannier Side Rails
+          for (zSign in listOf(-1f, 1f)) {
+            addTube(Vec3(-0.26f * ls, -0.18f, zSign * 0.08f), Vec3(-0.84f * ls, -0.42f, zSign * 0.12f), 0.024f, 10)
+            addTube(Vec3(-0.30f * ls, 0.12f, zSign * 0.12f), Vec3(-0.84f * ls, 0.10f, zSign * 0.12f), 0.018f, 10)
+            addTube(Vec3(-0.84f * ls, -0.42f, zSign * 0.12f), Vec3(-0.84f * ls, 0.10f, zSign * 0.12f), 0.018f, 10)
+            addTube(Vec3(-0.56f * ls, -0.30f, zSign * 0.12f), Vec3(-0.56f * ls, 0.11f, zSign * 0.12f), 0.015f, 10)
+          }
+          addRoundedBlock(-0.58f * ls, 0.12f, 0f, 0.28f * ls, 0.018f, 0.135f, exp = 0.50f)
+          // Utility Crankset
+          addTube(Vec3(-0.20f * ls, -0.20f, -0.11f), Vec3(-0.20f * ls, -0.20f, 0.11f), 0.020f, 10)
+          addTube(Vec3(-0.20f * ls, -0.20f, -0.11f), Vec3(-0.10f * ls, -0.36f, -0.14f), 0.014f, 8)
+          addTube(Vec3(-0.20f * ls, -0.20f, 0.11f), Vec3(-0.30f * ls, -0.04f, 0.14f), 0.014f, 8)
+          addRoundedBlock(-0.10f * ls, -0.36f, -0.20f, 0.048f, 0.011f, 0.042f, exp = 0.55f)
+          addRoundedBlock(-0.30f * ls, -0.04f, 0.20f, 0.048f, 0.011f, 0.042f, exp = 0.55f)
+          addCurvedFender(0.84f * ls, -0.42f, wheelR + 0.05f, 45f, 130f, 0.118f)
+          addCurvedFender(-0.84f * ls, -0.42f, wheelR + 0.05f, 65f, 170f, 0.118f)
+        }
+
+        newBucket("frame_seat", "frame", PevPbrMaterialId.QUILTED_LEATHER, saddleVinyl, 0.03f, 0.78f, isShell = true) {
+          addLoftedBodyX(
+            stations = listOf(
+              LoftStation(-0.46f * ls, 0.42f, 0f, 0.044f, 0.125f, exp = 0.76f),
+              LoftStation(-0.32f * ls, 0.41f, 0f, 0.048f, 0.135f, exp = 0.74f),
+              LoftStation(-0.18f * ls, 0.42f, 0f, 0.034f, 0.075f, exp = 0.85f),
+            ),
+            ringSegs = 18,
+          )
+        }
+
+        // Rear-of-seatpost Slide-out Battery + Compact Controller
+        newBucket("battery", "battery", PevPbrMaterialId.BATTERY_PACK, batteryAlloy, 0.68f, 0.34f) {
+          addRoundedBlock(-0.16f * ls, 0.02f, 0f, 0.085f, 0.21f, 0.085f, exp = 0.48f)
+        }
+        newBucket("controller", "controller", PevPbrMaterialId.BRUSHED_METAL, focHeatsink, 0.90f, 0.22f) {
+          addFinnedBlock(0.14f * ls, -0.18f, 0f, 0.085f, 0.052f, 0.095f, 6)
+        }
+        newBucket("suspension", "suspension", PevPbrMaterialId.BRUSHED_METAL, finish.accentRgb, 0.92f, 0.18f) {
+          addTube(Vec3(0.50f * ls, 0.10f, -0.11f), Vec3(0.84f * ls, -0.42f, -0.11f), 0.028f, 14)
+          addTube(Vec3(0.50f * ls, 0.10f, 0.11f), Vec3(0.84f * ls, -0.42f, 0.11f), 0.028f, 14)
+        }
+        newBucket("motor", "motor", PevPbrMaterialId.BRUSHED_METAL, motorHousing, 0.90f, 0.24f) {
+          addDisc(-0.84f * ls, -0.42f, 0f, wheelR * 0.44f, 0.18f, 28)
+        }
+        newBucket("motor_drive", "motor", PevPbrMaterialId.BRUSHED_METAL, steelChain, 0.92f, 0.22f) {
+          addSprocketWithTeeth(-0.20f * ls, -0.20f, -0.115f, 0.075f, 0.010f, 16)
+          addSprocketWithTeeth(-0.84f * ls, -0.42f, -0.115f, 0.105f * ws, 0.010f, 18)
+          addChainDriveLoop(Vec3(-0.20f * ls, -0.20f, -0.115f), Vec3(-0.84f * ls, -0.42f, -0.115f), 0.075f, 0.105f * ws, -0.115f)
+        }
+        newBucket("brakes", "brakes", PevPbrMaterialId.CARBON_WEAVE, anodizedBlack, 0.35f, 0.42f) {
+          addSweptTube(listOf(Vec3(0.42f * ls, 0.78f, 0.20f), Vec3(0.62f * ls, 0.02f, 0.12f), Vec3(0.84f * ls, -0.36f, 0.12f)), listOf(0.006f, 0.006f, 0.006f), 8)
+          addSweptTube(listOf(Vec3(0.42f * ls, 0.78f, -0.20f), Vec3(0.20f * ls, -0.12f, -0.04f), Vec3(-0.78f * ls, -0.36f, 0.12f)), listOf(0.006f, 0.006f, 0.006f), 8)
+        }
+        newBucket("cockpit", "cockpit", PevPbrMaterialId.BRUSHED_METAL, anodizedBlack, 0.88f, 0.24f) {
+          addSweptTube(
+            listOf(Vec3(0.39f * ls, 0.82f, -0.38f), Vec3(0.43f * ls, 0.82f, -0.14f), Vec3(0.42f * ls, 0.80f, 0f), Vec3(0.43f * ls, 0.82f, 0.14f), Vec3(0.39f * ls, 0.82f, 0.38f)),
+            listOf(0.021f, 0.019f, 0.024f, 0.019f, 0.021f),
+            12,
+          )
+          addRoundedBlock(0.45f * ls, 0.86f, 0f, 0.044f, 0.036f, 0.078f, exp = 0.55f)
+        }
+        newBucket("cockpit_grips", "cockpit", PevPbrMaterialId.TIRE_RUBBER, rubberNeutral, 0.04f, 0.86f) {
+          addTube(Vec3(0.42f * ls, 0.82f, 0.22f), Vec3(0.39f * ls, 0.82f, 0.39f), 0.028f, 12)
+          addTube(Vec3(0.42f * ls, 0.82f, -0.22f), Vec3(0.39f * ls, 0.82f, -0.39f), 0.028f, 12)
+        }
+        newBucket("cockpit_tft", "cockpit", PevPbrMaterialId.TFT_SCREEN, tftWhite, 0.08f, 0.08f, floatArrayOf(0.55f, 0.58f, 0.62f), isScreen = true) {
+          addQuad(Vec3(0.495f * ls, 0.845f, 0.068f), Vec3(0.495f * ls, 0.845f, -0.068f), Vec3(0.472f * ls, 0.895f, -0.068f), Vec3(0.472f * ls, 0.895f, 0.068f), Vec3(0.92f, 0.38f, 0f), 1f, 1f, wire = false)
+        }
+      }
+
+      else -> {
+        // EMOTO_MX_DIRT, EMOTO_STREET_NAKED & EBIKE_SCRAMBLER_MOPED
+        val isStreet = bp == Pev3dBlueprintType.EMOTO_STREET_NAKED
+        val isScrambler = bp == Pev3dBlueprintType.EBIKE_SCRAMBLER_MOPED
+        val wheelR = when {
+          isScrambler -> 0.41f * ws
+          isStreet -> 0.38f * ws
+          else -> 0.42f * ws
+        }
+        val tireW = if (isScrambler) 0.26f else if (isStreet) 0.24f else 0.20f
+        addDetailedWheel("wheel_rear", -0.92f * ls, -0.34f, 0f, wheelR, tireW, if (isScrambler) "motor" else "frame", isScrambler)
+        addDetailedWheel("wheel_front", 0.94f * ls, -0.34f, 0f, wheelR, if (isScrambler) 0.25f else 0.19f, "brakes", false)
+
         newBucket(
           nodeName = "frame",
           partKey = "frame",
@@ -1401,19 +1788,23 @@ internal object Pev3dGltfBuilder {
           clearcoat = 0.85f,
           isShell = true,
         ) {
-          // Twin curved perimeter frame spars (flowing from headtube down to swingarm pivot)
           for (zSign in listOf(-1f, 1f)) {
-            addSweptTube(
-              listOf(
-                Vec3(0.47f * ls, 0.40f, zSign * 0.042f),
-                Vec3(0.18f * ls, 0.32f, zSign * 0.105f),
-                Vec3(-0.18f * ls, 0.14f, zSign * 0.115f),
-                Vec3(-0.26f * ls, -0.15f, zSign * 0.112f),
-              ),
-              listOf(0.036f, 0.042f, 0.038f, 0.036f),
-              14,
-            )
-            // Rear subframe trellis supporting the tail cowl & saddle
+            if (isScrambler) {
+              // Vintage twin-bar horizontal café/scrambler top frame (Super73 / Onyx RCR)
+              addTube(Vec3(0.47f * ls, 0.42f, zSign * 0.055f), Vec3(-0.72f * ls, 0.30f, zSign * 0.088f), 0.028f, 12)
+              addTube(Vec3(0.43f * ls, 0.28f, zSign * 0.065f), Vec3(-0.22f * ls, -0.15f, zSign * 0.105f), 0.026f, 12)
+            } else {
+              addSweptTube(
+                listOf(
+                  Vec3(0.47f * ls, 0.40f, zSign * 0.042f),
+                  Vec3(0.18f * ls, 0.32f, zSign * 0.105f),
+                  Vec3(-0.18f * ls, 0.14f, zSign * 0.115f),
+                  Vec3(-0.26f * ls, -0.15f, zSign * 0.112f),
+                ),
+                listOf(0.036f, 0.042f, 0.038f, 0.036f),
+                14,
+              )
+            }
             addSweptTube(
               listOf(
                 Vec3(-0.16f * ls, 0.22f, zSign * 0.082f),
@@ -1424,21 +1815,18 @@ internal object Pev3dGltfBuilder {
               10,
             )
             addTube(Vec3(-0.24f * ls, -0.12f, zSign * 0.105f), Vec3(-0.58f * ls, 0.25f, zSign * 0.082f), 0.018f, 10)
-            // Sculpted forged rear swingarm
             addSweptTube(
               listOf(Vec3(-0.24f * ls, -0.15f, zSign * 0.115f), Vec3(-0.58f * ls, -0.25f, zSign * 0.125f), Vec3(-0.92f * ls, -0.34f, zSign * 0.118f)),
               listOf(0.042f, 0.035f, 0.028f),
               14,
             )
           }
-          // Headtube & Lower Downtube Cradle
           addTube(Vec3(0.49f * ls, 0.50f, 0f), Vec3(0.43f * ls, 0.30f, 0f), 0.046f, 16)
           addSweptTube(
             listOf(Vec3(0.45f * ls, 0.34f, 0f), Vec3(0.32f * ls, 0.06f, 0f), Vec3(0.06f * ls, -0.18f, 0f), Vec3(-0.20f * ls, -0.18f, 0f)),
             listOf(0.044f, 0.042f, 0.040f, 0.040f),
             16,
           )
-          // Curved Under-Chassis Bash Skidplate
           addLoftedBodyX(
             stations = listOf(
               LoftStation(-0.22f * ls, -0.22f, 0f, 0.016f, 0.10f, exp = 0.60f),
@@ -1447,44 +1835,84 @@ internal object Pev3dGltfBuilder {
             ),
             ringSegs = 14,
           )
-          if (isBike) {
-            // eBike Cranks & Tapered Pedals
+          if (isScrambler) {
+            // Cranks & Pedals + café fenders
             addTube(Vec3(-0.24f * ls, -0.22f, -0.12f), Vec3(-0.24f * ls, -0.22f, 0.12f), 0.022f, 12)
             addTube(Vec3(-0.24f * ls, -0.22f, -0.12f), Vec3(-0.14f * ls, -0.38f, -0.15f), 0.015f, 10)
             addTube(Vec3(-0.24f * ls, -0.22f, 0.12f), Vec3(-0.34f * ls, -0.08f, 0.15f), 0.015f, 10)
             addRoundedBlock(-0.14f * ls, -0.38f, -0.22f, 0.052f, 0.013f, 0.046f, exp = 0.55f)
             addRoundedBlock(-0.34f * ls, -0.08f, 0.22f, 0.052f, 0.013f, 0.046f, exp = 0.55f)
-            addCurvedFender(0.94f * ls, -0.34f, wheelR + 0.06f, 52f, 125f, 0.105f)
-            addCurvedFender(-0.92f * ls, -0.34f, wheelR + 0.05f, 70f, 170f, 0.115f)
+            addCurvedFender(0.94f * ls, -0.34f, wheelR + 0.06f, 52f, 125f, 0.132f)
+            addCurvedFender(-0.92f * ls, -0.34f, wheelR + 0.05f, 70f, 170f, 0.135f)
           } else {
-            // EMOTO CNC Dropped Footpegs + High Sculpted MX Fender
+            // CNC Dropped Footpegs + High MX Beak (Dirt) or Low Street Tire Huggers (Street Naked)
             addTube(Vec3(-0.30f * ls, -0.26f, -0.12f), Vec3(-0.30f * ls, -0.26f, -0.27f), 0.016f, 10)
             addTube(Vec3(-0.30f * ls, -0.26f, 0.12f), Vec3(-0.30f * ls, -0.26f, 0.27f), 0.016f, 10)
             addRoundedBlock(-0.30f * ls, -0.26f, -0.23f, 0.042f, 0.011f, 0.050f, exp = 0.50f)
             addRoundedBlock(-0.30f * ls, -0.26f, 0.23f, 0.042f, 0.011f, 0.050f, exp = 0.50f)
-            addCurvedFender(0.94f * ls, -0.34f, wheelR + 0.14f, 45f, 118f, 0.115f)
-            addCurvedFender(-0.92f * ls, -0.34f, wheelR + 0.06f, 70f, 165f, 0.125f)
+            if (isStreet) {
+              addCurvedFender(0.94f * ls, -0.34f, wheelR + 0.045f, 52f, 122f, 0.118f)
+              addCurvedFender(-0.92f * ls, -0.34f, wheelR + 0.045f, 95f, 175f, 0.125f)
+            } else {
+              // High-mounted MX front dirt beak
+              addCurvedFender(0.84f * ls, -0.12f, wheelR + 0.05f, 45f, 118f, 0.115f)
+              addCurvedFender(-0.92f * ls, -0.34f, wheelR + 0.06f, 70f, 165f, 0.125f)
+            }
           }
-          // Tail Tidy Bracket
           addTube(Vec3(-0.70f * ls, 0.25f, 0f), Vec3(-0.88f * ls, 0.15f, 0f), 0.014f, 8)
         }
 
-        // Sculpted Automotive Metallic Clearcoat Tank Cover, Sweeping Radiator Shrouds, Tail Cowl & Number Fairing!
+        // OEM Clearcoat Bodywork Fairings differentiated by chassis class
         newBucket("frame_graphics", "frame", PevPbrMaterialId.RACING_LIVERY, finish.bodyRgb, finish.paintMetallic, 0.15f, clearcoat = 0.96f, isShell = true) {
-          // Sculpted Upper Tank / Battery Top Fairing flowing seamlessly from headtube into the saddle
-          addLoftedBodyX(
-            stations = listOf(
-              LoftStation(-0.14f * ls, 0.30f, 0f, 0.058f, 0.115f, exp = 0.78f, topFlat = 0.92f),
-              LoftStation(0.06f * ls, 0.36f, 0f, 0.092f, 0.155f, exp = 0.74f, topFlat = 0.90f),
-              LoftStation(0.28f * ls, 0.38f, 0f, 0.098f, 0.162f, exp = 0.72f, topFlat = 0.92f),
-              LoftStation(0.45f * ls, 0.37f, 0f, 0.062f, 0.118f, exp = 0.80f),
-              LoftStation(0.52f * ls, 0.36f, 0f, 0.032f, 0.068f, exp = 0.90f),
-            ),
-            ringSegs = 22,
-            uTile = 1.6f,
-            vTile = 1.4f,
-          )
-          // Sweeping Left & Right Sculpted Side Tank Shrouds
+          if (isStreet) {
+            // Muscular wide sculpted café/street motorcycle fuel tank & sculpted lower belly pan cowl
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(-0.14f * ls, 0.30f, 0f, 0.065f, 0.125f, exp = 0.78f, topFlat = 0.92f),
+                LoftStation(0.10f * ls, 0.41f, 0f, 0.125f, 0.205f, exp = 0.72f, topFlat = 0.90f),
+                LoftStation(0.32f * ls, 0.42f, 0f, 0.120f, 0.198f, exp = 0.72f, topFlat = 0.92f),
+                LoftStation(0.48f * ls, 0.37f, 0f, 0.072f, 0.130f, exp = 0.80f),
+              ),
+              ringSegs = 22,
+              uTile = 1.6f,
+              vTile = 1.4f,
+            )
+            // Aerodynamic lower belly pan fairing
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(-0.16f * ls, -0.22f, 0f, 0.052f, 0.135f, exp = 0.65f),
+                LoftStation(0.14f * ls, -0.20f, 0f, 0.068f, 0.150f, exp = 0.62f),
+                LoftStation(0.36f * ls, -0.10f, 0f, 0.058f, 0.120f, exp = 0.70f),
+              ),
+              ringSegs = 16,
+            )
+          } else if (isScrambler) {
+            // Vintage retro café/moped top-tube teardrop tank shroud (Onyx RCR / Super73 style)
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(-0.02f * ls, 0.44f, 0f, 0.052f, 0.115f, exp = 0.78f),
+                LoftStation(0.20f * ls, 0.45f, 0f, 0.072f, 0.142f, exp = 0.72f),
+                LoftStation(0.40f * ls, 0.44f, 0f, 0.055f, 0.112f, exp = 0.80f),
+              ),
+              ringSegs = 20,
+            )
+          } else {
+            // Sharp MX Dirt Tank + Number Plate Shrouds
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(-0.14f * ls, 0.30f, 0f, 0.058f, 0.115f, exp = 0.78f, topFlat = 0.92f),
+                LoftStation(0.06f * ls, 0.36f, 0f, 0.092f, 0.155f, exp = 0.74f, topFlat = 0.90f),
+                LoftStation(0.28f * ls, 0.38f, 0f, 0.098f, 0.162f, exp = 0.72f, topFlat = 0.92f),
+                LoftStation(0.45f * ls, 0.37f, 0f, 0.062f, 0.118f, exp = 0.80f),
+                LoftStation(0.52f * ls, 0.36f, 0f, 0.032f, 0.068f, exp = 0.90f),
+              ),
+              ringSegs = 22,
+              uTile = 1.6f,
+              vTile = 1.4f,
+            )
+            // High MX Front Number Plate Fairing
+            addSculptedPod(0.57f * ls, 0.56f, 0f, 0.034f, 0.105f, 0.100f, exp = 0.65f, rings = 8, segs = 16)
+          }
           for (zSign in listOf(-1f, 1f)) {
             addLoftedBodyX(
               stations = listOf(
@@ -1495,7 +1923,6 @@ internal object Pev3dGltfBuilder {
               ),
               ringSegs = 16,
             )
-            // Contoured Rear Tail Side Number Panels
             addLoftedBodyX(
               stations = listOf(
                 LoftStation(-0.76f * ls, 0.27f, zSign * 0.088f, 0.032f, 0.016f, exp = 0.78f),
@@ -1505,7 +1932,6 @@ internal object Pev3dGltfBuilder {
               ringSegs = 14,
             )
           }
-          // Tapered Rear Tail Ducktail Cowl
           addLoftedBodyX(
             stations = listOf(
               LoftStation(-0.84f * ls, 0.28f, 0f, 0.024f, 0.072f, exp = 0.78f),
@@ -1514,50 +1940,52 @@ internal object Pev3dGltfBuilder {
             ),
             ringSegs = 16,
           )
-          // Sculpted Front Fairing / Windscreen Cowl above Headlight
-          if (!isBike) {
-            addSculptedPod(0.56f * ls, 0.56f, 0f, 0.034f, 0.095f, 0.092f, exp = 0.68f, rings = 8, segs = 16)
+        }
+
+        // Bench Saddle (Scrambler flat long quilted vs MX stepped vs Street sport sculpted)
+        newBucket("frame_seat", "frame", PevPbrMaterialId.QUILTED_LEATHER, saddleVinyl, 0.03f, 0.74f, isShell = true) {
+          if (isScrambler) {
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(-0.74f * ls, 0.42f, 0f, 0.050f, 0.125f, exp = 0.72f, topFlat = 0.90f),
+                LoftStation(-0.42f * ls, 0.42f, 0f, 0.054f, 0.132f, exp = 0.70f, topFlat = 0.90f),
+                LoftStation(-0.10f * ls, 0.42f, 0f, 0.048f, 0.118f, exp = 0.74f, topFlat = 0.90f),
+              ),
+              ringSegs = 20,
+            )
+          } else {
+            addLoftedBodyX(
+              stations = listOf(
+                LoftStation(-0.70f * ls, 0.34f, 0f, 0.036f, 0.098f, exp = 0.85f, topFlat = 0.85f),
+                LoftStation(-0.54f * ls, 0.35f, 0f, 0.058f, 0.128f, exp = 0.76f, topFlat = 0.82f),
+                LoftStation(-0.34f * ls, 0.33f, 0f, 0.056f, 0.132f, exp = 0.76f, topFlat = 0.80f),
+                LoftStation(-0.16f * ls, 0.33f, 0f, 0.050f, 0.114f, exp = 0.80f, topFlat = 0.85f),
+                LoftStation(-0.02f * ls, 0.36f, 0f, 0.034f, 0.088f, exp = 0.88f, topFlat = 0.90f),
+              ),
+              ringSegs = 20,
+              uTile = 2.0f,
+              vTile = 1.6f,
+            )
           }
         }
 
-        // Ergonomic Sculpted Ribbed Gripper Moto Saddle (curved waisted seat profile — NOT 2 bricks!)
-        newBucket("frame_seat", "frame", PevPbrMaterialId.QUILTED_LEATHER, saddleVinyl, 0.03f, 0.74f, isShell = true) {
-          addLoftedBodyX(
-            stations = listOf(
-              LoftStation(-0.70f * ls, 0.34f, 0f, 0.036f, 0.098f, exp = 0.85f, topFlat = 0.85f),
-              LoftStation(-0.54f * ls, 0.35f, 0f, 0.058f, 0.128f, exp = 0.76f, topFlat = 0.82f),
-              LoftStation(-0.34f * ls, 0.33f, 0f, 0.056f, 0.132f, exp = 0.76f, topFlat = 0.80f),
-              LoftStation(-0.16f * ls, 0.33f, 0f, 0.050f, 0.114f, exp = 0.80f, topFlat = 0.85f),
-              LoftStation(-0.02f * ls, 0.36f, 0f, 0.034f, 0.088f, exp = 0.88f, topFlat = 0.90f),
-            ),
-            ringSegs = 20,
-            uTile = 2.0f,
-            vTile = 1.6f,
-          )
-        }
-
-        // USD Dual-Crown Inverted Forks (Anodized Gold/Crimson Upper + Chrome Stanchions + Sculpted Guards + Mono-Shock)
         newBucket("suspension", "suspension", PevPbrMaterialId.BRUSHED_METAL, finish.accentRgb, 0.94f, 0.16f, clearcoat = 0.45f) {
           addTube(Vec3(0.47f * ls, 0.59f, -0.118f), Vec3(0.70f * ls, 0.14f, -0.118f), 0.038f, 16)
           addTube(Vec3(0.47f * ls, 0.59f, 0.118f), Vec3(0.70f * ls, 0.14f, 0.118f), 0.038f, 16)
           addRoundedBlock(0.50f * ls, 0.52f, 0f, 0.048f, 0.020f, 0.152f, exp = 0.55f)
           addRoundedBlock(0.57f * ls, 0.37f, 0f, 0.048f, 0.020f, 0.152f, exp = 0.55f)
-          // Rear Coiled Mono-shock Spring
           addHelicalSpring(Vec3(-0.30f * ls, 0.18f, 0f), Vec3(-0.54f * ls, -0.16f, 0f), 0.052f, 0.010f, 6.5f)
         }
-        // Polished Chrome Lower Fork Stanchions & Shock Damper Shaft
         newBucket("suspension_chrome", "suspension", PevPbrMaterialId.BRUSHED_METAL, cncAluminum, 0.98f, 0.10f) {
           addTube(Vec3(0.70f * ls, 0.14f, -0.118f), Vec3(0.94f * ls, -0.34f, -0.118f), 0.027f, 16)
           addTube(Vec3(0.70f * ls, 0.14f, 0.118f), Vec3(0.94f * ls, -0.34f, 0.118f), 0.027f, 16)
           addTube(Vec3(-0.26f * ls, 0.24f, 0f), Vec3(-0.58f * ls, -0.22f, 0f), 0.022f, 12)
         }
-        // Molded Dark Carbon Lower Fork Guards
         newBucket("suspension_guards", "suspension", PevPbrMaterialId.CARBON_WEAVE, anodizedBlack, 0.28f, 0.32f) {
           addSculptedPod(0.84f * ls, -0.12f, -0.146f, 0.038f, 0.135f, 0.018f, exp = 0.65f)
           addSculptedPod(0.84f * ls, -0.12f, 0.146f, 0.038f, 0.135f, 0.018f, exp = 0.65f)
         }
 
-        // Realistic Anodized Dark Graphite High-Voltage Battery Pack tucked cleanly in main frame triangle
         newBucket("battery", "battery", PevPbrMaterialId.BATTERY_PACK, batteryAlloy, 0.68f, 0.34f) {
           addLoftedBodyX(
             stations = listOf(
@@ -1571,13 +1999,11 @@ internal object Pev3dGltfBuilder {
           )
         }
 
-        // Realistic Satin-Gunmetal Ribbed IPM Mid-Drive Motor + Bronze Stator Collar + CNC Sprockets & Chain
         newBucket("motor", "motor", PevPbrMaterialId.BRUSHED_METAL, motorHousing, 0.88f, 0.26f) {
           addTube(Vec3(-0.14f * ls, -0.22f, -0.142f), Vec3(-0.14f * ls, -0.22f, 0.142f), 0.128f, 24)
           addFinnedBlock(-0.14f * ls, -0.22f, 0f, 0.105f, 0.115f, 0.125f, 7)
         }
         newBucket("motor_drive", "motor", PevPbrMaterialId.BRUSHED_METAL, steelChain, 0.92f, 0.22f) {
-          // High-voltage armored phase cable
           addSweptTube(
             listOf(Vec3(0.28f * ls, -0.02f, 0.06f), Vec3(0.12f * ls, -0.14f, 0.11f), Vec3(-0.10f * ls, -0.20f, 0.12f)),
             listOf(0.014f, 0.014f, 0.014f),
@@ -1586,16 +2012,9 @@ internal object Pev3dGltfBuilder {
           val sprocketZ = -0.140f
           addSprocketWithTeeth(-0.14f * ls, -0.22f, sprocketZ, 0.072f, 0.012f, 16)
           addSprocketWithTeeth(-0.92f * ls, -0.34f, sprocketZ, 0.162f * ws, 0.012f, 26)
-          addChainDriveLoop(
-            frontAxle = Vec3(-0.14f * ls, -0.22f, sprocketZ),
-            rearAxle = Vec3(-0.92f * ls, -0.34f, sprocketZ),
-            rFront = 0.072f,
-            rRear = 0.162f * ws,
-            zOffset = sprocketZ,
-          )
+          addChainDriveLoop(Vec3(-0.14f * ls, -0.22f, sprocketZ), Vec3(-0.92f * ls, -0.34f, sprocketZ), 0.072f, 0.162f * ws, sprocketZ)
         }
 
-        // Braided Hydraulic Brake Lines
         newBucket("brakes", "brakes", PevPbrMaterialId.CARBON_WEAVE, anodizedBlack, 0.35f, 0.42f) {
           addSweptTube(
             listOf(Vec3(0.50f * ls, 0.64f, 0.25f), Vec3(0.62f * ls, 0.32f, 0.16f), Vec3(0.76f * ls, 0.02f, 0.14f), Vec3(0.98f * ls, -0.28f, 0.14f)),
@@ -1609,39 +2028,41 @@ internal object Pev3dGltfBuilder {
           )
         }
 
-        // Finned Billet Aluminum FOC Inverter Controller (realistic machined aluminum, NOT glowing pink!)
         newBucket("controller", "controller", PevPbrMaterialId.BRUSHED_METAL, focHeatsink, 0.90f, 0.22f, clearcoat = 0.30f) {
           addFinnedBlock(0.34f * ls, -0.02f, 0f, 0.098f, 0.118f, 0.110f, 8)
         }
 
-        // Tapered MX Handlebars, Levers, Master Cylinders, Sculpted Teardrop Bar-End Mirrors & TFT Bezel
         newBucket("cockpit", "cockpit", PevPbrMaterialId.BRUSHED_METAL, anodizedBlack, 0.88f, 0.24f) {
+          val barY = if (isStreet) 0.58f else 0.66f
+          val barZ = if (isStreet) 0.38f else 0.45f
           addSweptTube(
-            listOf(Vec3(0.45f * ls, 0.66f, -0.45f), Vec3(0.51f * ls, 0.65f, -0.18f), Vec3(0.50f * ls, 0.63f, 0f), Vec3(0.51f * ls, 0.65f, 0.18f), Vec3(0.45f * ls, 0.66f, 0.45f)),
+            listOf(Vec3(0.45f * ls, barY, -barZ), Vec3(0.51f * ls, barY - 0.01f, -0.18f), Vec3(0.50f * ls, barY - 0.02f, 0f), Vec3(0.51f * ls, barY - 0.01f, 0.18f), Vec3(0.45f * ls, barY, barZ)),
             listOf(0.023f, 0.020f, 0.025f, 0.020f, 0.023f),
             14,
           )
-          addTube(Vec3(0.51f * ls, 0.65f, -0.26f), Vec3(0.58f * ls, 0.64f, -0.39f), 0.008f, 8)
-          addTube(Vec3(0.51f * ls, 0.65f, 0.26f), Vec3(0.58f * ls, 0.64f, 0.39f), 0.008f, 8)
-          addSculptedPod(0.51f * ls, 0.67f, -0.25f, 0.022f, 0.016f, 0.026f, exp = 0.65f)
-          addSculptedPod(0.51f * ls, 0.67f, 0.25f, 0.022f, 0.016f, 0.026f, exp = 0.65f)
-          addRoundedBlock(0.54f * ls, 0.68f, 0f, 0.052f, 0.038f, 0.094f, exp = 0.55f)
-          // Sculpted Aerodynamic Bar-End Mirrors
-          addTube(Vec3(0.45f * ls, 0.66f, 0.44f), Vec3(0.43f * ls, 0.77f, 0.48f), 0.009f, 8)
-          addTube(Vec3(0.45f * ls, 0.66f, -0.44f), Vec3(0.43f * ls, 0.77f, -0.48f), 0.009f, 8)
-          addSculptedPod(0.42f * ls, 0.79f, 0.50f, 0.018f, 0.036f, 0.056f, exp = 0.82f)
-          addSculptedPod(0.42f * ls, 0.79f, -0.50f, 0.018f, 0.036f, 0.056f, exp = 0.82f)
+          addTube(Vec3(0.51f * ls, barY, -0.26f), Vec3(0.58f * ls, barY - 0.02f, -0.37f), 0.008f, 8)
+          addTube(Vec3(0.51f * ls, barY, 0.26f), Vec3(0.58f * ls, barY - 0.02f, 0.37f), 0.008f, 8)
+          addSculptedPod(0.51f * ls, barY + 0.01f, -0.25f, 0.022f, 0.016f, 0.026f, exp = 0.65f)
+          addSculptedPod(0.51f * ls, barY + 0.01f, 0.25f, 0.022f, 0.016f, 0.026f, exp = 0.65f)
+          addRoundedBlock(0.54f * ls, barY + 0.02f, 0f, 0.052f, 0.038f, 0.094f, exp = 0.55f)
+          addTube(Vec3(0.45f * ls, barY, barZ - 0.01f), Vec3(0.43f * ls, barY + 0.11f, barZ + 0.03f), 0.009f, 8)
+          addTube(Vec3(0.45f * ls, barY, -(barZ - 0.01f)), Vec3(0.43f * ls, barY + 0.11f, -(barZ + 0.03f)), 0.009f, 8)
+          addSculptedPod(0.42f * ls, barY + 0.13f, barZ + 0.05f, 0.018f, 0.036f, 0.056f, exp = 0.82f)
+          addSculptedPod(0.42f * ls, barY + 0.13f, -(barZ + 0.05f), 0.018f, 0.036f, 0.056f, exp = 0.82f)
         }
         newBucket("cockpit_grips", "cockpit", PevPbrMaterialId.TIRE_RUBBER, rubberNeutral, 0.04f, 0.86f) {
-          addTube(Vec3(0.495f * ls, 0.655f, 0.27f), Vec3(0.45f * ls, 0.66f, 0.46f), 0.030f, 12)
-          addTube(Vec3(0.495f * ls, 0.655f, -0.27f), Vec3(0.45f * ls, 0.66f, -0.46f), 0.030f, 12)
+          val barY = if (isStreet) 0.58f else 0.66f
+          val barZ = if (isStreet) 0.39f else 0.46f
+          addTube(Vec3(0.495f * ls, barY - 0.005f, 0.26f), Vec3(0.45f * ls, barY, barZ), 0.030f, 12)
+          addTube(Vec3(0.495f * ls, barY - 0.005f, -0.26f), Vec3(0.45f * ls, barY, -barZ), 0.030f, 12)
         }
         newBucket("cockpit_tft", "cockpit", PevPbrMaterialId.TFT_SCREEN, tftWhite, 0.08f, 0.08f, floatArrayOf(0.55f, 0.58f, 0.62f), isScreen = true) {
+          val barY = if (isStreet) 0.58f else 0.66f
           addQuad(
-            Vec3(0.580f * ls, 0.655f, 0.082f),
-            Vec3(0.580f * ls, 0.655f, -0.082f),
-            Vec3(0.556f * ls, 0.715f, -0.082f),
-            Vec3(0.556f * ls, 0.715f, 0.082f),
+            Vec3(0.580f * ls, barY - 0.005f, 0.082f),
+            Vec3(0.580f * ls, barY - 0.005f, -0.082f),
+            Vec3(0.556f * ls, barY + 0.055f, -0.082f),
+            Vec3(0.556f * ls, barY + 0.055f, 0.082f),
             Vec3(0.92f, 0.38f, 0f),
             1f,
             1f,
@@ -1652,26 +2073,41 @@ internal object Pev3dGltfBuilder {
     }
 
     // Sculpted Round/Oval Bi-LED Projector Headlight Pod, Flush Tapered LED Taillight & Teardrop Turn Signals
-    val hlX = when (archetype) {
-      Pev3dArchetype.EUC -> 0.37f
-      Pev3dArchetype.HYDROFOIL -> 1.04f
+    val hlX = when (bp) {
+      Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE,
+      Pev3dBlueprintType.EUC_AERO_TRAIL -> 0.37f
+      Pev3dBlueprintType.HYDROFOIL_EFOIL -> 1.04f
+      Pev3dBlueprintType.EBIKE_COMPACT_FOLDING -> 0.56f * ls
+      Pev3dBlueprintType.EBIKE_MOUNTAIN_FULLSUSP -> 0.58f * ls
       else -> 0.64f * ls
     }
-    val hlY = when (archetype) {
-      Pev3dArchetype.EUC -> 0.28f
-      Pev3dArchetype.HYDROFOIL -> 0.19f
-      Pev3dArchetype.SCOOTER -> 0.66f
+    val hlY = when (bp) {
+      Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE,
+      Pev3dBlueprintType.EUC_AERO_TRAIL -> 0.28f
+      Pev3dBlueprintType.HYDROFOIL_EFOIL -> 0.19f
+      Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD,
+      Pev3dBlueprintType.SCOOTER_TUBULAR_RACING,
+      Pev3dBlueprintType.SCOOTER_MONOCOQUE_AERO -> 0.66f
+      Pev3dBlueprintType.EBIKE_COMPACT_FOLDING -> 0.22f
+      Pev3dBlueprintType.EBIKE_MOUNTAIN_FULLSUSP -> 0.50f
+      Pev3dBlueprintType.EBIKE_SCRAMBLER_MOPED -> 0.48f
       else -> 0.44f
     }
-    val tailX = when (archetype) {
-      Pev3dArchetype.EUC -> -0.37f
-      Pev3dArchetype.HYDROFOIL -> -1.03f
+    val tailX = when (bp) {
+      Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE,
+      Pev3dBlueprintType.EUC_AERO_TRAIL -> -0.37f
+      Pev3dBlueprintType.HYDROFOIL_EFOIL -> -1.03f
+      Pev3dBlueprintType.EBIKE_COMPACT_FOLDING -> -0.84f * ls
       else -> -0.82f * ls
     }
-    val tailY = when (archetype) {
-      Pev3dArchetype.EUC -> 0.25f
-      Pev3dArchetype.HYDROFOIL -> 0.16f
-      Pev3dArchetype.SCOOTER -> -0.17f
+    val tailY = when (bp) {
+      Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE,
+      Pev3dBlueprintType.EUC_AERO_TRAIL -> 0.25f
+      Pev3dBlueprintType.HYDROFOIL_EFOIL -> 0.16f
+      Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD,
+      Pev3dBlueprintType.SCOOTER_TUBULAR_RACING,
+      Pev3dBlueprintType.SCOOTER_MONOCOQUE_AERO -> -0.17f
+      Pev3dBlueprintType.EBIKE_COMPACT_FOLDING -> 0.12f
       else -> 0.27f
     }
 
@@ -1751,7 +2187,7 @@ internal object Pev3dGltfBuilder {
     addTurnSignalPod("signal_left_rear", "frame", rSigX, rSigY, -0.10f, -sigZSpan - 0.05f)
     addTurnSignalPod("signal_right_rear", "frame", rSigX, rSigY, 0.10f, sigZSpan + 0.05f)
 
-    return packBucketsToGlb(buckets, wheelAxleCenters, explodeDirs, xrayShell)
+    return RawSceneBuckets(buckets, wheelAxleCenters, explodeDirs)
   }
 
   private fun packBucketsToGlb(
@@ -1950,7 +2386,7 @@ internal object Pev3dGltfBuilder {
     val binBytes = binStream.toByteArray()
 
     val root = JSONObject()
-      .put("asset", JSONObject().put("version", "2.0").put("generator", "RuralERides-VulkanPBR-GLB"))
+      .put("asset", JSONObject().put("version", "2.0").put("generator", "VoltTrail-PBR-GLB"))
       .put("extensionsUsed", JSONArray().put("KHR_materials_clearcoat"))
       .put("scene", 0)
       .put("scenes", JSONArray().put(JSONObject().put("nodes", rootNodeIndices)))

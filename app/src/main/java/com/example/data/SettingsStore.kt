@@ -98,6 +98,9 @@ class SettingsStore(private val context: Context) {
     val PSI_REMINDER_DAYS = intPreferencesKey("psi_reminder_days")
     val MAINT_REMINDER_KM = intPreferencesKey("maint_reminder_km")
     val WEATHER_ALERTS = booleanPreferencesKey("weather_alerts")
+    val AI_NOTIFS_ENABLED = booleanPreferencesKey("ai_notifs_enabled")
+    val SOCIAL_NOTIFS_ENABLED = booleanPreferencesKey("social_notifs_enabled")
+    val DM_NOTIFS_ENABLED = booleanPreferencesKey("dm_notifs_enabled")
     val QUIET_HOURS = booleanPreferencesKey("quiet_hours")
     val QUIET_START = intPreferencesKey("quiet_start")
     val QUIET_END = intPreferencesKey("quiet_end")
@@ -230,6 +233,10 @@ class SettingsStore(private val context: Context) {
     val MATCH_PACE_FILTER = stringPreferencesKey("match_pace_filter")
     val MATCH_TERRAIN_FILTER = stringPreferencesKey("match_terrain_filter")
     val MATCH_VIBE_FILTER = stringPreferencesKey("match_vibe_filter")
+    val CUSTOM_VOICE_PROFILES_JSON = stringPreferencesKey("custom_voice_profiles_json")
+    val ACTIVE_CUSTOM_VOICE_ID = stringPreferencesKey("active_custom_voice_id")
+    val TTS_PRELOAD_BUFFER_ENABLED = booleanPreferencesKey("tts_preload_buffer_enabled")
+    val TTS_PRELOAD_BUFFER_DEPTH = intPreferencesKey("tts_preload_buffer_depth")
   }
 
   val settingsFlow: Flow<MasterSettings> =
@@ -239,8 +246,10 @@ class SettingsStore(private val context: Context) {
           AppThemePreset.entries.firstOrNull { it.id == prefs[Keys.THEME_PRESET] }
             ?: AppThemePreset.LIME,
         visualStyle =
-          VisualStyleMode.entries.firstOrNull { it.id == prefs[Keys.VISUAL_STYLE] }
-            ?: VisualStyleMode.DARK_STUDIO,
+          com.example.ui.theme.sanitizeVisualStyleForSeason(
+            VisualStyleMode.entries.firstOrNull { it.id == prefs[Keys.VISUAL_STYLE] }
+              ?: VisualStyleMode.DARK_STUDIO
+          ),
         colorModeOverride =
           ColorModeOverride.entries.firstOrNull { it.id == prefs[Keys.COLOR_MODE_OVERRIDE] }
             ?: ColorModeOverride.DARK,
@@ -332,6 +341,9 @@ class SettingsStore(private val context: Context) {
         psiReminderDays = prefs[Keys.PSI_REMINDER_DAYS] ?: 3,
         maintReminderKm = prefs[Keys.MAINT_REMINDER_KM] ?: 250,
         weatherAlertsEnabled = prefs[Keys.WEATHER_ALERTS] ?: true,
+        aiNotifsEnabled = prefs[Keys.AI_NOTIFS_ENABLED] ?: true,
+        socialNotifsEnabled = prefs[Keys.SOCIAL_NOTIFS_ENABLED] ?: true,
+        dmNotifsEnabled = prefs[Keys.DM_NOTIFS_ENABLED] ?: true,
         quietHoursEnabled = prefs[Keys.QUIET_HOURS] ?: false,
         quietStartHour = prefs[Keys.QUIET_START] ?: 22,
         quietEndHour = prefs[Keys.QUIET_END] ?: 7,
@@ -373,7 +385,9 @@ class SettingsStore(private val context: Context) {
         ttsSpeechRate = prefs[Keys.TTS_SPEECH_RATE] ?: 1.03f,
         ttsPitch = prefs[Keys.TTS_PITCH] ?: 1.0f,
         autoMuteAlertsWhileRiding = prefs[Keys.AUTO_MUTE_RIDING] ?: false,
-        navDefaultProfile = NavRouteProfile.entries.firstOrNull { it.id == prefs[Keys.NAV_DEFAULT_PROFILE] } ?: NavRouteProfile.PEV_BIKE_LANE,
+        navDefaultProfile =
+          NavRouteProfile.entries.firstOrNull { it.id == prefs[Keys.NAV_DEFAULT_PROFILE] }
+            ?: NavRouteProfile.FAST_STREET,
         navVoiceGuidance = prefs[Keys.NAV_VOICE_GUIDANCE] ?: true,
         navAutoReroute = prefs[Keys.NAV_AUTO_REROUTE] ?: true,
         navAvoidHighways = prefs[Keys.NAV_AVOID_HIGHWAYS] ?: true,
@@ -478,6 +492,10 @@ class SettingsStore(private val context: Context) {
         matchVibeFilter =
           RiderScheduleVibe.entries.firstOrNull { it.id == prefs[Keys.MATCH_VIBE_FILTER] }
             ?: RiderScheduleVibe.ANY,
+        customVoiceProfilesJson = prefs[Keys.CUSTOM_VOICE_PROFILES_JSON] ?: "[]",
+        activeCustomVoiceId = prefs[Keys.ACTIVE_CUSTOM_VOICE_ID] ?: "",
+        ttsPreloadBufferEnabled = prefs[Keys.TTS_PRELOAD_BUFFER_ENABLED] ?: true,
+        ttsPreloadBufferDepth = (prefs[Keys.TTS_PRELOAD_BUFFER_DEPTH] ?: 2).coerceIn(1, 5),
       )
     }
 
@@ -573,6 +591,9 @@ class SettingsStore(private val context: Context) {
         put("psiReminderDays", s.psiReminderDays)
         put("maintReminderKm", s.maintReminderKm)
         put("weatherAlertsEnabled", s.weatherAlertsEnabled)
+        put("aiNotifsEnabled", s.aiNotifsEnabled)
+        put("socialNotifsEnabled", s.socialNotifsEnabled)
+        put("dmNotifsEnabled", s.dmNotifsEnabled)
         put("quietHoursEnabled", s.quietHoursEnabled)
         put("quietStartHour", s.quietStartHour)
         put("quietEndHour", s.quietEndHour)
@@ -705,6 +726,10 @@ class SettingsStore(private val context: Context) {
         put("matchPaceFilter", s.matchPaceFilter.id)
         put("matchTerrainFilter", s.matchTerrainFilter.id)
         put("matchVibeFilter", s.matchVibeFilter.id)
+        put("customVoiceProfilesJson", s.customVoiceProfilesJson)
+        put("activeCustomVoiceId", s.activeCustomVoiceId)
+        put("ttsPreloadBufferEnabled", s.ttsPreloadBufferEnabled)
+        put("ttsPreloadBufferDepth", s.ttsPreloadBufferDepth)
       }
       .toString(2)
   }
@@ -813,6 +838,9 @@ class SettingsStore(private val context: Context) {
           psiReminderDays = obj.optInt("psiReminderDays", current.psiReminderDays),
           maintReminderKm = obj.optInt("maintReminderKm", current.maintReminderKm),
           weatherAlertsEnabled = obj.optBoolean("weatherAlertsEnabled", current.weatherAlertsEnabled),
+          aiNotifsEnabled = obj.optBoolean("aiNotifsEnabled", current.aiNotifsEnabled),
+          socialNotifsEnabled = obj.optBoolean("socialNotifsEnabled", current.socialNotifsEnabled),
+          dmNotifsEnabled = obj.optBoolean("dmNotifsEnabled", current.dmNotifsEnabled),
           quietHoursEnabled = obj.optBoolean("quietHoursEnabled", current.quietHoursEnabled),
           quietStartHour = obj.optInt("quietStartHour", current.quietStartHour),
           quietEndHour = obj.optInt("quietEndHour", current.quietEndHour),
@@ -959,6 +987,10 @@ class SettingsStore(private val context: Context) {
           matchVibeFilter =
             RiderScheduleVibe.entries.firstOrNull { it.id == obj.optString("matchVibeFilter") }
               ?: current.matchVibeFilter,
+          customVoiceProfilesJson = obj.optString("customVoiceProfilesJson", current.customVoiceProfilesJson),
+          activeCustomVoiceId = obj.optString("activeCustomVoiceId", current.activeCustomVoiceId),
+          ttsPreloadBufferEnabled = obj.optBoolean("ttsPreloadBufferEnabled", current.ttsPreloadBufferEnabled),
+          ttsPreloadBufferDepth = obj.optInt("ttsPreloadBufferDepth", current.ttsPreloadBufferDepth),
         )
       writeAll(restored)
     }
@@ -1043,6 +1075,9 @@ class SettingsStore(private val context: Context) {
       prefs[Keys.PSI_REMINDER_DAYS] = updated.psiReminderDays
       prefs[Keys.MAINT_REMINDER_KM] = updated.maintReminderKm
       prefs[Keys.WEATHER_ALERTS] = updated.weatherAlertsEnabled
+      prefs[Keys.AI_NOTIFS_ENABLED] = updated.aiNotifsEnabled
+      prefs[Keys.SOCIAL_NOTIFS_ENABLED] = updated.socialNotifsEnabled
+      prefs[Keys.DM_NOTIFS_ENABLED] = updated.dmNotifsEnabled
       prefs[Keys.QUIET_HOURS] = updated.quietHoursEnabled
       prefs[Keys.QUIET_START] = updated.quietStartHour
       prefs[Keys.QUIET_END] = updated.quietEndHour
@@ -1175,6 +1210,10 @@ class SettingsStore(private val context: Context) {
       prefs[Keys.MATCH_PACE_FILTER] = updated.matchPaceFilter.id
       prefs[Keys.MATCH_TERRAIN_FILTER] = updated.matchTerrainFilter.id
       prefs[Keys.MATCH_VIBE_FILTER] = updated.matchVibeFilter.id
+      prefs[Keys.CUSTOM_VOICE_PROFILES_JSON] = updated.customVoiceProfilesJson
+      prefs[Keys.ACTIVE_CUSTOM_VOICE_ID] = updated.activeCustomVoiceId
+      prefs[Keys.TTS_PRELOAD_BUFFER_ENABLED] = updated.ttsPreloadBufferEnabled
+      prefs[Keys.TTS_PRELOAD_BUFFER_DEPTH] = updated.ttsPreloadBufferDepth.coerceIn(1, 5)
     }
   }
 }

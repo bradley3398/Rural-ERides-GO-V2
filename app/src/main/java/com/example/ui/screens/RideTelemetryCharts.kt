@@ -23,30 +23,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Terrain
-import androidx.compose.material.icons.filled.ZoomIn
-import androidx.compose.material.icons.filled.ZoomOut
+import com.example.ui.compartments.GraphInspectChartType
+import com.example.ui.compartments.GraphInspectData
+import com.example.ui.compartments.GraphInspectModal
+import com.example.ui.compartments.GraphInspectSlice
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,32 +56,21 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.unit.sp
 import com.example.core.PevBatteryPhysics
 import com.example.data.MasterSettings
 import com.example.data.PevVehicle
 import com.example.data.RideSession
-import com.example.ui.components.applyThemeToMapView
-import com.example.ui.components.createSafeMapView
-import com.example.ui.components.configureSmoothMapPanning
-import com.example.ui.components.defaultMapLayerId
 import com.example.ui.components.distUnitLabel
 import com.example.ui.components.formatDistValue
 import com.example.ui.components.formatSpeedValue
-import com.example.ui.components.resolveMapTileSource
 import com.example.ui.components.speedUnitLabel
-import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -107,20 +92,25 @@ internal fun haversineMeters(a: GeoPoint, b: GeoPoint): Double {
   val dLng = (b.longitude - a.longitude) * PI / 180.0
   val lat1 = a.latitude * PI / 180.0
   val lat2 = b.latitude * PI / 180.0
-  val h = sin(dLat / 2) * sin(dLat / 2) + cos(lat1) * cos(lat2) * sin(dLng / 2) * sin(dLng / 2)
-  return 2 * r * atan2(sqrt(h), sqrt(1 - h))
+  val rawH = sin(dLat / 2) * sin(dLat / 2) + cos(lat1) * cos(lat2) * sin(dLng / 2) * sin(dLng / 2)
+  val h = rawH.coerceIn(0.0, 1.0)
+  return 2 * r * atan2(sqrt(h), sqrt(1.0 - h))
 }
 
 internal fun buildRideSpeedProfile(ride: RideSession, distanceUnit: String): List<Double> {
-  val maxSpd = formatSpeedValue(ride.maxSpeedKmh.coerceAtLeast(0.0), distanceUnit)
-  val avgSpd = formatSpeedValue(ride.avgSpeedKmh.coerceAtLeast(0.0), distanceUnit).coerceAtMost(maxSpd)
+  val safeMax = ride.maxSpeedKmh.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+  val safeAvg = ride.avgSpeedKmh.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+  val maxSpd = formatSpeedValue(safeMax, distanceUnit).takeIf { it.isFinite() } ?: 0.0
+  val avgSpd = (formatSpeedValue(safeAvg, distanceUnit).takeIf { it.isFinite() } ?: 0.0).coerceAtMost(maxSpd)
   if (maxSpd <= 0.1 && avgSpd <= 0.1) return List(16) { 0.0 }
 
   val pts = parseRideTrackPoints(ride)
   val buckets = 16
   val rawWeights =
     if (pts.size >= 4) {
-      val segDists = (1 until pts.size).map { i -> haversineMeters(pts[i - 1], pts[i]) }
+      val segDists = (1 until pts.size).map { i ->
+        haversineMeters(pts[i - 1], pts[i]).takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+      }
       val maxSeg = segDists.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
       List(buckets) { idx ->
         val frac = idx.toDouble() / (buckets - 1)
@@ -151,14 +141,17 @@ internal fun buildRideSpeedProfile(ride: RideSession, distanceUnit: String): Lis
 }
 
 internal fun buildRideElevationProfile(ride: RideSession, distanceUnit: String): List<Double> {
-  val totalGain = formatElevationValue(ride.elevationGainM.coerceAtLeast(0.0), distanceUnit)
+  val safeElev = ride.elevationGainM.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+  val totalGain = formatElevationValue(safeElev, distanceUnit).takeIf { it.isFinite() } ?: 0.0
   val buckets = 16
   if (totalGain <= 0.1) return List(buckets) { 0.0 }
 
   val pts = parseRideTrackPoints(ride)
   val increments =
     if (pts.size >= 4) {
-      val segDists = (1 until pts.size).map { i -> haversineMeters(pts[i - 1], pts[i]).coerceAtLeast(0.5) }
+      val segDists = (1 until pts.size).map { i ->
+        (haversineMeters(pts[i - 1], pts[i]).takeIf { it.isFinite() } ?: 0.5).coerceAtLeast(0.5)
+      }
       List(buckets - 1) { idx ->
         val segIdx = (idx.toDouble() / (buckets - 1) * segDists.size).toInt().coerceIn(0, segDists.lastIndex)
         val gradeWave = 0.6 + 0.4 * abs(sin((idx + 1) * 0.7))
@@ -189,18 +182,20 @@ internal fun computeRideEnergySplit(
   secondary: Color,
   tertiary: Color,
 ): List<PieSliceData> {
-  val totalWh = ride.whUsed.coerceAtLeast(1.0)
-  val climbWhRaw = (100.0 * 9.81 * ride.elevationGainM.coerceAtLeast(0.0)) / (3600.0 * 0.78)
+  val totalWh = (ride.whUsed.takeIf { it.isFinite() } ?: 1.0).coerceAtLeast(1.0)
+  val safeElev = ride.elevationGainM.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+  val safeAvgSpd = ride.avgSpeedKmh.takeIf { it.isFinite() && it >= 0.0 } ?: 18.0
+  val climbWhRaw = (100.0 * 9.81 * safeElev) / (3600.0 * 0.78)
   val climbWh = climbWhRaw.coerceIn(0.0, totalWh * 0.55)
   val remaining = (totalWh - climbWh).coerceAtLeast(0.0)
-  val speedRatio = (ride.avgSpeedKmh / 45.0).coerceIn(0.15, 0.75)
+  val speedRatio = (safeAvgSpd / 45.0).coerceIn(0.15, 0.75)
   val aeroWh = remaining * speedRatio
   val rollingWh = (remaining - aeroWh).coerceAtLeast(0.1)
   return listOf(
     PieSliceData("Rolling Resistance", rollingWh, primary),
     PieSliceData("Aero & Speed Surge", aeroWh.coerceAtLeast(0.1), secondary),
     PieSliceData("Hill Climb Work", climbWh.coerceAtLeast(0.0), tertiary),
-  ).filter { it.value > 0.05 }
+  ).filter { it.value.isFinite() && it.value > 0.05 }
 }
 
 /**
@@ -214,8 +209,10 @@ internal fun TelemetryDonutPieChart(
   reducedMotion: Boolean = false,
   chartSize: Dp = 136.dp,
   modifier: Modifier = Modifier,
+  onTap: (() -> Unit)? = null,
 ) {
-  if (slices.isEmpty()) {
+  val safeSlices = remember(slices) { slices.filter { it.value.isFinite() && it.value > 0.0 } }
+  if (safeSlices.isEmpty()) {
     Text(
       "Not enough telemetry recorded for this chart yet.",
       style = MaterialTheme.typography.bodySmall,
@@ -224,14 +221,14 @@ internal fun TelemetryDonutPieChart(
     )
     return
   }
-  val total = slices.sumOf { it.value }.coerceAtLeast(0.01)
-  val slicesKey = "${slices.size}_${slices.first().label}_${total.toInt()}"
+  val total = safeSlices.sumOf { it.value }.coerceAtLeast(0.01)
+  val slicesKey = "${safeSlices.size}_${safeSlices.first().label}_${total.toInt()}"
   val sweepProgressState = rememberChartEntranceState(triggerKey = slicesKey, reducedMotion = reducedMotion, durationMs = 700)
   var hoveredSliceIdx by remember(slicesKey) { mutableStateOf<Int?>(null) }
   val pulseAlphaState = rememberNeonPulseAlphaState(active = hoveredSliceIdx != null, reducedMotion = reducedMotion)
 
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    val activeSlice = hoveredSliceIdx?.let { slices.getOrNull(it) }
+    val activeSlice = hoveredSliceIdx?.let { safeSlices.getOrNull(it) }
     NeonChartTooltipOverlay(
       visible = activeSlice != null,
       anchorXFraction = 0.35f,
@@ -271,7 +268,7 @@ internal fun TelemetryDonutPieChart(
                     if (angleDeg < 0f) angleDeg += 360f
                     var acc = 0f
                     var found = 0
-                    slices.forEachIndexed { idx, s ->
+                    safeSlices.forEachIndexed { idx, s ->
                       val sweep = ((s.value / total) * 360.0).toFloat().coerceAtLeast(4f)
                       if (angleDeg in acc..(acc + sweep)) found = idx
                       acc += sweep
@@ -280,16 +277,21 @@ internal fun TelemetryDonutPieChart(
                   }
                 },
                 onHoverEnded = { hoveredSliceIdx = null },
+                onTap = onTap,
               ),
         ) {
+          if (size.width < 24f || size.height < 24f) return@Canvas
           val sweepProgress = sweepProgressState.value
           val pulseAlpha = pulseAlphaState.value
           var startAngle = -90f
-          val baseStroke = (chartSize.toPx() * 0.20f).coerceIn(18f, 34f)
-          val arcSize = Size(size.width - baseStroke * 1.25f, size.height - baseStroke * 1.25f)
+          val minDim = minOf(size.width, size.height)
+          val baseStroke = (chartSize.toPx() * 0.20f).coerceIn(10f, (minDim * 0.40f).coerceAtLeast(10f))
+          val arcW = (size.width - baseStroke * 1.25f).coerceAtLeast(8f)
+          val arcH = (size.height - baseStroke * 1.25f).coerceAtLeast(8f)
+          val arcSize = Size(arcW, arcH)
           val topLeft = Offset((size.width - arcSize.width) / 2f, (size.height - arcSize.height) / 2f)
 
-          slices.forEachIndexed { idx, s ->
+          safeSlices.forEachIndexed { idx, s ->
             val rawSweep = ((s.value / total) * 360.0).toFloat().coerceAtLeast(4f)
             val animSweep = (rawSweep * sweepProgress - 1.5f).coerceAtLeast(0.5f)
             val isFocused = hoveredSliceIdx == idx
@@ -336,7 +338,7 @@ internal fun TelemetryDonutPieChart(
         }
       }
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        slices.forEachIndexed { idx, s ->
+        safeSlices.forEachIndexed { idx, s ->
           val pct = ((s.value / total) * 100.0).toInt()
           val isFocused = hoveredSliceIdx == idx
           Row(
@@ -377,6 +379,7 @@ internal fun HistoricalSpeedProfileChart(
   settings: MasterSettings,
   chartHeight: Dp = 170.dp,
   modifier: Modifier = Modifier,
+  onTap: (() -> Unit)? = null,
 ) {
   val series = remember(rides) { rides.take(16).reversed() }
   if (series.isEmpty()) return
@@ -430,26 +433,38 @@ internal fun HistoricalSpeedProfileChart(
                 showTooltip = true
               },
               onHoverEnded = { showTooltip = false },
+              onTap = onTap,
             ),
       ) {
         val entrance = entranceState.value
         val pulseAlpha = pulseAlphaState.value
         val w = size.width
         val h = size.height
+        if (w < 24f || h < 24f) return@Canvas
         for (g in 0..3) {
           drawLine(gridC, Offset(0f, h * g / 3f), Offset(w, h * g / 3f), strokeWidth = 1f)
         }
+        val maxY8 = (h - 8f).coerceAtLeast(8f)
+        val maxY6 = (h - 6f).coerceAtLeast(6f)
         clipRect(left = 0f, top = 0f, right = w * entrance, bottom = h) {
           if (series.size == 1) {
-            val y1 = h - ((maxSpdSeries[0] / yMax).toFloat() * h * entrance).coerceIn(8f, h - 8f)
-            val y2 = h - ((avgSpdSeries[0] / yMax).toFloat() * h * entrance).coerceIn(8f, h - 8f)
+            val r1 = ((maxSpdSeries[0] / yMax).toFloat() * h * entrance).let { if (it.isFinite()) it else 8f }
+            val r2 = ((avgSpdSeries[0] / yMax).toFloat() * h * entrance).let { if (it.isFinite()) it else 8f }
+            val y1 = h - r1.coerceIn(8f, maxY8)
+            val y2 = h - r2.coerceIn(8f, maxY8)
             drawCircle(primaryC.copy(alpha = 0.28f * pulseAlpha), radius = 13.dp.toPx(), center = Offset(w / 2f, y1))
             drawCircle(primaryC, radius = 7.dp.toPx(), center = Offset(w / 2f, y1))
             drawCircle(secondaryC, radius = 5.dp.toPx(), center = Offset(w / 2f, y2))
           } else {
             val stepX = w / (series.size - 1).coerceAtLeast(1)
-            val maxPts = maxSpdSeries.mapIndexed { i, v -> Offset(i * stepX, h - ((v / yMax).toFloat() * h * entrance).coerceIn(6f, h - 6f)) }
-            val avgPts = avgSpdSeries.mapIndexed { i, v -> Offset(i * stepX, h - ((v / yMax).toFloat() * h * entrance).coerceIn(6f, h - 6f)) }
+            val maxPts = maxSpdSeries.mapIndexed { i, v ->
+              val raw = ((v / yMax).toFloat() * h * entrance).let { if (it.isFinite()) it else 6f }
+              Offset(i * stepX, h - raw.coerceIn(6f, maxY6))
+            }
+            val avgPts = avgSpdSeries.mapIndexed { i, v ->
+              val raw = ((v / yMax).toFloat() * h * entrance).let { if (it.isFinite()) it else 6f }
+              Offset(i * stepX, h - raw.coerceIn(6f, maxY6))
+            }
 
             val maxPath = buildSmoothSplinePath(maxPts)
             val fillPath = Path().apply {
@@ -532,6 +547,7 @@ internal fun HistoricalElevationGainChart(
   settings: MasterSettings,
   chartHeight: Dp = 165.dp,
   modifier: Modifier = Modifier,
+  onTap: (() -> Unit)? = null,
 ) {
   val series = remember(rides) { rides.take(16).reversed() }
   if (series.isEmpty()) return
@@ -586,27 +602,32 @@ internal fun HistoricalElevationGainChart(
                 showTooltip = true
               },
               onHoverEnded = { showTooltip = false },
+              onTap = onTap,
             ),
       ) {
         val entrance = entranceState.value
         val pulseAlpha = pulseAlphaState.value
         val w = size.width
         val h = size.height
+        if (w < 24f || h < 24f) return@Canvas
         for (g in 0..3) drawLine(gridC, Offset(0f, h * g / 3f), Offset(w, h * g / 3f), strokeWidth = 1f)
 
         val slotW = w / series.size.coerceAtLeast(1)
-        val barW = (slotW * 0.56f).coerceIn(8f, 38f)
+        val barW = (slotW * 0.56f).coerceIn(6f, 38f)
         val ratePts = ArrayList<Offset>(series.size)
+        val maxBarH = (h - 4f).coerceAtLeast(4f)
+        val maxRateY = (h - 6f).coerceAtLeast(6f)
 
         elevVals.forEachIndexed { idx, ev ->
           val stagger = ((entrance * 1.35f) - (idx.toFloat() / (series.size + 2)) * 0.35f).coerceIn(0f, 1f)
-          val barH = ((ev / maxElev).toFloat() * h * stagger).coerceIn(3f, h - 4f)
+          val rawBar = ((ev / maxElev).toFloat() * h * stagger).let { if (it.isFinite()) it else 3f }
+          val barH = rawBar.coerceIn(3f, maxBarH)
           val xLeft = idx * slotW + (slotW - barW) / 2f
           val isSel = idx == selectedIdx
           if (isSel && showTooltip) {
             drawRoundRect(
               color = elevColor.copy(alpha = 0.22f * pulseAlpha),
-              topLeft = Offset(xLeft - 3.dp.toPx(), h - barH - 3.dp.toPx()),
+              topLeft = Offset(xLeft - 3.dp.toPx(), (h - barH - 3.dp.toPx()).coerceAtLeast(0f)),
               size = Size(barW + 6.dp.toPx(), barH + 3.dp.toPx()),
               cornerRadius = CornerRadius(10f, 10f),
             )
@@ -617,7 +638,8 @@ internal fun HistoricalElevationGainChart(
             size = Size(barW, barH),
             cornerRadius = CornerRadius(8f, 8f),
           )
-          val rY = h - ((climbRates[idx] / maxRate).toFloat() * h * stagger).coerceIn(6f, h - 6f)
+          val rawRate = ((climbRates[idx] / maxRate).toFloat() * h * stagger).let { if (it.isFinite()) it else 6f }
+          val rY = h - rawRate.coerceIn(6f, maxRateY)
           ratePts.add(Offset(xLeft + barW / 2f, rY))
         }
         clipRect(0f, 0f, w * entrance, h) {
@@ -674,6 +696,7 @@ internal fun HistoricalEfficiencyVoltageChart(
   settings: MasterSettings,
   chartHeight: Dp = 160.dp,
   modifier: Modifier = Modifier,
+  onTap: (() -> Unit)? = null,
 ) {
   val series = remember(rides) { rides.take(14).reversed() }
   if (series.isEmpty()) return
@@ -733,20 +756,25 @@ internal fun HistoricalEfficiencyVoltageChart(
                 showTooltip = true
               },
               onHoverEnded = { showTooltip = false },
+              onTap = onTap,
             ),
       ) {
         val entrance = entranceState.value
         val pulseAlpha = pulseAlphaState.value
         val w = size.width
         val h = size.height
+        if (w < 24f || h < 24f) return@Canvas
         for (g in 0..3) drawLine(gridC, Offset(0f, h * g / 3f), Offset(w, h * g / 3f), strokeWidth = 1f)
         val slotW = w / series.size.coerceAtLeast(1)
         val barW = (slotW * 0.42f).coerceIn(6f, 28f)
         val pts = ArrayList<Offset>(series.size)
+        val maxDh = (h - 4f).coerceAtLeast(4f)
+        val maxEffY = (h - 6f).coerceAtLeast(6f)
 
         series.indices.forEach { i ->
           val stagger = ((entrance * 1.35f) - (i.toFloat() / (series.size + 2)) * 0.35f).coerceIn(0f, 1f)
-          val dH = ((drainSeries[i] / 100.0).toFloat() * h * stagger).coerceIn(3f, h - 4f)
+          val rawDh = ((drainSeries[i] / 100.0).toFloat() * h * stagger).let { if (it.isFinite()) it else 3f }
+          val dH = rawDh.coerceIn(3f, maxDh)
           val xLeft = i * slotW + (slotW - barW) / 2f
           drawRoundRect(
             color = drainColor.copy(alpha = if (i == selectedIdx) 0.78f else 0.32f),
@@ -754,7 +782,8 @@ internal fun HistoricalEfficiencyVoltageChart(
             size = Size(barW, dH),
             cornerRadius = CornerRadius(6f, 6f),
           )
-          val y = h - ((effSeries[i] / maxEff).toFloat() * h * stagger).coerceIn(6f, h - 6f)
+          val rawEff = ((effSeries[i] / maxEff).toFloat() * h * stagger).let { if (it.isFinite()) it else 6f }
+          val y = h - rawEff.coerceIn(6f, maxEffY)
           pts.add(Offset(xLeft + barW / 2f, y))
         }
         clipRect(0f, 0f, w * entrance, h) {
@@ -818,6 +847,7 @@ internal fun HistoricalDistanceEnergyChart(
   settings: MasterSettings,
   chartHeight: Dp = 155.dp,
   modifier: Modifier = Modifier,
+  onTap: (() -> Unit)? = null,
 ) {
   val bars = remember(rides) { rides.take(10).reversed() }
   if (bars.isEmpty()) return
@@ -861,11 +891,13 @@ internal fun HistoricalDistanceEnergyChart(
                 showTooltip = true
               },
               onHoverEnded = { showTooltip = false },
+              onTap = onTap,
             ),
       ) {
         val entrance = entranceState.value
         val pulseAlpha = pulseAlphaState.value
         val h = size.height
+        if (size.width < 24f || h < 24f) return@Canvas
         for (g in 0..3) drawLine(gridC, Offset(0f, h * g / 3f), Offset(size.width, h * g / 3f), strokeWidth = 1f)
         val groupW = size.width / bars.size.coerceAtLeast(1)
         val barW = (groupW * 0.34f).coerceIn(6f, 26f)
@@ -932,6 +964,7 @@ internal fun SpeedVsEfficiencyScatterChart(
   settings: MasterSettings,
   chartHeight: Dp = 165.dp,
   modifier: Modifier = Modifier,
+  onTap: (() -> Unit)? = null,
 ) {
   if (rides.isEmpty()) return
   val scatterKey = "${rides.size}_${rides.first().id}"
@@ -980,9 +1013,14 @@ internal fun SpeedVsEfficiencyScatterChart(
               onPointerAt = { pos, w, h, _ ->
                 var bestIdx = -1
                 var bestDist = Float.MAX_VALUE
+                if (w < 32f || h < 32f) return@chartPointer2D
+                val maxXBound = (w - 12f).coerceAtLeast(12f)
+                val maxYBound = (h - 12f).coerceAtLeast(12f)
                 points.forEachIndexed { idx, (_, xSpd, yEff) ->
-                  val cx = ((xSpd / maxX).toFloat() * (w - 24f) + 12f).coerceIn(12f, w - 12f)
-                  val cy = (h - ((yEff / maxY).toFloat() * (h - 24f)) - 12f).coerceIn(12f, h - 12f)
+                  val rx = ((xSpd / maxX).toFloat() * (w - 24f) + 12f).let { if (it.isFinite()) it else 12f }
+                  val ry = (h - ((yEff / maxY).toFloat() * (h - 24f)) - 12f).let { if (it.isFinite()) it else 12f }
+                  val cx = rx.coerceIn(12f, maxXBound)
+                  val cy = ry.coerceIn(12f, maxYBound)
                   val d = hypot(pos.x - cx, pos.y - cy)
                   if (d < bestDist) {
                     bestDist = d
@@ -995,12 +1033,16 @@ internal fun SpeedVsEfficiencyScatterChart(
                 }
               },
               onHoverEnded = { focusedIdx = null },
+              onTap = onTap,
             ),
       ) {
         val entrance = entranceState.value
         val pulseAlpha = pulseAlphaState.value
         val w = size.width
         val h = size.height
+        if (w < 32f || h < 32f) return@Canvas
+        val maxXBound = (w - 12f).coerceAtLeast(12f)
+        val maxYBound = (h - 12f).coerceAtLeast(12f)
         for (g in 0..3) {
           drawLine(gridC, Offset(0f, h * g / 3f), Offset(w, h * g / 3f), strokeWidth = 1f)
           drawLine(gridC, Offset(w * g / 3f, 0f), Offset(w * g / 3f, h), strokeWidth = 1f)
@@ -1012,8 +1054,10 @@ internal fun SpeedVsEfficiencyScatterChart(
         )
         points.forEachIndexed { idx, (ride, xSpd, yEff) ->
           val stagger = ((entrance * 1.4f) - (idx.toFloat() / (points.size + 4)) * 0.4f).coerceIn(0f, 1f)
-          val cx = ((xSpd / maxX).toFloat() * (w - 24f) + 12f).coerceIn(12f, w - 12f)
-          val cy = (h - ((yEff / maxY).toFloat() * (h - 24f)) - 12f).coerceIn(12f, h - 12f)
+          val rx = ((xSpd / maxX).toFloat() * (w - 24f) + 12f).let { if (it.isFinite()) it else 12f }
+          val ry = (h - ((yEff / maxY).toFloat() * (h - 24f)) - 12f).let { if (it.isFinite()) it else 12f }
+          val cx = rx.coerceIn(12f, maxXBound)
+          val cy = ry.coerceIn(12f, maxYBound)
           val radius = ((5.dp.toPx() + (ride.distanceKm / maxDist).toFloat() * 9.dp.toPx()).coerceIn(5.dp.toPx(), 15.dp.toPx())) * stagger
           val col =
             when {
@@ -1067,6 +1111,7 @@ internal fun RideDurationHistogramChart(
   reducedMotion: Boolean = false,
   chartHeight: Dp = 130.dp,
   modifier: Modifier = Modifier,
+  onTap: (() -> Unit)? = null,
 ) {
   if (rides.isEmpty()) return
   val histKey = "${rides.size}_${rides.first().id}"
@@ -1102,12 +1147,14 @@ internal fun RideDurationHistogramChart(
                 anchorXFrac = frac
               },
               onHoverEnded = { hoveredIdx = null },
+              onTap = onTap,
             ),
       ) {
         val entrance = entranceState.value
         val pulseAlpha = pulseAlphaState.value
+        if (size.width < 24f || size.height < 24f) return@Canvas
         val slotW = size.width / buckets.size
-        val barW = (slotW * 0.56f).coerceIn(16f, 64f)
+        val barW = (slotW * 0.56f).coerceIn(12f, 64f)
         buckets.forEachIndexed { idx, (_, count) ->
           val stagger = ((entrance * 1.3f) - idx * 0.1f).coerceIn(0f, 1f)
           val frac = (count.toFloat() / maxCount.toFloat()).coerceIn(0.06f, 1f)
@@ -1161,227 +1208,30 @@ internal fun RideDurationHistogramChart(
   }
 }
 
-private fun downsampleTrackPoints(points: List<GeoPoint>, maxPoints: Int = 320): List<GeoPoint> {
-  if (points.size <= maxPoints) return points
-  val step = (points.size - 1).toDouble() / (maxPoints - 1).toDouble()
-  return List(maxPoints) { idx ->
-    points[(idx * step).toInt().coerceIn(0, points.lastIndex)]
-  }
-}
-
-private fun safeFitMapToPoints(map: MapView, pts: List<GeoPoint>, animated: Boolean) {
-  if (pts.isEmpty()) return
-  if (pts.size >= 2) {
-    runCatching {
-      val bb = BoundingBox.fromGeoPoints(pts)
-      if (bb.latitudeSpan > 0.0002 || bb.longitudeSpan > 0.0002) {
-        map.post { runCatching { map.zoomToBoundingBox(bb, animated, 64) } }
-      } else {
-        if (animated) map.controller.animateTo(pts.first(), 15.5, 400L)
-        else {
-          map.controller.setCenter(pts.first())
-          map.controller.setZoom(15.5)
-        }
-      }
-    }.onFailure {
-      map.controller.setCenter(pts.first())
-      map.controller.setZoom(14.5)
-    }
-  } else {
-    if (animated) map.controller.animateTo(pts.first(), 15.0, 400L)
-    else {
-      map.controller.setCenter(pts.first())
-      map.controller.setZoom(15.0)
-    }
-  }
-}
-
 /**
- * SINGLE-RIDE INTERACTIVE OSMDROID TRACK MAP (Zero-Freeze Memoized Overlays + Lifecycle Safe)
+ * SINGLE-RIDE & MULTI-RIDE 100% COMPOSE VECTOR TRACK MAP
  */
 @Composable
 internal fun RideTrackMapView(
   ride: RideSession,
   allOverlayRides: List<RideSession> = emptyList(),
   settings: MasterSettings,
+  playbackProgress: Float? = null,
   height: Dp = 220.dp,
   modifier: Modifier = Modifier,
 ) {
-  val trackPts = remember(ride.id, ride.polylinePoints.size) { downsampleTrackPoints(parseRideTrackPoints(ride)) }
-  val overlayTracks =
-    remember(allOverlayRides.size, allOverlayRides.firstOrNull()?.id) {
-      allOverlayRides.take(16).map { r -> r to downsampleTrackPoints(parseRideTrackPoints(r), 140) }.filter { it.second.size >= 2 }
-    }
-  val distUnit = distUnitLabel(settings.distanceUnit)
-  val spdUnit = speedUnitLabel(settings.distanceUnit)
-
-  if (trackPts.isEmpty() && overlayTracks.isEmpty()) {
-    Surface(
-      color = MaterialTheme.colorScheme.surface,
-      shape = RoundedCornerShape(12.dp),
-      border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-      modifier = modifier.fillMaxWidth(),
-    ) {
-      Text(
-        "No GPS polyline points saved for \"${ride.title}\". Record a trail with GPS lock to view your route track on the map.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(12.dp),
-      )
-    }
-    return
-  }
-
-  var mapRef by remember { mutableStateOf<MapView?>(null) }
-  var fittedKey by remember { mutableStateOf("") }
-  var lastOverlaySig by remember { mutableStateOf("") }
-  var userPanned by remember { mutableStateOf(false) }
-  val lifecycleOwner = LocalLifecycleOwner.current
-
-  DisposableEffect(lifecycleOwner, mapRef) {
-    val map = mapRef
-    val observer = LifecycleEventObserver { _, event ->
-      when (event) {
-        Lifecycle.Event.ON_RESUME -> map?.onResume()
-        Lifecycle.Event.ON_PAUSE -> map?.onPause()
-        else -> Unit
-      }
-    }
-    lifecycleOwner.lifecycle.addObserver(observer)
-    onDispose {
-      lifecycleOwner.lifecycle.removeObserver(observer)
-    }
-  }
-
-  val mapLayer = remember { defaultMapLayerId() }
-  val primaryArgb = MaterialTheme.colorScheme.primary.toArgb()
-  val secondaryArgb = MaterialTheme.colorScheme.secondary.toArgb()
-  val surfaceArgb = MaterialTheme.colorScheme.surface.toArgb()
-  val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-
-  val fitPoints = remember(trackPts, overlayTracks) {
-    if (overlayTracks.isNotEmpty()) overlayTracks.flatMap { it.second } else trackPts
-  }
-  val fitKey = if (overlayTracks.isNotEmpty()) "ALL_${overlayTracks.size}" else ride.id
-  val overlaySig = "$fitKey|${trackPts.size}|$mapLayer|$primaryArgb|$secondaryArgb|$isDark|${settings.themePreset.id}|${settings.distanceUnit}"
-
-  Box(modifier = modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(12.dp))) {
-    AndroidView(
-      factory = { ctxMap ->
-        createSafeMapView(ctxMap).also { map ->
-          mapRef = map
-          configureSmoothMapPanning(map) { userPanned = true }
-        }
-      },
-      update = { map ->
-        val desiredSource = resolveMapTileSource(mapLayer)
-        if (map.tileProvider.tileSource.name() != desiredSource.name()) {
-          map.setTileSource(desiredSource)
-        }
-        if (fittedKey != fitKey && !userPanned) {
-          fittedKey = fitKey
-          safeFitMapToPoints(map, fitPoints, animated = false)
-        }
-        if (lastOverlaySig == overlaySig) return@AndroidView
-        lastOverlaySig = overlaySig
-        applyThemeToMapView(map, settings, primaryArgb, surfaceArgb, isDark, mapLayer)
-        map.overlays.clear()
-        if (overlayTracks.isNotEmpty()) {
-          overlayTracks.forEachIndexed { idx, (_, pts) ->
-            map.overlays.add(
-              Polyline().apply {
-                outlinePaint.color = if (idx == 0) primaryArgb else secondaryArgb
-                outlinePaint.strokeWidth = if (idx == 0) 7f else 5f
-                setPoints(pts)
-              }
-            )
-          }
-        } else if (trackPts.size > 1) {
-          map.overlays.add(
-            Polyline().apply {
-              outlinePaint.color = primaryArgb
-              outlinePaint.strokeWidth = 7f
-              setPoints(trackPts)
-            }
-          )
-          map.overlays.add(
-            Marker(map).apply {
-              position = trackPts.first()
-              title = "START • ${ride.title}"
-            }
-          )
-          map.overlays.add(
-            Marker(map).apply {
-              position = trackPts.last()
-              title = "FINISH • ${ride.title}"
-            }
-          )
-        }
-        map.invalidate()
-      },
-      onRelease = { map ->
-        if (mapRef === map) mapRef = null
-        runCatching { map.onPause() }
-        runCatching { map.onDetach() }
-      },
-      modifier = Modifier.fillMaxSize().testTag("ride_track_map_view"),
-    )
-
-    Surface(
-      color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
-      shape = RoundedCornerShape(10.dp),
-      modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
-    ) {
-      Text(
-        if (overlayTracks.isNotEmpty()) "ALL TRAILS (${overlayTracks.size} GPS tracks)"
-        else "${ride.vehicleName} • ${"%.2f".format(formatDistValue(ride.distanceKm, settings.distanceUnit))} $distUnit • Max ${"%.1f".format(formatSpeedValue(ride.maxSpeedKmh, settings.distanceUnit))} $spdUnit",
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-      )
-    }
-
-    Column(
-      modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-      verticalArrangement = Arrangement.spacedBy(6.dp),
-      horizontalAlignment = Alignment.End,
-    ) {
-      Surface(
-        onClick = {
-          userPanned = false
-          mapRef?.let { m -> safeFitMapToPoints(m, fitPoints, animated = true) }
-        },
-        color = MaterialTheme.colorScheme.primary,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.heightIn(min = 44.dp),
-      ) {
-        Row(
-          Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-          Icon(Icons.Default.MyLocation, contentDescription = "Fit Track", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(16.dp))
-          Text("FIT TRACK", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary, maxLines = 1, softWrap = false)
-        }
-      }
-      Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f), shape = RoundedCornerShape(12.dp)) {
-        Row {
-          IconButton(onClick = { mapRef?.controller?.zoomIn() }, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Default.ZoomIn, contentDescription = "Zoom In", modifier = Modifier.size(20.dp))
-          }
-          IconButton(onClick = { mapRef?.controller?.zoomOut() }, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Default.ZoomOut, contentDescription = "Zoom Out", modifier = Modifier.size(20.dp))
-          }
-        }
-      }
-    }
-  }
+  ComposeVectorRideMap(
+    ride = ride,
+    allOverlayRides = allOverlayRides,
+    settings = settings,
+    playbackProgress = playbackProgress,
+    height = height,
+    modifier = modifier,
+  )
 }
 
 /**
- * DEDICATED PER-RIDE-LOG VISUAL SUITE (Animated Speed Graph, Elevation Graph, Pie Charts & Track Map!)
+ * DEDICATED PER-RIDE-LOG VISUAL SUITE (Animated Speed Graph, Elevation Graph, Pie Charts & Compose Vector Track Map!)
  */
 @Composable
 fun PerRideTelemetryPanel(
@@ -1389,6 +1239,7 @@ fun PerRideTelemetryPanel(
   activeVehicle: PevVehicle?,
   settings: MasterSettings,
   showAllStacked: Boolean = false,
+  playbackProgress: Float? = null,
   onOpenFullStudio: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
@@ -1423,6 +1274,65 @@ fun PerRideTelemetryPanel(
   val startV = if (ride.startBatteryPct >= 0) PevBatteryPhysics.voltageForSoc(nomV, ride.startBatteryPct.toDouble(), settings.batteryChemistry) else 0.0
   val endV = if (ride.endBatteryPct >= 0) PevBatteryPhysics.voltageForSoc(nomV, ride.endBatteryPct.toDouble(), settings.batteryChemistry) else 0.0
 
+  var activeGraphInspect by remember { mutableStateOf<GraphInspectData?>(null) }
+  val rideGpsPoints = remember(ride.id, ride.polylinePoints.size) {
+    parseRideTrackPoints(ride).map { it.latitude to it.longitude }
+  }
+
+  fun openSpeedCurveInspect() {
+    activeGraphInspect = GraphInspectData(
+      title = "Speed Profile • ${ride.title}",
+      subtitle = "Peak ${"%.1f".format(formatSpeedValue(ride.maxSpeedKmh, settings.distanceUnit))} $spdUnit • Avg ${"%.1f".format(formatSpeedValue(ride.avgSpeedKmh, settings.distanceUnit))} $spdUnit",
+      chartType = GraphInspectChartType.SPEED,
+      icon = Icons.AutoMirrored.Filled.ShowChart,
+      primaryColor = primaryC,
+      secondaryColor = secondaryC,
+      unitLabel = spdUnit,
+      values = speedCurve,
+      peakMetric = "%.1f %s".format(formatSpeedValue(ride.maxSpeedKmh, settings.distanceUnit), spdUnit),
+      avgMetric = "%.1f %s".format(formatSpeedValue(ride.avgSpeedKmh, settings.distanceUnit), spdUnit),
+      minMetric = "0.0 $spdUnit",
+      referenceValue = formatSpeedValue(ride.avgSpeedKmh, settings.distanceUnit),
+      rideId = ride.id,
+      gpsPoints = rideGpsPoints,
+    )
+  }
+
+  fun openElevCurveInspect() {
+    val totalElevVal = formatElevationValue(ride.elevationGainM, settings.distanceUnit)
+    activeGraphInspect = GraphInspectData(
+      title = "Elevation Profile • ${ride.title}",
+      subtitle = "Total Climb Ascent: +${totalElevVal.toInt()} $elevUnit",
+      chartType = GraphInspectChartType.ELEVATION,
+      icon = Icons.Default.Terrain,
+      primaryColor = elevC,
+      unitLabel = elevUnit,
+      values = elevCurve,
+      peakMetric = "+%.0f %s".format(elevCurve.maxOrNull() ?: 0.0, elevUnit),
+      avgMetric = "+%.0f %s".format(elevCurve.average().takeIf { !it.isNaN() } ?: 0.0, elevUnit),
+      totalMetric = "+${totalElevVal.toInt()} $elevUnit",
+      referenceValue = elevCurve.average().takeIf { !it.isNaN() },
+      rideId = ride.id,
+      gpsPoints = rideGpsPoints,
+    )
+  }
+
+  fun openPieInspect() {
+    val targetSlices = if (pieSubMode == 0) batterySlices else energySlices
+    activeGraphInspect = GraphInspectData(
+      title = if (pieSubMode == 0) "Battery Pack Drain Split • ${ride.title}" else "Energy Consumption Split • ${ride.title}",
+      subtitle = if (pieSubMode == 0) "Used: $usedPct% • Reserve: $remPct%" else "Total Consumed: ${ride.whUsed.toInt()} Wh",
+      chartType = GraphInspectChartType.PIE_DONUT,
+      icon = Icons.Default.PieChart,
+      primaryColor = primaryC,
+      unitLabel = if (pieSubMode == 0) "%" else "Wh",
+      peakMetric = if (pieSubMode == 0) "-$usedPct%" else "${ride.whUsed.toInt()} Wh",
+      pieSlices = targetSlices.map { GraphInspectSlice(it.label, it.value, it.color) },
+      rideId = ride.id,
+      gpsPoints = rideGpsPoints,
+    )
+  }
+
   Surface(
     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
     border = BorderStroke(1.dp, primaryC.copy(alpha = 0.35f)),
@@ -1444,8 +1354,8 @@ fun PerRideTelemetryPanel(
           if (onOpenFullStudio != null) {
             OutlinedButton(
               onClick = onOpenFullStudio,
-              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-              modifier = Modifier.heightIn(min = 38.dp).testTag("open_ride_studio_${ride.id}"),
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+              modifier = Modifier.heightIn(min = 48.dp).testTag("open_ride_studio_${ride.id}"),
             ) {
               Icon(Icons.Default.OpenInFull, contentDescription = "Full Telemetry Studio", modifier = Modifier.size(14.dp))
               Spacer(Modifier.width(4.dp))
@@ -1490,7 +1400,22 @@ fun PerRideTelemetryPanel(
       }
 
       if (showAllStacked || subTab == 0) {
-        if (showAllStacked) SectionSubHeader(Icons.AutoMirrored.Filled.ShowChart, "SPEED PROFILE ($spdUnit)", primaryC)
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          if (showAllStacked) SectionSubHeader(Icons.AutoMirrored.Filled.ShowChart, "SPEED PROFILE ($spdUnit)", primaryC) else Text("Tap to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          OutlinedButton(
+            onClick = { openSpeedCurveInspect() },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.heightIn(min = 48.dp),
+          ) {
+            Icon(Icons.Default.OpenInFull, contentDescription = null, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Pop up Graph", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+          }
+        }
         SingleCurveAreaChart(
           triggerKey = "${ride.id}_speed",
           values = speedCurve,
@@ -1501,6 +1426,7 @@ fun PerRideTelemetryPanel(
           referenceColor = secondaryC,
           reducedMotion = settings.reducedMotion,
           height = if (showAllStacked) 155.dp else 125.dp,
+          onTap = { openSpeedCurveInspect() },
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
           Text("Peak: ${"%.1f".format(formatSpeedValue(ride.maxSpeedKmh, settings.distanceUnit))} $spdUnit", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = primaryC, maxLines = 1, softWrap = false)
@@ -1510,10 +1436,26 @@ fun PerRideTelemetryPanel(
       }
 
       if (showAllStacked || subTab == 1) {
-        if (showAllStacked) {
-          Spacer(Modifier.height(4.dp))
-          SectionSubHeader(Icons.Default.Terrain, "ELEVATION GAIN PROFILE (+$elevUnit)", elevC)
+        Spacer(Modifier.height(4.dp))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          if (showAllStacked) SectionSubHeader(Icons.Default.Terrain, "ELEVATION GAIN PROFILE (+$elevUnit)", elevC) else Text("Tap to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          OutlinedButton(
+            onClick = { openElevCurveInspect() },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.heightIn(min = 48.dp),
+          ) {
+            Icon(Icons.Default.OpenInFull, contentDescription = null, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Pop up Graph", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+          }
         }
+        val distVal = formatDistValue(ride.distanceKm, settings.distanceUnit)
+        val totalElevVal = formatElevationValue(ride.elevationGainM, settings.distanceUnit)
+        val climbRate = if (distVal > 0.05) totalElevVal / distVal else 0.0
         SingleCurveAreaChart(
           triggerKey = "${ride.id}_elev",
           values = elevCurve,
@@ -1524,10 +1466,8 @@ fun PerRideTelemetryPanel(
           referenceColor = elevC,
           reducedMotion = settings.reducedMotion,
           height = if (showAllStacked) 145.dp else 120.dp,
+          onTap = { openElevCurveInspect() },
         )
-        val distVal = formatDistValue(ride.distanceKm, settings.distanceUnit)
-        val totalElevVal = formatElevationValue(ride.elevationGainM, settings.distanceUnit)
-        val climbRate = if (distVal > 0.05) totalElevVal / distVal else 0.0
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
           Text("Total Gain: +${totalElevVal.toInt()} $elevUnit", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = elevC, maxLines = 1, softWrap = false)
           Text("Climb Rate: ${"%.0f".format(climbRate)} $elevUnit/$distUnit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
@@ -1535,9 +1475,22 @@ fun PerRideTelemetryPanel(
       }
 
       if (showAllStacked || subTab == 2) {
-        if (showAllStacked) {
-          Spacer(Modifier.height(4.dp))
-          SectionSubHeader(Icons.Default.PieChart, "ENERGY & BATTERY PIE BREAKDOWN", tertiaryC)
+        Spacer(Modifier.height(4.dp))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          if (showAllStacked) SectionSubHeader(Icons.Default.PieChart, "ENERGY & BATTERY PIE BREAKDOWN", tertiaryC) else Text("Tap to inspect", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          OutlinedButton(
+            onClick = { openPieInspect() },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.heightIn(min = 48.dp),
+          ) {
+            Icon(Icons.Default.OpenInFull, contentDescription = null, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Pop up Graph", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+          }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           FilterChip(
@@ -1552,17 +1505,20 @@ fun PerRideTelemetryPanel(
           )
         }
         if (pieSubMode == 0) {
-          TelemetryDonutPieChart(
-            slices = batterySlices,
-            centerValue = "-$usedPct%",
-            centerLabel = "${ride.whUsed.toInt()} Wh",
-            reducedMotion = settings.reducedMotion,
-            chartSize = if (showAllStacked) 136.dp else 112.dp,
-          )
-          if (startV > 0.0 && endV > 0.0) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-              Text("Start: ${ride.startBatteryPct}% (${"%.1f".format(startV)}V)", style = MaterialTheme.typography.labelSmall, color = primaryC, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-              Text("End: ${ride.endBatteryPct}% (${"%.1f".format(endV)}V)", style = MaterialTheme.typography.labelSmall, color = tertiaryC, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          Column {
+            TelemetryDonutPieChart(
+              slices = batterySlices,
+              centerValue = "-$usedPct%",
+              centerLabel = "${ride.whUsed.toInt()} Wh",
+              reducedMotion = settings.reducedMotion,
+              chartSize = if (showAllStacked) 136.dp else 112.dp,
+              onTap = { openPieInspect() },
+            )
+            if (startV > 0.0 && endV > 0.0) {
+              Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Start: ${ride.startBatteryPct}% (${"%.1f".format(startV)}V)", style = MaterialTheme.typography.labelSmall, color = primaryC, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                Text("End: ${ride.endBatteryPct}% (${"%.1f".format(endV)}V)", style = MaterialTheme.typography.labelSmall, color = tertiaryC, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+              }
             }
           }
         } else {
@@ -1572,6 +1528,7 @@ fun PerRideTelemetryPanel(
             centerLabel = "Wh Total",
             reducedMotion = settings.reducedMotion,
             chartSize = if (showAllStacked) 136.dp else 112.dp,
+            onTap = { openPieInspect() },
           )
         }
       }
@@ -1584,10 +1541,18 @@ fun PerRideTelemetryPanel(
         RideTrackMapView(
           ride = ride,
           settings = settings,
+          playbackProgress = playbackProgress,
           height = if (showAllStacked) 250.dp else 195.dp,
         )
       }
     }
+  }
+
+  activeGraphInspect?.let { inspectData ->
+    GraphInspectModal(
+      data = inspectData,
+      onDismiss = { activeGraphInspect = null },
+    )
   }
 }
 
@@ -1614,10 +1579,13 @@ private fun SingleCurveAreaChart(
   referenceColor: Color,
   reducedMotion: Boolean,
   height: Dp,
+  onTap: (() -> Unit)? = null,
 ) {
-  if (values.isEmpty()) return
+  val cleanValues = remember(values) { values.map { if (it.isFinite()) it else 0.0 } }
+  if (cleanValues.isEmpty()) return
   val entranceState = rememberChartEntranceState(triggerKey = triggerKey, reducedMotion = reducedMotion, durationMs = 660)
-  val maxV = max(5.0, (values.maxOrNull() ?: 10.0) * 1.15)
+  val maxV = max(5.0, (cleanValues.maxOrNull() ?: 10.0) * 1.15)
+  val safeRef = referenceLineValue?.takeIf { it.isFinite() && it > 0.0 }
   val gridC = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
 
   var hoveredIdx by remember(triggerKey) { mutableStateOf<Int?>(null) }
@@ -1631,22 +1599,26 @@ private fun SingleCurveAreaChart(
           .fillMaxWidth()
           .height(height)
           .chartHoverAndScrub(
-            itemCount = values.size,
+            itemCount = cleanValues.size,
             useSlots = false,
             onPointFocused = { idx, frac, _ ->
               hoveredIdx = idx
               anchorXFrac = frac
             },
             onHoverEnded = { hoveredIdx = null },
+            onTap = onTap,
           ),
     ) {
       val entrance = entranceState.value
       val pulseAlpha = pulseAlphaState.value
       val w = size.width
       val h = size.height
+      if (w < 24f || h < 24f) return@Canvas
+      val maxYBound = (h - 6f).coerceAtLeast(6f)
       for (g in 0..3) drawLine(gridC, Offset(0f, h * g / 3f), Offset(w, h * g / 3f), strokeWidth = 1f)
-      if (referenceLineValue != null && referenceLineValue > 0.0) {
-        val ry = h - ((referenceLineValue / maxV).toFloat() * h).coerceIn(6f, h - 6f)
+      if (safeRef != null) {
+        val rawRy = ((safeRef / maxV).toFloat() * h).let { if (it.isFinite()) it else 6f }
+        val ry = h - rawRy.coerceIn(6f, maxYBound)
         drawLine(
           color = referenceColor.copy(alpha = 0.7f * entrance),
           start = Offset(0f, ry),
@@ -1656,9 +1628,12 @@ private fun SingleCurveAreaChart(
         )
       }
       clipRect(0f, 0f, w * entrance, h) {
-        if (values.size > 1) {
-          val stepX = w / (values.size - 1)
-          val pts = values.mapIndexed { i, v -> Offset(i * stepX, h - ((v / maxV).toFloat() * h * entrance).coerceIn(6f, h - 6f)) }
+        if (cleanValues.size > 1) {
+          val stepX = w / (cleanValues.size - 1)
+          val pts = cleanValues.mapIndexed { i, v ->
+            val rawY = ((v / maxV).toFloat() * h * entrance).let { if (it.isFinite()) it else 6f }
+            Offset(i * stepX, h - rawY.coerceIn(6f, maxYBound))
+          }
           val linePath = buildSmoothSplinePath(pts)
           val fillPath = Path().apply {
             addPath(linePath)
@@ -1688,16 +1663,16 @@ private fun SingleCurveAreaChart(
       }
     }
 
-    val hIdx = hoveredIdx
+    val hIdx = hoveredIdx?.takeIf { it in cleanValues.indices }
     NeonChartTooltipOverlay(
       visible = hIdx != null,
       anchorXFraction = anchorXFrac,
-      title = if (hIdx != null) "Progress ${((hIdx.toFloat() / (values.size - 1).coerceAtLeast(1)) * 100).toInt()}%" else "",
+      title = if (hIdx != null) "Progress ${((hIdx.toFloat() / (cleanValues.size - 1).coerceAtLeast(1)) * 100).toInt()}%" else "",
       accentColor = accentColor,
       metrics =
         if (hIdx != null) {
           listOf(
-            NeonTooltipMetric(metricLabel, "${"%.1f".format(values[hIdx])} $unitLabel", accentColor),
+            NeonTooltipMetric(metricLabel, "${"%.1f".format(cleanValues[hIdx])} $unitLabel", accentColor),
           )
         } else emptyList(),
       modifier = Modifier.align(Alignment.TopStart).padding(top = 2.dp),

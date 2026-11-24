@@ -59,6 +59,9 @@ import com.example.ui.theme.LocalTacticalChrome
 import com.example.ui.theme.LocalTacticalSettings
 import com.example.ui.theme.TacticalChromeFamily
 import com.example.ui.theme.TacticalColors
+import com.example.ui.theme.drawHolidayNavOrnament
+import com.example.ui.theme.isHolidayTheme
+import com.example.ui.theme.sanitizeVisualStyleForSeason
 
 data class TacticalNavTabItem(
   val label: String,
@@ -276,6 +279,11 @@ fun TacticalBottomNavigationHost(
   val chrome = LocalTacticalChrome.current
   val settings = LocalTacticalSettings.current
   val cs = MaterialTheme.colorScheme
+  val effectiveStyle = sanitizeVisualStyleForSeason(settings.visualStyle)
+  val holidayNavMod =
+    if (!settings.nightVisionMode && !settings.sunVisibilityMode && effectiveStyle.isHolidayTheme()) {
+      Modifier.drawBehind { drawHolidayNavOrnament(effectiveStyle) }
+    } else Modifier
 
   when (styleKey) {
     "rural_timber" -> {
@@ -288,7 +296,7 @@ fun TacticalBottomNavigationHost(
         modifier = Modifier.fillMaxWidth().testTag("rural_timber_nav_bar"),
       ) {
         Row(
-          modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 5.dp, vertical = 6.dp),
+          modifier = Modifier.fillMaxWidth().then(holidayNavMod).navigationBarsPadding().padding(horizontal = 5.dp, vertical = 6.dp),
           horizontalArrangement = Arrangement.spacedBy(3.dp),
           verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -809,7 +817,7 @@ fun TacticalBottomNavigationHost(
         modifier = Modifier.fillMaxWidth().testTag("tactical_pill_nav_bar"),
       ) {
         Row(
-          modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 4.dp, vertical = 5.dp),
+          modifier = Modifier.fillMaxWidth().then(holidayNavMod).navigationBarsPadding().padding(horizontal = 4.dp, vertical = 5.dp),
           horizontalArrangement = Arrangement.spacedBy(2.dp),
           verticalAlignment = Alignment.CenterVertically,
         ) {

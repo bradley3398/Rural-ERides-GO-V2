@@ -65,6 +65,17 @@ fun resolveWallpaperDrawableRes(wallpaper: PevWallpaper, style: VisualStyleMode)
         VisualStyleMode.RURAL_CREEK_MIST -> R.drawable.img_pev_wp_alpine_glacier_1795392501170
         VisualStyleMode.RURAL_HARVEST_IRON -> R.drawable.img_pev_wp_barn_workbench_1795392500349
         VisualStyleMode.VAPORWAVE_RETRO -> R.drawable.img_pev_wp_synthwave_grid_1795392500461
+        VisualStyleMode.HOLIDAY_THANKSGIVING,
+        VisualStyleMode.HOLIDAY_LABOR_DAY -> R.drawable.img_pev_wp_barn_workbench_1795392500349
+        VisualStyleMode.HOLIDAY_CHRISTMAS,
+        VisualStyleMode.HOLIDAY_ST_PATRICKS -> R.drawable.img_pev_bg_forest_euc_1795212595148
+        VisualStyleMode.HOLIDAY_NEW_YEARS,
+        VisualStyleMode.HOLIDAY_FOURTH_JULY,
+        VisualStyleMode.HOLIDAY_HALLOWEEN -> R.drawable.img_pev_wp_cyber_alley_1795392499323
+        VisualStyleMode.HOLIDAY_MEMORIAL_DAY,
+        VisualStyleMode.HOLIDAY_VETERANS_DAY -> R.drawable.img_pev_wp_alpine_ridge_1795253902717
+        VisualStyleMode.HOLIDAY_VALENTINES,
+        VisualStyleMode.HOLIDAY_EASTER -> R.drawable.img_pev_bg_coastal_onewheel_1795212595108
         VisualStyleMode.BRUTALIST_HIGH_VIS, VisualStyleMode.DARK_STUDIO -> R.drawable.img_pev_wp_cyber_alley_1795392499323
         else -> R.drawable.img_pev_bg_wallpaper_1795208256664
       }
@@ -81,7 +92,7 @@ fun TacticalBackgroundCanvas(
   val accent = MaterialTheme.colorScheme.primary
   val secondary = MaterialTheme.colorScheme.secondary
   val isLightBg = bg.luminance() > 0.5f
-  val style = settings.visualStyle
+  val style = sanitizeVisualStyleForSeason(settings.visualStyle)
   val isWin95 = style == VisualStyleMode.WINDOWS_CLASSIC && !settings.nightVisionMode && !settings.sunVisibilityMode
   val isWin2K = style == VisualStyleMode.WINDOWS_2000 && !settings.nightVisionMode && !settings.sunVisibilityMode
   val isWinXP = style == VisualStyleMode.WINDOWS_XP && !settings.nightVisionMode && !settings.sunVisibilityMode
@@ -511,6 +522,11 @@ fun TacticalBackgroundCanvas(
             }
           }
         }
+      }
+    }
+    if (style.isHolidayTheme() && !settings.nightVisionMode && !settings.sunVisibilityMode) {
+      Canvas(modifier = Modifier.fillMaxSize()) {
+        drawHolidayBackgroundArt(mode = style, accent = accent, secondary = secondary)
       }
     }
     content()

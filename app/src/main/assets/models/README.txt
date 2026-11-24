@@ -5,5 +5,5 @@ Drop real .glb 3D PEV models into this directory (app/src/main/assets/models/):
 - euc.glb           (Electric Unicycles)
 - hydrofoil.glb     (Electric Hydrofoils / Specialty)
 
-The Vulkan Filament 1.81.0 PBR engine loads these assets via gltfio AssetLoader/ResourceLoader
-and dynamically applies per-model PBR MaterialInstance overrides for all 58 PEV profiles.
+The OpenGL ES 3.0 PBR, WebGL 2.0 GLB, and Compose 3D Vector CAD engines load these assets
+and dynamically apply per-model PBR MaterialInstance overrides for all 88 PEV profiles.

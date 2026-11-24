@@ -42,6 +42,12 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+import com.example.core.ReminderScheduler
+import com.example.data.SettingsStore
+import com.example.data.getActiveCustomVoice
+import com.example.data.resolveEffectiveBase
+import kotlinx.coroutines.flow.first
+
 private const val TAG = "CopilotSocialViewModel"
 
 class CopilotSocialViewModel(application: Application) : AndroidViewModel(application) {
@@ -195,6 +201,19 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   private val _socialNotice = MutableStateFlow("")
   val socialNotice: StateFlow<String> = _socialNotice.asStateFlow()
 
+  private val _openDmSheetRequested = MutableStateFlow<String?>(null)
+  val openDmSheetRequested: StateFlow<String?> = _openDmSheetRequested.asStateFlow()
+
+  fun requestOpenDmSheet(threadIdOrPeer: String = "") {
+    _openDmSheetRequested.value = threadIdOrPeer
+  }
+
+  fun clearOpenDmSheetRequest() {
+    _openDmSheetRequested.value = null
+  }
+
+  private val notifiedDmMessageIds = mutableSetOf<String>()
+
   private var boundKey: String? = null
   private var boundUid = ""
   private var boundFirebaseAuth = false
@@ -290,13 +309,33 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
         }
         if (firebaseAuthenticated) {
           launch {
+            var initialBoardLoad = true
             communityRepo
               .observeBoardPosts()
               .catch { e ->
                 if (e is CancellationException) throw e
                 Log.w(TAG, "Board listener error: ${e.message}")
               }
-              .collect { _boardPosts.value = it }
+              .collect { incoming ->
+                val prevIds = _boardPosts.value.map { it.id }.toSet()
+                _boardPosts.value = incoming
+                if (initialBoardLoad) {
+                  initialBoardLoad = false
+                } else {
+                  val newPost = incoming.firstOrNull { it.id !in prevIds && it.userId != cleanUid }
+                  if (newPost != null && newPost.userId !in _mutedPeerIds.value) {
+                    val settings = SettingsStore(ctx).settingsFlow.first()
+                    if (settings.socialNotifsEnabled) {
+                      ReminderScheduler.postSocialNotification(
+                        context = ctx,
+                        title = "Board Dispatch: ${newPost.authorCallsign}",
+                        body = (newPost.title.ifBlank { newPost.body }).take(150),
+                        targetTab = "BOARD",
+                      )
+                    }
+                  }
+                }
+              }
           }
           launch {
             riderRepo
@@ -308,13 +347,38 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
               .collect { _savedVideos.value = it }
           }
           launch {
+            var initialDmLoad = true
+            val prevThreadMsgs = mutableMapOf<String, String>()
             communityRepo
               .observeMyDmThreads(cleanUid)
               .catch { e ->
                 if (e is CancellationException) throw e
                 Log.w(TAG, "DM threads error: ${e.message}")
               }
-              .collect { _dmThreads.value = it }
+              .collect { list ->
+                _dmThreads.value = list
+                if (initialDmLoad) {
+                  initialDmLoad = false
+                  list.forEach { prevThreadMsgs[it.id] = it.lastMessage }
+                } else {
+                  for (th in list) {
+                    val oldMsg = prevThreadMsgs[th.id]
+                    if (oldMsg != null && oldMsg != th.lastMessage && th.lastMessage.isNotBlank()) {
+                      val peerCallsign = th.participantCallsigns.firstOrNull { it.isNotBlank() } ?: "Rider"
+                      val settings = SettingsStore(ctx).settingsFlow.first()
+                      if (settings.dmNotifsEnabled) {
+                        ReminderScheduler.postDmNotification(
+                          context = ctx,
+                          senderCallsign = peerCallsign,
+                          body = th.lastMessage.take(150),
+                          threadId = th.id,
+                        )
+                      }
+                    }
+                    prevThreadMsgs[th.id] = th.lastMessage
+                  }
+                }
+              }
           }
           launch {
             communityRepo
@@ -341,11 +405,56 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
           val token = boundSupabaseToken
           if (token.isNotBlank()) {
             launch {
+              var initialSbBoardLoad = true
+              var initialSbDmLoad = true
+              val prevSbThreadMsgs = mutableMapOf<String, String>()
               while (isActive) {
                 LiveCloudServices.fetchSupabaseBoardPosts(token)
-                  .onSuccess { _boardPosts.value = it }
+                  .onSuccess { incoming ->
+                    val prevIds = _boardPosts.value.map { it.id }.toSet()
+                    _boardPosts.value = incoming
+                    if (initialSbBoardLoad) {
+                      initialSbBoardLoad = false
+                    } else {
+                      val newPost = incoming.firstOrNull { it.id !in prevIds && it.userId != cleanUid }
+                      if (newPost != null && newPost.userId !in _mutedPeerIds.value) {
+                        val settings = SettingsStore(ctx).settingsFlow.first()
+                        if (settings.socialNotifsEnabled) {
+                          ReminderScheduler.postSocialNotification(
+                            context = ctx,
+                            title = "Board Dispatch: ${newPost.authorCallsign}",
+                            body = (newPost.title.ifBlank { newPost.body }).take(150),
+                            targetTab = "BOARD",
+                          )
+                        }
+                      }
+                    }
+                  }
                 LiveCloudServices.fetchSupabaseDmThreads(token, cleanUid)
-                  .onSuccess { _dmThreads.value = it }
+                  .onSuccess { list ->
+                    _dmThreads.value = list
+                    if (initialSbDmLoad) {
+                      initialSbDmLoad = false
+                      list.forEach { prevSbThreadMsgs[it.id] = it.lastMessage }
+                    } else {
+                      for (th in list) {
+                        val oldMsg = prevSbThreadMsgs[th.id]
+                        if (oldMsg != null && oldMsg != th.lastMessage && th.lastMessage.isNotBlank()) {
+                          val peerCallsign = th.participantCallsigns.firstOrNull { it.isNotBlank() } ?: "Rider"
+                          val settings = SettingsStore(ctx).settingsFlow.first()
+                          if (settings.dmNotifsEnabled) {
+                            ReminderScheduler.postDmNotification(
+                              context = ctx,
+                              senderCallsign = peerCallsign,
+                              body = th.lastMessage.take(150),
+                              threadId = th.id,
+                            )
+                          }
+                        }
+                        prevSbThreadMsgs[th.id] = th.lastMessage
+                      }
+                    }
+                  }
                 LiveCloudServices.fetchSupabaseCallSessions(token, cleanUid)
                   .onSuccess { allCalls ->
                     _callHistory.value = allCalls.take(30)
@@ -422,6 +531,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     copilotJob = null
     _copilotBusy.value = false
     _streamingText.value = ""
+    audio.stopSpeaking()
   }
 
   fun selectCopilotSession(sessionId: String) {
@@ -489,6 +599,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     copilotJob?.cancel()
     copilotJob =
       viewModelScope.launch {
+        var streamingSession: VoiceAudioManager.StreamingTtsBufferSession? = null
         try {
           val sid =
             _activeSessionId.value.ifBlank {
@@ -520,6 +631,41 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
           _streamingText.value = ""
           val webCtx = if (useWebSearch) LiveCloudServices.webSearchGrounding(userMsg.text) else ""
           var finalAnswer = ""
+
+          val settings = SettingsStore(ctx).settingsFlow.first()
+          val activeCustomVoice = settings.getActiveCustomVoice()
+          val effectiveVoiceProfile = activeCustomVoice?.resolveEffectiveBase() ?: voiceProfile
+          val useStreamingBuffer = autoSpeak && volumePct > 0 && settings.ttsPreloadBufferEnabled
+
+          var sentenceSplitter: VoiceAudioManager.StreamingSentenceSplitter? = null
+          var lastStreamOffset = 0
+
+          if (useStreamingBuffer) {
+            val session =
+              audio.startStreamingSpeechSession(
+                profile = effectiveVoiceProfile,
+                customVoice = activeCustomVoice,
+                volumePct = volumePct,
+                speechRateMult = activeCustomVoice?.speechRate ?: 1.0f,
+                pitchMult = activeCustomVoice?.pitch ?: 1.0f,
+                preferFastLocal = true,
+                bufferDepth = settings.ttsPreloadBufferDepth,
+              )
+            streamingSession = session
+            sentenceSplitter =
+              VoiceAudioManager.StreamingSentenceSplitter { sentence ->
+                val cleanSentence =
+                  sentence
+                    .replace("[WIDGET: TELEMETRY]", "")
+                    .replace("[WIDGET: WEATHER]", "")
+                    .replace("[WIDGET: SOS]", "")
+                    .trim()
+                if (cleanSentence.isNotBlank()) {
+                  session.enqueueTextFragment(cleanSentence)
+                }
+              }
+          }
+
           aiRepo
             .streamCopilotResponse(
               history = _messages.value,
@@ -537,12 +683,21 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
               detailLevel = detailLevel,
             )
             .catch { e ->
-              if (e is kotlinx.coroutines.CancellationException) throw e
+              if (e is kotlinx.coroutines.CancellationException) {
+                streamingSession?.cancel()
+                throw e
+              }
+              streamingSession?.cancel()
               finalAnswer = "AI Co-Pilot Error: ${e.message ?: "Request failed."}"
             }
             .collect { partial ->
               finalAnswer = partial
               _streamingText.value = partial
+              if (useStreamingBuffer && sentenceSplitter != null && partial.length > lastStreamOffset) {
+                val delta = partial.substring(lastStreamOffset)
+                lastStreamOffset = partial.length
+                sentenceSplitter.feed(delta)
+              }
             }
 
           val widget =
@@ -580,7 +735,26 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
               updatedAtMs = System.currentTimeMillis(),
             )
           )
-          if (autoSpeak) audio.speakWithVoiceProfile(cleaned, voiceProfile, volumePct)
+
+          if (useStreamingBuffer) {
+            sentenceSplitter?.flush()
+            streamingSession?.finish()
+          } else if (autoSpeak && volumePct > 0) {
+            if (activeCustomVoice != null) {
+              audio.speakWithCustomVoice(cleaned, activeCustomVoice, volumePct)
+            } else {
+              audio.speakWithVoiceProfile(cleaned, effectiveVoiceProfile, volumePct)
+            }
+          }
+
+          if (settings.aiNotifsEnabled) {
+            ReminderScheduler.postAiNotification(
+              context = ctx,
+              title = "AI Co-Pilot: $personaName",
+              body = cleaned.take(150),
+              targetTab = "COPILOT",
+            )
+          }
         } finally {
           _streamingText.value = ""
           _copilotBusy.value = false
@@ -1386,6 +1560,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
                   } else true
                 }
               _dmMessages.value = visible
+              visible.forEach { notifiedDmMessageIds.add(it.id) }
             }
         }
     } else {
@@ -1406,6 +1581,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
                     } else true
                   }
                 _dmMessages.value = visible
+                visible.forEach { notifiedDmMessageIds.add(it.id) }
               }
             delay(3_000L)
           }

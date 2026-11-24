@@ -19,33 +19,33 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BubbleChart
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.BubbleChart
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Radar
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
@@ -53,13 +53,26 @@ import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.ui.compartments.ComposeVectorMethodChartPreview
+import com.example.ui.compartments.GraphAnalysisMethod
+import com.example.ui.compartments.GraphInspectChartType
+import com.example.ui.compartments.GraphInspectData
+import com.example.ui.compartments.GraphInspectModal
+import com.example.ui.compartments.GraphInspectSlice
+import com.example.ui.compartments.applicableMethodsFor
+import com.example.ui.compartments.computeGraphAnalytics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,7 +88,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.filled.Refresh
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.core.PevBatteryPhysics
 import com.example.data.MasterSettings
@@ -88,6 +100,7 @@ import com.example.ui.components.formatDistValue
 import com.example.ui.components.formatSpeedValue
 import com.example.ui.components.speedUnitLabel
 import com.example.viewmodel.CockpitViewModel
+import com.example.viewmodel.RideTelemetryViewModel
 import com.example.viewmodel.SessionViewModel
 import kotlin.math.max
 
@@ -101,6 +114,7 @@ fun RideTelemetryStudioScreen(
   BackHandler { onBack() }
 
   val ctx = LocalContext.current
+  val telemetryVm = androidx.lifecycle.viewmodel.compose.viewModel<RideTelemetryViewModel>()
   val settings by sessionVm.settings.collectAsStateWithLifecycle()
   val rides by cockpitVm.rides.collectAsStateWithLifecycle()
   val vehicles by cockpitVm.vehicles.collectAsStateWithLifecycle()
@@ -108,25 +122,57 @@ fun RideTelemetryStudioScreen(
   val fleetDebrief by cockpitVm.fleetDebrief.collectAsStateWithLifecycle()
   val fleetDebriefBusy by cockpitVm.fleetDebriefBusy.collectAsStateWithLifecycle()
 
+  androidx.compose.runtime.LaunchedEffect(rides, settings, initialRideId) {
+    telemetryVm.updateRides(rides)
+    telemetryVm.updateSettings(settings)
+    if (initialRideId != null) {
+      telemetryVm.setSelectedRideId(initialRideId)
+      telemetryVm.setStudioMode(1)
+    }
+  }
+
+  val uiState by telemetryVm.uiState.collectAsStateWithLifecycle()
+  val studioMode = uiState.studioMode
+  val vehicleFilter = uiState.vehicleFilter
+  val windowLimit = uiState.windowLimit
+  val selectedRideId = uiState.selectedRideId
+  val filteredRides = uiState.filteredRides
+  val vehicleOptions = uiState.vehicleOptions
+  val totalKm = uiState.totalKm
+  val topSpeedKmh = uiState.topSpeedKmh
+  val totalElevM = uiState.totalElevM
+  val totalWh = uiState.totalWh
+  val totalMins = uiState.totalMins
+  val avgEff = uiState.avgEff
+
   val activeVehicle =
     remember(vehicles, profile?.activeVehicleId) {
       vehicles.firstOrNull { it.id == profile?.activeVehicleId } ?: vehicles.firstOrNull()
     }
 
-  var studioMode by remember(initialRideId) { mutableIntStateOf(if (initialRideId != null) 1 else 0) } // 0=Fleet Graphs, 1=Per-Ride Deep Dive
-  var vehicleFilter by remember { mutableStateOf("ALL") }
-  var windowLimit by remember { mutableIntStateOf(0) } // 0=All, 5, 10, 25
-  var selectedRideId by remember(rides, initialRideId) {
-    mutableStateOf(
-      initialRideId?.takeIf { id -> rides.any { it.id == id } }
-        ?: rides.firstOrNull()?.id.orEmpty()
-    )
-  }
   var pieMode by remember { mutableIntStateOf(0) } // 0=Vehicle, 1=Speed Zones, 2=Energy Wh, 3=Elevation, 4=Battery Drain
   var overlayAllTracks by remember { mutableStateOf(false) }
   var compareLeftIdx by remember(rides) { mutableIntStateOf(0) }
   var compareRightIdx by remember(rides) { mutableIntStateOf(if (rides.size > 1) 1 else 0) }
   var activeGraphTab by remember { mutableStateOf<Int?>(null) }
+  var fullInspectData by remember { mutableStateOf<GraphInspectData?>(null) }
+  var selectedStudioMethod by remember { mutableStateOf(GraphAnalysisMethod.RAW_SERIES) }
+
+  val studioGraphMeta = remember {
+    listOf(
+      Triple("1. Speed Profile", Icons.AutoMirrored.Filled.ShowChart, Color(0xFF6366F1)),
+      Triple("2. Elevation Gain", Icons.Default.Terrain, Color(0xFF38BDF8)),
+      Triple("3. Efficiency & Voltage", Icons.Default.ElectricBolt, Color(0xFFEC4899)),
+      Triple("4. Distance vs Energy", Icons.Default.BarChart, Color(0xFF10B981)),
+      Triple("5. Fleet Pie Slices", Icons.Default.PieChart, Color(0xFF6366F1)),
+      Triple("6. Pace vs Efficiency", Icons.Default.BubbleChart, Color(0xFFA855F7)),
+      Triple("7. Ride Duration", Icons.Default.Schedule, Color(0xFFF97316)),
+      Triple("8. Motor Watts & Amps", Icons.Default.Speed, Color(0xFFF59E0B)),
+      Triple("9. Performance Radar", Icons.Default.Radar, Color(0xFF10B981)),
+      Triple("10. Gas Savings ROI", Icons.AutoMirrored.Filled.TrendingUp, Color(0xFF22C55E)),
+      Triple("11. AI Fleet Coach", Icons.Default.AutoAwesome, Color(0xFFEC4899)),
+    )
+  }
 
   fun playCue(cue: VoiceAudioManager.TouchCue = VoiceAudioManager.TouchCue.BUTTON_TAP) {
     sessionVm.voiceAudio.triggerHapticCue(
@@ -142,27 +188,9 @@ fun RideTelemetryStudioScreen(
     )
   }
 
-  val vehicleOptions = remember(rides) { listOf("ALL") + rides.map { it.vehicleName }.distinct().filter { it.isNotBlank() } }
-  val filteredRides =
-    remember(rides, vehicleFilter, windowLimit) {
-      val base = if (vehicleFilter == "ALL") rides else rides.filter { it.vehicleName == vehicleFilter }
-      if (windowLimit > 0) base.take(windowLimit) else base
-    }
-
   val distUnit = distUnitLabel(settings.distanceUnit)
   val spdUnit = speedUnitLabel(settings.distanceUnit)
   val elevUnit = elevationUnitLabel(settings.distanceUnit)
-
-  val totalKm = remember(filteredRides) { filteredRides.sumOf { it.distanceKm } }
-  val topSpeedKmh = remember(filteredRides) { filteredRides.maxOfOrNull { it.maxSpeedKmh } ?: 0.0 }
-  val totalElevM = remember(filteredRides) { filteredRides.sumOf { it.elevationGainM } }
-  val totalWh = remember(filteredRides) { filteredRides.sumOf { it.whUsed } }
-  val totalMins = remember(filteredRides) { filteredRides.sumOf { it.durationSec } / 60 }
-  val avgEff =
-    remember(totalKm, totalWh, settings.distanceUnit) {
-      if (settings.distanceUnit == "km") PevBatteryPhysics.whPerKm(totalWh, totalKm)
-      else PevBatteryPhysics.whPerMile(totalWh, totalKm)
-    }
 
   Surface(
     color = MaterialTheme.colorScheme.background,
@@ -273,14 +301,14 @@ fun RideTelemetryStudioScreen(
       ) {
         FilterChip(
           selected = studioMode == 0,
-          onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); studioMode = 0 },
+          onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); telemetryVm.setStudioMode(0) },
           leadingIcon = { Icon(Icons.AutoMirrored.Filled.ShowChart, null, Modifier.size(16.dp)) },
           label = { Text("Fleet Graphs (10)", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
           modifier = Modifier.weight(1f).testTag("studio_mode_fleet"),
         )
         FilterChip(
           selected = studioMode == 1,
-          onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); studioMode = 1 },
+          onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); telemetryVm.setStudioMode(1) },
           leadingIcon = { Icon(Icons.Default.Map, null, Modifier.size(16.dp)) },
           label = { Text("Per-Ride Deep Dive", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
           modifier = Modifier.weight(1f).testTag("studio_mode_single"),
@@ -299,14 +327,14 @@ fun RideTelemetryStudioScreen(
               items(listOf(0 to "All Rides", 5 to "Last 5", 10 to "Last 10", 25 to "Last 25")) { (lim, lbl) ->
                 FilterChip(
                   selected = windowLimit == lim,
-                  onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); windowLimit = lim },
+                  onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); telemetryVm.setWindowLimit(lim) },
                   label = { Text(lbl, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
                 )
               }
               items(vehicleOptions) { vName ->
                 FilterChip(
                   selected = vehicleFilter == vName,
-                  onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); vehicleFilter = vName },
+                  onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); telemetryVm.setVehicleFilter(vName) },
                   label = { Text(vName, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
                 )
               }
@@ -341,22 +369,8 @@ fun RideTelemetryStudioScreen(
 
 
 
-          val graphMeta = listOf(
-            Triple("1. Speed Profile", Icons.AutoMirrored.Filled.ShowChart, Color(0xFF6366F1)),
-            Triple("2. Elevation Gain", Icons.Default.Terrain, Color(0xFF38BDF8)),
-            Triple("3. Efficiency & Voltage", Icons.Default.ElectricBolt, Color(0xFFEC4899)),
-            Triple("4. Distance vs Energy", Icons.Default.BarChart, Color(0xFF10B981)),
-            Triple("5. Fleet Pie Slices", Icons.Default.PieChart, Color(0xFF6366F1)),
-            Triple("6. Pace vs Efficiency", Icons.Default.BubbleChart, Color(0xFFA855F7)),
-            Triple("7. Ride Duration", Icons.Default.Schedule, Color(0xFFF97316)),
-            Triple("8. Motor Watts & Amps", Icons.Default.Speed, Color(0xFFF59E0B)),
-            Triple("9. Performance Radar", Icons.Default.Radar, Color(0xFF10B981)),
-            Triple("10. Gas Savings ROI", Icons.AutoMirrored.Filled.TrendingUp, Color(0xFF22C55E)),
-            Triple("11. AI Fleet Coach", Icons.Default.AutoAwesome, Color(0xFFEC4899)),
-          )
-
-          items(graphMeta.indices.toList()) { idx ->
-            val (title, icon, accent) = graphMeta[idx]
+          items(studioGraphMeta.indices.toList()) { idx ->
+            val (title, icon, accent) = studioGraphMeta[idx]
             Surface(
               onClick = {
                 playCue(VoiceAudioManager.TouchCue.BUTTON_TAP)
@@ -382,8 +396,8 @@ fun RideTelemetryStudioScreen(
                   }
                 }
                 Column(Modifier.weight(1f)) {
-                  Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = Color.White)
-                  Text("Click to launch independent chart window", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                  Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
+                  Text("Click to launch independent chart window", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Surface(
                   shape = RoundedCornerShape(6.dp),
@@ -399,9 +413,10 @@ fun RideTelemetryStudioScreen(
 
 
           // INTERACTIVE MULTI-RIDE & SINGLE-RIDE GPS TRACK MAP
-          item {
-            val mapRide = filteredRides.firstOrNull { it.id == selectedRideId } ?: filteredRides.first()
-            StudioGraphCard(icon = Icons.Default.Map, title = "GPS TRAIL TRACKS MAP", accent = MaterialTheme.colorScheme.primary) {
+          val mapRide = filteredRides.firstOrNull { it.id == selectedRideId } ?: filteredRides.firstOrNull()
+          if (mapRide != null) {
+            item {
+              StudioGraphCard(icon = Icons.Default.Map, title = "GPS TRAIL TRACKS MAP", accent = MaterialTheme.colorScheme.primary) {
               Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 FilterChip(
                   selected = overlayAllTracks,
@@ -412,11 +427,11 @@ fun RideTelemetryStudioScreen(
               }
               if (!overlayAllTracks) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                  items(filteredRides.take(12), key = { it.id }) { r ->
+                  itemsIndexed(filteredRides.take(12), key = { idx, r -> "map_${r.id}_$idx" }) { _, r ->
                     val pts = remember(r.id, r.polylinePoints.size) { parseRideTrackPoints(r).size }
                     FilterChip(
                       selected = mapRide.id == r.id,
-                      onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); selectedRideId = r.id },
+                      onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); telemetryVm.setSelectedRideId(r.id) },
                       label = { Text("${r.title.take(16)} ($pts)", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
                     )
                   }
@@ -430,6 +445,7 @@ fun RideTelemetryStudioScreen(
               )
             }
           }
+        }
 
           // SIDE-BY-SIDE 2-RIDE COMPARISON
           if (filteredRides.size >= 2) {
@@ -470,50 +486,69 @@ fun RideTelemetryStudioScreen(
             )
             Spacer(Modifier.height(4.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-              items(rides, key = { it.id }) { r ->
+              itemsIndexed(rides, key = { idx, r -> "pick_${r.id}_$idx" }) { idx, r ->
+                val dVal = formatDistValue(r.distanceKm.takeIf { it.isFinite() } ?: 0.0, settings.distanceUnit)
                 FilterChip(
                   selected = selectedRideId == r.id,
-                  onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); selectedRideId = r.id },
-                  label = { Text("${r.title.take(18)} • ${"%.1f".format(formatDistValue(r.distanceKm, settings.distanceUnit))}$distUnit", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
+                  onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); telemetryVm.setSelectedRideId(r.id) },
+                  label = { Text("${r.title.ifBlank { "Ride ${idx + 1}" }.take(18)} • ${"%.1f".format(dVal)}$distUnit", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
                   modifier = Modifier.testTag("studio_pick_ride_${r.id}"),
                 )
               }
             }
           }
 
-          val activeRide = rides.firstOrNull { it.id == selectedRideId } ?: rides.first()
-          item(key = "deep_dive_${activeRide.id}") {
-            val effVal =
-              if (settings.distanceUnit == "km") PevBatteryPhysics.whPerKm(activeRide.whUsed, activeRide.distanceKm)
-              else PevBatteryPhysics.whPerMile(activeRide.whUsed, activeRide.distanceKm)
+          val activeIdx = rides.indexOfFirst { it.id == selectedRideId }.takeIf { it >= 0 } ?: 0
+          val activeRide = rides.getOrNull(activeIdx)
+          if (activeRide != null) {
+            item(key = "deep_dive_${activeRide.id}_$activeIdx") {
+              val safeWh = activeRide.whUsed.takeIf { it.isFinite() } ?: 0.0
+              val safeDist = activeRide.distanceKm.takeIf { it.isFinite() } ?: 0.0
+              val safeMaxSpd = activeRide.maxSpeedKmh.takeIf { it.isFinite() } ?: 0.0
+              val safeElev = activeRide.elevationGainM.takeIf { it.isFinite() } ?: 0.0
+              val effVal =
+                (if (settings.distanceUnit == "km") PevBatteryPhysics.whPerKm(safeWh, safeDist)
+                else PevBatteryPhysics.whPerMile(safeWh, safeDist)).takeIf { it.isFinite() } ?: 0.0
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-              TacticalCard(title = "${activeRide.title} • ${activeRide.vehicleName}") {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                  StudioKpiTile("DISTANCE", "${"%.2f".format(formatDistValue(activeRide.distanceKm, settings.distanceUnit))} $distUnit", MaterialTheme.colorScheme.primary, Modifier.weight(1f))
-                  StudioKpiTile("PEAK", "${"%.1f".format(formatSpeedValue(activeRide.maxSpeedKmh, settings.distanceUnit))} $spdUnit", MaterialTheme.colorScheme.secondary, Modifier.weight(1f))
-                  StudioKpiTile("CLIMB", "+${formatElevationValue(activeRide.elevationGainM, settings.distanceUnit).toInt()} $elevUnit", Color(0xFF38BDF8), Modifier.weight(1f))
-                  StudioKpiTile("EFF", "${"%.1f".format(effVal)} Wh/$distUnit", MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
+              Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                TacticalCard(title = "${activeRide.title.ifBlank { "Trail Ride" }} • ${activeRide.vehicleName}") {
+                  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    StudioKpiTile("DISTANCE", "${"%.2f".format(formatDistValue(safeDist, settings.distanceUnit))} $distUnit", MaterialTheme.colorScheme.primary, Modifier.weight(1f))
+                    StudioKpiTile("PEAK", "${"%.1f".format(formatSpeedValue(safeMaxSpd, settings.distanceUnit))} $spdUnit", MaterialTheme.colorScheme.secondary, Modifier.weight(1f))
+                    StudioKpiTile("CLIMB", "+${formatElevationValue(safeElev, settings.distanceUnit).toInt()} $elevUnit", Color(0xFF38BDF8), Modifier.weight(1f))
+                    StudioKpiTile("EFF", "${"%.1f".format(effVal)} Wh/$distUnit", MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
+                  }
+                }
+
+                var deepDivePlaybackProgress by remember(activeRide.id) { mutableFloatStateOf(0f) }
+
+                InteractiveRidePlaybackScrubber(
+                  ride = activeRide,
+                  activeVehicle = activeVehicle,
+                  settings = settings,
+                  externalProgress = deepDivePlaybackProgress,
+                  onProgressChange = { deepDivePlaybackProgress = it },
+                )
+
+                PerRideTelemetryPanel(
+                  ride = activeRide,
+                  activeVehicle = activeVehicle,
+                  settings = settings,
+                  showAllStacked = true,
+                  playbackProgress = deepDivePlaybackProgress,
+                )
+
+                if (activeRide.aiDebrief.isNotBlank()) {
+                  TacticalCard(title = "RIDGE-TO-RIDGE AI DEBRIEF") {
+                    Text(activeRide.aiDebrief, style = MaterialTheme.typography.bodySmall)
+                  }
                 }
               }
-
-              InteractiveRidePlaybackScrubber(
-                ride = activeRide,
-                activeVehicle = activeVehicle,
-                settings = settings,
-              )
-
-              PerRideTelemetryPanel(
-                ride = activeRide,
-                activeVehicle = activeVehicle,
-                settings = settings,
-                showAllStacked = true,
-              )
-
-              if (activeRide.aiDebrief.isNotBlank()) {
-                TacticalCard(title = "RIDGE-TO-RIDGE AI DEBRIEF") {
-                  Text(activeRide.aiDebrief, style = MaterialTheme.typography.bodySmall)
-                }
+            }
+          } else {
+            item {
+              TacticalCard(title = "NO RIDE LOGS") {
+                Text("No ride logs available. Record or sync a ride to view Per-Ride Deep Dive telemetry.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
               }
             }
           }
@@ -522,6 +557,538 @@ fun RideTelemetryStudioScreen(
         item { Spacer(Modifier.height(16.dp)) }
       }
     }
+  }
+
+  // DEDICATED GRAPH WINDOW POP-UP FOR TELEMETRY MATRIX CARDS (0..10)
+  activeGraphTab?.let { tabIdx ->
+    val safeTab = tabIdx.coerceIn(0, studioGraphMeta.lastIndex)
+    val (winTitle, winIcon, winAccent) = studioGraphMeta[safeTab]
+    val palette = listOf(
+      MaterialTheme.colorScheme.primary,
+      MaterialTheme.colorScheme.secondary,
+      MaterialTheme.colorScheme.tertiary,
+      Color(0xFF38BDF8),
+      Color(0xFFF97316),
+      Color(0xFFA855F7),
+    )
+
+    fun buildInspectForTab(idx: Int): GraphInspectData? {
+      val series = filteredRides.take(16).reversed()
+      if (series.isEmpty()) return null
+      val seriesGps =
+        series.lastOrNull { parseRideTrackPoints(it).size >= 2 }
+          ?.let { r -> parseRideTrackPoints(r).map { it.latitude to it.longitude } }
+          .orEmpty()
+      return when (idx) {
+        0 -> {
+          val maxSpd = series.map { formatSpeedValue(it.maxSpeedKmh, settings.distanceUnit) }
+          val avgSpd = series.map { formatSpeedValue(it.avgSpeedKmh, settings.distanceUnit) }
+          GraphInspectData(
+            title = "Speed Profile Matrix",
+            subtitle = "Peak & Average across ${series.size} logs",
+            chartType = GraphInspectChartType.SPEED,
+            icon = Icons.AutoMirrored.Filled.ShowChart,
+            primaryColor = winAccent,
+            unitLabel = spdUnit,
+            values = maxSpd,
+            secondaryValues = avgSpd,
+            peakMetric = "%.1f %s".format(maxSpd.maxOrNull() ?: 0.0, spdUnit),
+            avgMetric = "%.1f %s".format(avgSpd.average().takeIf { !it.isNaN() } ?: 0.0, spdUnit),
+            referenceValue = avgSpd.average().takeIf { !it.isNaN() },
+            timestamps = series.map { it.title },
+            gpsPoints = seriesGps,
+          )
+        }
+        1 -> {
+          val elevVals = series.map { formatElevationValue(it.elevationGainM, settings.distanceUnit) }
+          GraphInspectData(
+            title = "Elevation Gain Matrix",
+            subtitle = "Total Climb: +${elevVals.sum().toInt()} $elevUnit",
+            chartType = GraphInspectChartType.ELEVATION,
+            icon = Icons.Default.Terrain,
+            primaryColor = winAccent,
+            unitLabel = elevUnit,
+            values = elevVals,
+            peakMetric = "+%.0f %s".format(elevVals.maxOrNull() ?: 0.0, elevUnit),
+            avgMetric = "+%.0f %s".format(elevVals.average().takeIf { !it.isNaN() } ?: 0.0, elevUnit),
+            totalMetric = "+%.0f %s".format(elevVals.sum(), elevUnit),
+            referenceValue = elevVals.average().takeIf { !it.isNaN() },
+            timestamps = series.map { it.title },
+            gpsPoints = seriesGps,
+          )
+        }
+        2 -> {
+          val effVals = series.map { r ->
+            if (settings.distanceUnit == "km") PevBatteryPhysics.whPerKm(r.whUsed, r.distanceKm)
+            else PevBatteryPhysics.whPerMile(r.whUsed, r.distanceKm)
+          }
+          GraphInspectData(
+            title = "Efficiency & Pack Drain",
+            subtitle = "Wh per $distUnit consumption",
+            chartType = GraphInspectChartType.EFFICIENCY_VOLTAGE,
+            icon = Icons.Default.ElectricBolt,
+            primaryColor = winAccent,
+            unitLabel = "Wh/$distUnit",
+            values = effVals,
+            peakMetric = "%.1f Wh/%s".format(effVals.maxOrNull() ?: 0.0, distUnit),
+            avgMetric = "%.1f Wh/%s".format(effVals.average().takeIf { !it.isNaN() } ?: 0.0, distUnit),
+            referenceValue = effVals.average().takeIf { !it.isNaN() },
+            timestamps = series.map { it.title },
+            gpsPoints = seriesGps,
+          )
+        }
+        3 -> {
+          val distVals = series.map { formatDistValue(it.distanceKm, settings.distanceUnit) }
+          GraphInspectData(
+            title = "Distance vs Energy",
+            subtitle = "Trip length distribution (${series.size} rides)",
+            chartType = GraphInspectChartType.DISTANCE_ENERGY,
+            icon = Icons.Default.BarChart,
+            primaryColor = winAccent,
+            unitLabel = distUnit,
+            values = distVals,
+            peakMetric = "%.1f %s".format(distVals.maxOrNull() ?: 0.0, distUnit),
+            totalMetric = "%.1f %s".format(distVals.sum(), distUnit),
+            timestamps = series.map { it.title },
+            gpsPoints = seriesGps,
+          )
+        }
+        4 -> {
+          val (slices, totalStr, lbl) = buildFleetPieSlices(filteredRides, pieMode, palette, settings.distanceUnit)
+          GraphInspectData(
+            title = "Fleet Pie Breakdown",
+            subtitle = "${filteredRides.size} rides • $totalStr $lbl",
+            chartType = GraphInspectChartType.PIE_DONUT,
+            icon = Icons.Default.PieChart,
+            primaryColor = winAccent,
+            unitLabel = lbl,
+            peakMetric = "$totalStr $lbl",
+            pieSlices = slices.map { GraphInspectSlice(it.label, it.value, it.color) },
+            gpsPoints = seriesGps,
+          )
+        }
+        5 -> {
+          val spdVals = series.map { formatSpeedValue(it.avgSpeedKmh, settings.distanceUnit) }
+          val effVals = series.map { r ->
+            if (settings.distanceUnit == "km") PevBatteryPhysics.whPerKm(r.whUsed, r.distanceKm)
+            else PevBatteryPhysics.whPerMile(r.whUsed, r.distanceKm)
+          }
+          GraphInspectData(
+            title = "Pace vs Efficiency Scatter",
+            subtitle = "Avg Speed ($spdUnit) vs Wh/$distUnit",
+            chartType = GraphInspectChartType.SCATTER,
+            icon = Icons.Default.BubbleChart,
+            primaryColor = winAccent,
+            unitLabel = "Wh/$distUnit",
+            values = spdVals,
+            secondaryValues = effVals,
+            peakMetric = "%.1f %s".format(spdVals.maxOrNull() ?: 0.0, spdUnit),
+            avgMetric = "%.1f Wh/%s".format(effVals.average().takeIf { !it.isNaN() } ?: 0.0, distUnit),
+            timestamps = series.map { it.title },
+            gpsPoints = seriesGps,
+          )
+        }
+        6 -> {
+          val mins = series.map { (it.durationSec / 60.0).coerceAtLeast(1.0) }
+          GraphInspectData(
+            title = "Ride Duration Distribution",
+            subtitle = "Minutes per ride",
+            chartType = GraphInspectChartType.HISTOGRAM,
+            icon = Icons.Default.Schedule,
+            primaryColor = winAccent,
+            unitLabel = "mins",
+            values = mins,
+            peakMetric = "%.0f mins".format(mins.maxOrNull() ?: 0.0),
+            totalMetric = "%.0f mins".format(mins.sum()),
+            timestamps = series.map { it.title },
+            gpsPoints = seriesGps,
+          )
+        }
+        7 -> {
+          val watts = series.map { r ->
+            val hrs = (r.durationSec / 3600.0).coerceAtLeast(0.02)
+            r.whUsed / hrs
+          }
+          GraphInspectData(
+            title = "Motor Watts & Pack Current",
+            subtitle = "Average continuous load",
+            chartType = GraphInspectChartType.POWER_AMPS,
+            icon = Icons.Default.Speed,
+            primaryColor = winAccent,
+            unitLabel = "W",
+            values = watts,
+            peakMetric = "%.0f W".format(watts.maxOrNull() ?: 0.0),
+            avgMetric = "%.0f W".format(watts.average().takeIf { !it.isNaN() } ?: 0.0),
+            timestamps = series.map { it.title },
+            gpsPoints = seriesGps,
+          )
+        }
+        8 -> {
+          val radar = computeRiderRadarScores(filteredRides)
+          GraphInspectData(
+            title = "5-Axis Performance Radar",
+            subtitle = "Latest Ride vs Fleet Benchmark (${filteredRides.size} logs)",
+            chartType = GraphInspectChartType.RADAR_5AXIS,
+            icon = Icons.Default.Radar,
+            primaryColor = winAccent,
+            unitLabel = "%",
+            values = radar.latest.map { it.toDouble() },
+            secondaryValues = radar.fleetAvg.map { it.toDouble() },
+            peakMetric = radar.peakLabel,
+            avgMetric = radar.avgPctLabel,
+            minMetric = radar.minLabel,
+            timestamps = radar.axisLabels,
+            gpsPoints = seriesGps,
+          )
+        }
+        9 -> {
+          var acc = 0.0
+          val cum = series.map { r ->
+            acc += formatDistValue(r.distanceKm, settings.distanceUnit)
+            acc
+          }
+          GraphInspectData(
+            title = "Cumulative Odometer Growth",
+            subtitle = "Total: ${"%.1f".format(acc)} $distUnit",
+            chartType = GraphInspectChartType.SPEED,
+            icon = Icons.AutoMirrored.Filled.TrendingUp,
+            primaryColor = winAccent,
+            unitLabel = distUnit,
+            values = cum,
+            peakMetric = "%.1f %s".format(acc, distUnit),
+            totalMetric = "${filteredRides.size} rides",
+            timestamps = series.map { it.title },
+            gpsPoints = seriesGps,
+          )
+        }
+        else -> null
+      }
+    }
+
+    fun launchFullInspectForTab(idx: Int) {
+      fullInspectData = buildInspectForTab(idx)
+    }
+
+    BackHandler { activeGraphTab = null }
+    Dialog(
+      onDismissRequest = { activeGraphTab = null },
+      properties = DialogProperties(
+        usePlatformDefaultWidth = false,
+        dismissOnBackPress = true,
+        dismissOnClickOutside = true,
+      ),
+    ) {
+      Surface(
+        modifier = Modifier
+          .fillMaxWidth(0.95f)
+          .widthIn(max = 700.dp)
+          .heightIn(max = 780.dp)
+          .padding(vertical = 16.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.5.dp, winAccent.copy(alpha = 0.65f)),
+        tonalElevation = 12.dp,
+        shadowElevation = 24.dp,
+      ) {
+        Column(Modifier.fillMaxWidth()) {
+          // POP-UP TOP HEADER WITH PREV/NEXT/CLOSE
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .background(
+                Brush.horizontalGradient(
+                  listOf(winAccent.copy(alpha = 0.24f), MaterialTheme.colorScheme.surfaceVariant),
+                ),
+              )
+              .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            Icon(winIcon, contentDescription = null, tint = winAccent, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f)) {
+              Text(
+                winTitle,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Black,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+              Text(
+                "${filteredRides.size} Filtered Logs • $vehicleFilter",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+            IconButton(
+              onClick = {
+                playCue(VoiceAudioManager.TouchCue.TAB_SWITCH)
+                activeGraphTab = (safeTab - 1 + studioGraphMeta.size) % studioGraphMeta.size
+              },
+              modifier = Modifier.size(48.dp).testTag("studio_window_prev_btn"),
+            ) {
+              Icon(Icons.Default.ChevronLeft, contentDescription = "Previous Graph Window")
+            }
+            IconButton(
+              onClick = {
+                playCue(VoiceAudioManager.TouchCue.TAB_SWITCH)
+                activeGraphTab = (safeTab + 1) % studioGraphMeta.size
+              },
+              modifier = Modifier.size(48.dp).testTag("studio_window_next_btn"),
+            ) {
+              Icon(Icons.Default.ChevronRight, contentDescription = "Next Graph Window")
+            }
+            IconButton(
+              onClick = {
+                playCue(VoiceAudioManager.TouchCue.BACK_NAV)
+                activeGraphTab = null
+              },
+              modifier = Modifier.size(48.dp).testTag("studio_window_close_btn"),
+            ) {
+              Icon(Icons.Default.Close, contentDescription = "Close Graph Window")
+            }
+          }
+
+          HorizontalDivider(color = winAccent.copy(alpha = 0.35f))
+
+          Column(
+            modifier = Modifier
+              .weight(1f, fill = false)
+              .verticalScroll(rememberScrollState())
+              .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+          ) {
+            if (filteredRides.isEmpty() && safeTab != 10) {
+              Text(
+                "No rides match filter \"$vehicleFilter\". Select \"All\" in the filter strip to visualize telemetry.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            } else {
+              val tabChartType = when (safeTab) {
+                0 -> GraphInspectChartType.SPEED
+                1 -> GraphInspectChartType.ELEVATION
+                2 -> GraphInspectChartType.EFFICIENCY_VOLTAGE
+                3 -> GraphInspectChartType.DISTANCE_ENERGY
+                4 -> GraphInspectChartType.PIE_DONUT
+                5 -> GraphInspectChartType.SCATTER
+                6 -> GraphInspectChartType.HISTOGRAM
+                7 -> GraphInspectChartType.POWER_AMPS
+                8 -> GraphInspectChartType.RADAR_5AXIS
+                else -> GraphInspectChartType.SPEED
+              }
+              val tabApplicableMethods = remember(tabChartType) { applicableMethodsFor(tabChartType) }
+              val effectiveStudioMethod = if (selectedStudioMethod in tabApplicableMethods) selectedStudioMethod else tabApplicableMethods.first()
+
+              if (safeTab in 0..9 && tabApplicableMethods.size > 1) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                  items(tabApplicableMethods) { method ->
+                    FilterChip(
+                      selected = effectiveStudioMethod == method,
+                      onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); selectedStudioMethod = method },
+                      modifier = Modifier.heightIn(min = 48.dp).testTag("studio_method_${method.name.lowercase()}"),
+                      label = { Text(method.label, style = MaterialTheme.typography.labelSmall) },
+                    )
+                  }
+                }
+              }
+
+              val customPreviewPayload =
+                if (safeTab in 0..9 && effectiveStudioMethod != GraphAnalysisMethod.RAW_SERIES) {
+                  buildInspectForTab(safeTab)
+                } else null
+
+              if (customPreviewPayload != null) {
+                val previewStats = remember(customPreviewPayload.values) { computeGraphAnalytics(customPreviewPayload.values) }
+                Box(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .height(235.dp),
+                ) {
+                  ComposeVectorMethodChartPreview(
+                    data = customPreviewPayload,
+                    stats = previewStats,
+                    method = effectiveStudioMethod,
+                    showGrid = true,
+                    showRefLine = true,
+                    showDataPoints = true,
+                    onScrubPoint = { _, _ -> },
+                    onHoverEnd = {},
+                  )
+                }
+              } else {
+              when (safeTab) {
+                0 -> HistoricalSpeedProfileChart(
+                  rides = filteredRides,
+                  settings = settings,
+                  chartHeight = 230.dp,
+                  onTap = { launchFullInspectForTab(0) },
+                )
+                1 -> HistoricalElevationGainChart(
+                  rides = filteredRides,
+                  settings = settings,
+                  chartHeight = 230.dp,
+                  onTap = { launchFullInspectForTab(1) },
+                )
+                2 -> HistoricalEfficiencyVoltageChart(
+                  rides = filteredRides,
+                  activeVehicle = activeVehicle,
+                  settings = settings,
+                  chartHeight = 230.dp,
+                  onTap = { launchFullInspectForTab(2) },
+                )
+                3 -> HistoricalDistanceEnergyChart(
+                  rides = filteredRides,
+                  settings = settings,
+                  chartHeight = 220.dp,
+                  onTap = { launchFullInspectForTab(3) },
+                )
+                4 -> {
+                  LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(listOf(0 to "By Vehicle", 1 to "Speed Zones", 2 to "Energy Wh", 3 to "Elevation", 4 to "Pack Drain")) { (mIdx, mLbl) ->
+                      FilterChip(
+                        selected = pieMode == mIdx,
+                        onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); pieMode = mIdx },
+                        label = { Text(mLbl, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
+                      )
+                    }
+                  }
+                  val (slices, totalStr, unitLbl) = buildFleetPieSlices(filteredRides, pieMode, palette, settings.distanceUnit)
+                  TelemetryDonutPieChart(
+                    slices = slices,
+                    centerValue = totalStr,
+                    centerLabel = unitLbl,
+                    reducedMotion = settings.reducedMotion,
+                    chartSize = 165.dp,
+                    onTap = { launchFullInspectForTab(4) },
+                  )
+                }
+                5 -> SpeedVsEfficiencyScatterChart(
+                  rides = filteredRides,
+                  settings = settings,
+                  chartHeight = 230.dp,
+                  onTap = { launchFullInspectForTab(5) },
+                )
+                6 -> RideDurationHistogramChart(
+                  rides = filteredRides,
+                  reducedMotion = settings.reducedMotion,
+                  chartHeight = 210.dp,
+                  onTap = { launchFullInspectForTab(6) },
+                )
+                7 -> HistoricalPowerAmpsChart(
+                  rides = filteredRides,
+                  activeVehicle = activeVehicle,
+                  settings = settings,
+                  chartHeight = 230.dp,
+                  onTap = { launchFullInspectForTab(7) },
+                )
+                8 -> RiderPerformanceRadarChart(
+                  rides = filteredRides,
+                  settings = settings,
+                  chartHeight = 240.dp,
+                  onTap = { launchFullInspectForTab(8) },
+                )
+                9 -> {
+                  CumulativeOdometerRoiChart(
+                    rides = filteredRides,
+                    settings = settings,
+                    chartHeight = 230.dp,
+                    onTap = { launchFullInspectForTab(9) },
+                  )
+                  val milesTotal = totalKm * 0.621371
+                  val gasSavedUsd = ((milesTotal / settings.carMpg.coerceAtLeast(8.0)) * settings.gasPriceUsd - (totalWh / 1000.0) * settings.kwhRateUsd).coerceAtLeast(0.0)
+                  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StudioKpiTile("TOTAL ODO", "${"%.1f".format(formatDistValue(totalKm, settings.distanceUnit))} $distUnit", winAccent, Modifier.weight(1f))
+                    StudioKpiTile("GAS SAVED", "$${"%.2f".format(gasSavedUsd)}", Color(0xFF22C55E), Modifier.weight(1f))
+                  }
+                }
+                else -> {
+                  Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                      onClick = {
+                        playCue(VoiceAudioManager.TouchCue.ACTION_CONFIRM)
+                        cockpitVm.requestFleetLogbookDebrief(
+                          activeVehicle = activeVehicle,
+                          batteryChemistry = settings.batteryChemistry,
+                        )
+                      },
+                      enabled = !fleetDebriefBusy,
+                      modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("studio_ai_coach_run_btn"),
+                    ) {
+                      if (fleetDebriefBusy) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                      } else {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                      }
+                      Spacer(Modifier.width(8.dp))
+                      Text(if (fleetDebriefBusy) "Analyzing Live Fleet Telemetry..." else "Generate Live AI Fleet Debrief")
+                    }
+                    if (fleetDebrief.isNotBlank()) {
+                      Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, winAccent.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth(),
+                      ) {
+                        Text(
+                          text = fleetDebrief,
+                          style = MaterialTheme.typography.bodyMedium,
+                          modifier = Modifier.padding(12.dp),
+                        )
+                      }
+                    } else {
+                      Text(
+                        "Tap above to run a live Gemini telemetry engineering review across your ${filteredRides.size} recorded rides.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                    }
+                  }
+                }
+              }
+              }
+            }
+          }
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            if (safeTab in 0..9 && filteredRides.isNotEmpty()) {
+              OutlinedButton(
+                onClick = { launchFullInspectForTab(safeTab) },
+                modifier = Modifier.heightIn(min = 48.dp).testTag("studio_window_inspect_btn"),
+              ) {
+                Icon(Icons.Default.OpenInFull, contentDescription = "Deep Inspect Graph", modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Inspect & Services")
+              }
+            } else {
+              Spacer(Modifier.width(1.dp))
+            }
+            OutlinedButton(
+              onClick = { activeGraphTab = null },
+              modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+              Text("Close Window", fontWeight = FontWeight.Bold)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  fullInspectData?.let { inspectData ->
+    GraphInspectModal(
+      data = inspectData,
+      initialMethod = selectedStudioMethod,
+      onDismiss = { fullInspectData = null },
+    )
   }
 }
 

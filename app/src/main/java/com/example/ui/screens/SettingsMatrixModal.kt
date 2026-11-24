@@ -114,13 +114,13 @@ private enum class AndroidSettingsCategory(
   ),
   AI_COPILOT(
     title = "AI Helper & Repair Shop",
-    keywords = "ai gemini flash lite model thinking creativity voice rural warmth auto speak mechanic repair depth copilot helper chat auto scroll compact toolbar persona",
+    keywords = "ai gemini flash lite model thinking creativity voice rural warmth auto speak tts speed pitch preload buffer voice studio mechanic repair depth copilot helper chat auto scroll compact toolbar persona",
     icon = RuralPevIcons.NavCopilotCore,
     accentColor = Color(0xFFA855F7),
   ),
   SOUND_NOTIFY(
     title = "Sound, Haptics & Alerts",
-    keywords = "sound audio ringtone melody alert chime roger beep walkie dm nav turn low battery vibration haptic feedback pulse tts voice pitch rate volume reminder quiet hours psi maintenance touch acoustic marimba wind noise ducking verbosity detents",
+    keywords = "sound audio ringtone melody alert chime roger beep walkie dm nav turn low battery vibration haptic feedback pulse volume reminder quiet hours psi maintenance touch acoustic marimba wind noise ducking verbosity detents",
     icon = Icons.Default.VolumeUp,
     accentColor = Color(0xFFFF9F1C),
   ),
@@ -163,6 +163,7 @@ fun SettingsMatrixScreen(
   gpsActive: Boolean = false,
   telemetry: LiveTelemetrySnapshot? = null,
   onReplayStartupIntro: () -> Unit = {},
+  onOpenVoiceStudio: () -> Unit = {},
   onBack: () -> Unit,
 ) {
   val ctx = LocalContext.current
@@ -211,9 +212,16 @@ fun SettingsMatrixScreen(
     rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
       if (uri != null) {
         scope.launch {
-          val json = sessionVm.exportVaultJson()
-          ctx.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
-          statusMsg = "JSON Vault exported cleanly."
+          runCatching {
+            val json = sessionVm.exportVaultJson()
+            val out = ctx.contentResolver.openOutputStream(uri)
+              ?: error("Unable to open destination file stream.")
+            out.use { it.write(json.toByteArray()) }
+          }.onSuccess {
+            statusMsg = "JSON Vault exported cleanly."
+          }.onFailure { err ->
+            statusMsg = "Export failed: ${err.message ?: "storage access error"}"
+          }
         }
       }
     }
@@ -221,11 +229,19 @@ fun SettingsMatrixScreen(
   val importVaultLauncher =
     rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
       if (uri != null) {
-        val raw = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.readText().orEmpty()
-        if (raw.isNotBlank()) {
-          sessionVm.importVaultJson(raw) { res ->
-            statusMsg = res.fold(onSuccess = { "Vault imported cleanly." }, onFailure = { "Invalid JSON Vault: ${it.message}" })
+        val rawResult = runCatching {
+          ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
+        }
+        rawResult.onSuccess { raw ->
+          if (raw.isNotBlank()) {
+            sessionVm.importVaultJson(raw) { res ->
+              statusMsg = res.fold(onSuccess = { "Vault imported cleanly." }, onFailure = { "Invalid JSON Vault: ${it.message}" })
+            }
+          } else {
+            statusMsg = "Selected file is empty."
           }
+        }.onFailure { err ->
+          statusMsg = "Unable to read vault file: ${err.message ?: "permission denied"}"
         }
       }
     }
@@ -303,6 +319,7 @@ fun SettingsMatrixScreen(
           sessionVm = sessionVm,
           selectedSubCategory = activeSubCategory,
           onSelectSubCategory = { activeSubCategory = it },
+          onOpenVoiceStudio = onOpenVoiceStudio,
         )
       AndroidSettingsCategory.SOUND_NOTIFY ->
         SoundRingtonesNotifySettingsContent(

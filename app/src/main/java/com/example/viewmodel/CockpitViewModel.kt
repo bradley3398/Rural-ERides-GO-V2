@@ -32,6 +32,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import com.example.core.ReminderScheduler
+import com.example.data.SettingsStore
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private const val TAG = "CockpitViewModel"
@@ -476,6 +479,15 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
           riderRepo.updateRideDebrief(effectiveUid, ride.id, text)
         }
         _statusBanner.value = "Ridge-to-Ridge AI Debrief ready for ${ride.title}."
+        val settings = SettingsStore(ctx).settingsFlow.first()
+        if (settings.aiNotifsEnabled) {
+          ReminderScheduler.postAiNotification(
+            context = ctx,
+            title = "Ride Debrief: ${ride.title}",
+            body = text.take(150),
+            targetTab = "COCKPIT",
+          )
+        }
       }
       res.onFailure { _statusBanner.value = it.message ?: "AI Debrief error" }
       _debriefBusyId.value = null

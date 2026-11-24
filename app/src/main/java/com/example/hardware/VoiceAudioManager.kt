@@ -29,9 +29,11 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.example.data.AiVoiceProfile
 import com.example.data.AlertTonePreset
+import com.example.data.CustomVoiceProfile
 import com.example.data.RingtonePreset
 import com.example.data.VibrationPatternPreset
 import com.example.data.VoiceDspProfile
+import com.example.data.resolveEffectiveBase
 import com.google.firebase.Firebase
 import com.google.firebase.ai.GenerativeModel
 import com.google.firebase.ai.ai
@@ -57,10 +59,12 @@ import kotlin.math.tanh
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -105,6 +109,8 @@ class VoiceAudioManager(private val context: Context) {
   @Volatile private var activeSpeechTrack: AudioTrack? = null
   private val neuralTtsModels = ConcurrentHashMap<String, GenerativeModel>()
   private val neuralAudioCache = LruCache<String, ByteArray>(28)
+  private val pcmFragmentCache = LruCache<String, ByteArray>(48)
+  @Volatile var activeStreamingSession: StreamingTtsBufferSession? = null
 
   private val voiceSampleRate = 16000
   private val studioSampleRate = 44100
@@ -207,6 +213,290 @@ class VoiceAudioManager(private val context: Context) {
     }
   }
 
+  // ============================================================================
+  // BACKGROUND PRE-LOADING BUFFER FOR TTS FRAGMENTS & STREAMING PLAYBACK
+  // ============================================================================
+
+  class StreamingSentenceSplitter(private val onSentenceReady: (String) -> Unit) {
+    private val buffer = StringBuilder()
+
+    fun feed(chunk: String) {
+      buffer.append(chunk)
+      processBuffer(isFinal = false)
+    }
+
+    fun flush() {
+      processBuffer(isFinal = true)
+    }
+
+    private fun processBuffer(isFinal: Boolean) {
+      while (true) {
+        val text = buffer.toString()
+        val idx = findSentenceEnd(text)
+        if (idx != -1) {
+          val sentence = text.substring(0, idx + 1).trim()
+          buffer.delete(0, idx + 1)
+          if (sentence.isNotBlank()) {
+            onSentenceReady(sentence)
+          }
+        } else {
+          if (isFinal && text.isNotBlank()) {
+            onSentenceReady(text.trim())
+            buffer.clear()
+          }
+          break
+        }
+      }
+    }
+
+    private fun findSentenceEnd(text: String): Int {
+      for (i in 0 until text.length) {
+        val c = text[i]
+        if (c == '.' || c == '!' || c == '?' || c == '\n') {
+          if (c == '.' && i > 0 && i < text.length - 1 && text[i - 1].isDigit() && text[i + 1].isDigit()) {
+            continue
+          }
+          if (i == text.length - 1 || text[i + 1].isWhitespace()) {
+            return i
+          }
+        }
+      }
+      if (text.length > 120) {
+        val commaIdx = text.indexOf(',', 60)
+        if (commaIdx != -1) return commaIdx
+      }
+      return -1
+    }
+  }
+
+  class StreamingTtsBufferSession internal constructor(
+    private val voiceAudio: VoiceAudioManager,
+    val profile: AiVoiceProfile,
+    val customVoice: CustomVoiceProfile? = null,
+    val volumePct: Int = 85,
+    val speechRateMult: Float = 1.0f,
+    val pitchMult: Float = 1.0f,
+    val preferFastLocal: Boolean = true,
+    val bufferDepth: Int = 2,
+  ) {
+    private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val textChannel = Channel<String>(Channel.UNLIMITED)
+    private val pcmChannel = Channel<Pair<ByteArray, Int>>(capacity = bufferDepth.coerceIn(1, 5))
+    @Volatile private var isFinished = false
+    @Volatile private var isCancelled = false
+
+    init {
+      // 1. Background Pre-loader Worker: pre-synthesizes up to bufferDepth sentence fragments ahead of playback
+      sessionScope.launch {
+        try {
+          for (frag in textChannel) {
+            if (isCancelled || !isActive) break
+            val result = voiceAudio.synthesizeFragmentPcm(
+              fragment = frag,
+              profile = profile,
+              customVoice = customVoice,
+              speechRateMult = speechRateMult,
+              pitchMult = pitchMult,
+              preferFastLocal = preferFastLocal,
+            )
+            if (result != null && !isCancelled && isActive) {
+              pcmChannel.send(result)
+            }
+          }
+        } catch (_: CancellationException) {
+        } finally {
+          pcmChannel.close()
+        }
+      }
+
+      // 2. Continuous Playback Worker: plays PCM fragments sequentially with zero gap
+      sessionScope.launch {
+        try {
+          val dsp = customVoice?.dspProfile ?: profile.dspProfile
+          if (dsp == VoiceDspProfile.CB_RADIO) {
+            voiceAudio.playSquelchChirp(isEnd = false, volumePct = volumePct)
+          }
+          for ((pcm, sRate) in pcmChannel) {
+            if (isCancelled || !isActive) break
+            voiceAudio.playPcm16MonoCancellable(
+              pcm = pcm,
+              sampleRate = sRate,
+              volumePct = volumePct,
+              speedMult = 1.0f,
+              pitchMult = 1.0f,
+            )
+          }
+          if (!isCancelled && isActive && dsp == VoiceDspProfile.CB_RADIO) {
+            voiceAudio.playSquelchChirp(isEnd = true, volumePct = volumePct)
+          }
+        } catch (_: CancellationException) {
+        }
+      }
+    }
+
+    fun enqueueTextFragment(fragment: String) {
+      if (isFinished || isCancelled) return
+      val clean = fragment.trim()
+      if (clean.isNotBlank()) {
+        textChannel.trySend(clean)
+      }
+    }
+
+    fun finish() {
+      if (isFinished || isCancelled) return
+      isFinished = true
+      textChannel.close()
+    }
+
+    fun cancel() {
+      isCancelled = true
+      textChannel.close()
+      pcmChannel.close()
+      sessionScope.cancel()
+      voiceAudio.cancelActiveSpeechPlayback()
+    }
+  }
+
+  suspend fun synthesizeFragmentPcm(
+    fragment: String,
+    profile: AiVoiceProfile,
+    customVoice: CustomVoiceProfile? = null,
+    speechRateMult: Float = 1.0f,
+    pitchMult: Float = 1.0f,
+    preferFastLocal: Boolean = true,
+  ): Pair<ByteArray, Int>? {
+    val clean = cleanSpeechText(fragment)
+    if (clean.isBlank()) return null
+    val cacheKey = "${customVoice?.id ?: profile.id}|${clean.lowercase()}"
+    pcmFragmentCache.get(cacheKey)?.let {
+      return it to (if (preferFastLocal) voiceSampleRate else GEMINI_TTS_SAMPLE_RATE)
+    }
+
+    val effectiveProfile = customVoice?.resolveEffectiveBase() ?: profile
+    val dsp = customVoice?.dspProfile ?: effectiveProfile.dspProfile
+    val effectiveRate = (customVoice?.speechRate ?: effectiveProfile.speechRate) * speechRateMult
+    val effectivePitch = (customVoice?.pitch ?: effectiveProfile.pitch) * pitchMult
+
+    // 1. If preferFastLocal is false, try Studio Neural Gemini TTS first
+    if (!preferFastLocal) {
+      val neuralPcm = fetchOrCacheNeuralSpeechPcm(clean, effectiveProfile, customVoice)
+      if (neuralPcm != null && neuralPcm.isNotEmpty()) {
+        val shaped = if (dsp == VoiceDspProfile.CB_RADIO) applyCbRadioToPcm16(neuralPcm, GEMINI_TTS_SAMPLE_RATE) else neuralPcm
+        pcmFragmentCache.put(cacheKey, shaped)
+        return shaped to GEMINI_TTS_SAMPLE_RATE
+      }
+    }
+
+    // 2. Local DSP Synthesis fallback (fast & reliable, ~80ms per fragment)
+    val engine = tts ?: return null
+    if (!ttsReady) return null
+    val tempWav = File(context.cacheDir, "frag_${System.nanoTime()}.wav")
+    return try {
+      val uttId = "frag_${System.nanoTime()}"
+      val done = CompletableDeferred<Boolean>()
+      engine.setOnUtteranceProgressListener(
+        object : UtteranceProgressListener() {
+          override fun onStart(utteranceId: String?) {}
+          override fun onDone(utteranceId: String?) {
+            if (utteranceId == uttId) done.complete(true)
+          }
+          @Deprecated("Deprecated in Java")
+          override fun onError(utteranceId: String?) {
+            if (utteranceId == uttId) done.complete(false)
+          }
+          override fun onError(utteranceId: String?, errorCode: Int) {
+            if (utteranceId == uttId) done.complete(false)
+          }
+        }
+      )
+      applyBestEngineVoice(effectiveProfile)
+      engine.setSpeechRate(effectiveRate.coerceIn(0.68f, 1.55f))
+      engine.setPitch(effectivePitch.coerceIn(0.65f, 1.45f))
+      val res = engine.synthesizeToFile(clean, Bundle(), tempWav, uttId)
+      if (res != TextToSpeech.SUCCESS) return null
+      val ok = withTimeoutOrNull(4_500L) { done.await() } ?: false
+      if (!ok || !tempWav.exists() || tempWav.length() <= 64L) return null
+
+      val wav = parseWavPcm16(tempWav.readBytes()) ?: return null
+      val shaped = applyLocalDspSignature(wav.pcmBytes, wav.sampleRate, dsp)
+      pcmFragmentCache.put(cacheKey, shaped)
+      shaped to wav.sampleRate
+    } catch (ce: CancellationException) {
+      throw ce
+    } catch (e: Exception) {
+      Log.w(TAG, "Fragment synthesis error: ${e.message}")
+      null
+    } finally {
+      runCatching { tempWav.delete() }
+    }
+  }
+
+  fun splitIntoSentenceFragments(text: String): List<String> {
+    val clean = cleanSpeechText(text)
+    if (clean.isBlank()) return emptyList()
+    val list = mutableListOf<String>()
+    val splitter = StreamingSentenceSplitter { list.add(it) }
+    splitter.feed(clean)
+    splitter.flush()
+    return if (list.isEmpty()) listOf(clean) else list
+  }
+
+  fun startStreamingSpeechSession(
+    profile: AiVoiceProfile,
+    customVoice: CustomVoiceProfile? = null,
+    volumePct: Int = 85,
+    speechRateMult: Float = 1.0f,
+    pitchMult: Float = 1.0f,
+    preferFastLocal: Boolean = true,
+    bufferDepth: Int = 2,
+  ): StreamingTtsBufferSession {
+    stopSpeaking()
+    val session =
+      StreamingTtsBufferSession(
+        voiceAudio = this,
+        profile = profile,
+        customVoice = customVoice,
+        volumePct = volumePct,
+        speechRateMult = speechRateMult,
+        pitchMult = pitchMult,
+        preferFastLocal = preferFastLocal,
+        bufferDepth = bufferDepth,
+      )
+    activeStreamingSession = session
+    return session
+  }
+
+  fun speakWithCustomVoice(
+    text: String,
+    customVoice: CustomVoiceProfile,
+    volumePct: Int = 85,
+    interrupt: Boolean = true,
+    preferFastLocal: Boolean = true,
+    preloadBufferEnabled: Boolean = true,
+  ): Boolean {
+    return speakWithVoiceProfile(
+      text = text,
+      profile = customVoice.resolveEffectiveBase(),
+      volumePct = volumePct,
+      interrupt = interrupt,
+      speechRateMult = customVoice.speechRate,
+      pitchMult = customVoice.pitch,
+      preferFastLocal = preferFastLocal,
+      preloadBufferEnabled = preloadBufferEnabled,
+      customVoice = customVoice,
+    )
+  }
+
+  fun previewCustomVoice(customVoice: CustomVoiceProfile, volumePct: Int = 85): Boolean {
+    val sample = "Howdy from the custom voice studio! Pitch and speech rate configured. Trails are clear and telemetry is active."
+    return speakWithCustomVoice(sample, customVoice, volumePct)
+  }
+
+  fun clearPcmCache() {
+    pcmFragmentCache.evictAll()
+    neuralAudioCache.evictAll()
+  }
+
   fun speakWithVoiceProfile(
     text: String,
     profile: AiVoiceProfile,
@@ -214,18 +504,41 @@ class VoiceAudioManager(private val context: Context) {
     interrupt: Boolean = true,
     speechRateMult: Float = 1.0f,
     pitchMult: Float = 1.0f,
-    preferFastLocal: Boolean = false,
+    preferFastLocal: Boolean = true,
+    preloadBufferEnabled: Boolean = true,
+    customVoice: CustomVoiceProfile? = null,
   ): Boolean {
     if (volumePct <= 0 || text.isBlank()) return false
     val clean = cleanSpeechText(text)
     if (clean.isBlank()) return false
     pendingVolumePct = volumePct
-    pendingRate = (profile.speechRate * speechRateMult).coerceIn(0.65f, 1.65f)
-    pendingPitch = (profile.pitch * pitchMult).coerceIn(0.65f, 1.5f)
+    val baseRate = customVoice?.speechRate ?: profile.speechRate
+    val basePitch = customVoice?.pitch ?: profile.pitch
+    pendingRate = (baseRate * speechRateMult).coerceIn(0.65f, 1.65f)
+    pendingPitch = (basePitch * pitchMult).coerceIn(0.65f, 1.5f)
     pendingVoiceProfile = profile
 
     if (interrupt) {
       cancelActiveSpeechPlayback()
+    }
+
+    val fragments = splitIntoSentenceFragments(clean)
+    if (preloadBufferEnabled && fragments.size > 1) {
+      val session =
+        startStreamingSpeechSession(
+          profile = profile,
+          customVoice = customVoice,
+          volumePct = volumePct,
+          speechRateMult = speechRateMult,
+          pitchMult = pitchMult,
+          preferFastLocal = preferFastLocal,
+          bufferDepth = 2,
+        )
+      for (f in fragments) {
+        session.enqueueTextFragment(f)
+      }
+      session.finish()
+      return true
     }
 
     val prevJob = if (!interrupt) activeSpeechJob else null
@@ -237,17 +550,19 @@ class VoiceAudioManager(private val context: Context) {
           }
           if (!isActive) return@launch
 
-          // 1. Try Studio Neural Gemini 3.1 Flash TTS first (gives every profile a truly unique human AI voice)
+          val dsp = customVoice?.dspProfile ?: profile.dspProfile
+
+          // 1. Try Studio Neural Gemini 3.1 Flash TTS first
           if (!preferFastLocal) {
-            val neuralPcm = fetchOrCacheNeuralSpeechPcm(clean, profile)
+            val neuralPcm = fetchOrCacheNeuralSpeechPcm(clean, profile, customVoice)
             if (neuralPcm != null && neuralPcm.isNotEmpty() && isActive) {
               val processed =
-                if (profile.dspProfile == VoiceDspProfile.CB_RADIO) {
+                if (dsp == VoiceDspProfile.CB_RADIO) {
                   applyCbRadioToPcm16(neuralPcm, GEMINI_TTS_SAMPLE_RATE)
                 } else {
                   neuralPcm
                 }
-              if (profile.dspProfile == VoiceDspProfile.CB_RADIO) {
+              if (dsp == VoiceDspProfile.CB_RADIO) {
                 playSquelchChirp(isEnd = false, volumePct = volumePct)
               }
               playPcm16MonoCancellable(
@@ -257,7 +572,7 @@ class VoiceAudioManager(private val context: Context) {
                 speedMult = speechRateMult.coerceIn(0.7f, 1.55f),
                 pitchMult = pitchMult.coerceIn(0.75f, 1.35f),
               )
-              if (isActive && profile.dspProfile == VoiceDspProfile.CB_RADIO) {
+              if (isActive && dsp == VoiceDspProfile.CB_RADIO) {
                 playSquelchChirp(isEnd = true, volumePct = volumePct)
               }
               return@launch
@@ -267,7 +582,7 @@ class VoiceAudioManager(private val context: Context) {
           if (!isActive) return@launch
 
           // 2. Offline / Fast-turn fallback: Local Neural Voice Slot + Real-Time PCM DSP Shaper
-          val playedDsp = speakLocalWithDspCharacter(clean, profile, volumePct, speechRateMult, pitchMult)
+          val playedDsp = speakLocalWithDspCharacter(clean, profile, volumePct, speechRateMult, pitchMult, customVoice)
           if (!playedDsp && isActive) {
             speakDirectTtsFallback(clean, profile, volumePct, speechRateMult, pitchMult, interrupt = true)
           }
@@ -292,16 +607,16 @@ class VoiceAudioManager(private val context: Context) {
     speakWithVoiceProfile(profile.sampleLine, profile, volumePct.coerceAtLeast(45))
 
   @OptIn(PublicPreviewAPI::class)
-  private fun getOrCreateNeuralTtsModel(profile: AiVoiceProfile): GenerativeModel {
-    val key = "${profile.geminiVoiceName}|${profile.localeTag}"
+  private fun getOrCreateNeuralTtsModel(voiceName: String, localeTag: String): GenerativeModel {
+    val key = "$voiceName|$localeTag"
     return neuralTtsModels.getOrPut(key) {
       val config =
         generationConfig {
           responseModalities = listOf(ResponseModality.AUDIO)
           speechConfig =
             SpeechConfig(
-              voice = Voice(profile.geminiVoiceName),
-              languageCode = profile.localeTag,
+              voice = Voice(voiceName),
+              languageCode = localeTag,
             )
         }
       Firebase.ai(backend = GenerativeBackend.googleAI())
@@ -315,18 +630,21 @@ class VoiceAudioManager(private val context: Context) {
   private suspend fun fetchOrCacheNeuralSpeechPcm(
     cleanText: String,
     profile: AiVoiceProfile,
+    customVoice: CustomVoiceProfile? = null,
   ): ByteArray? {
     val spokenExcerpt = trimToSentenceBoundary(cleanText, maxChars = 720)
     if (spokenExcerpt.isBlank()) return null
-    val cacheKey = "${profile.id}|$spokenExcerpt"
+    val voiceName = customVoice?.geminiVoiceName?.ifBlank { profile.geminiVoiceName } ?: profile.geminiVoiceName
+    val directive = customVoice?.styleDirective?.ifBlank { profile.styleDirective } ?: profile.styleDirective
+    val cacheKey = "${customVoice?.id ?: profile.id}|$spokenExcerpt"
     neuralAudioCache.get(cacheKey)?.let { cached ->
       return cached
     }
     return try {
-      val model = getOrCreateNeuralTtsModel(profile)
-      val directedPrompt = "${profile.styleDirective}. Speak naturally and read this text aloud:\n$spokenExcerpt"
+      val model = getOrCreateNeuralTtsModel(voiceName, profile.localeTag)
+      val directedPrompt = "$directive. Speak naturally and read this text aloud:\n$spokenExcerpt"
       val response =
-        withTimeout(12_000L) {
+        withTimeout(10_000L) {
           model.generateContent(directedPrompt)
         }
       val outStream = ByteArrayOutputStream()
@@ -359,6 +677,7 @@ class VoiceAudioManager(private val context: Context) {
     volumePct: Int,
     speechRateMult: Float,
     pitchMult: Float,
+    customVoice: CustomVoiceProfile? = null,
   ): Boolean {
     val engine = tts ?: return false
     if (!ttsReady) return false

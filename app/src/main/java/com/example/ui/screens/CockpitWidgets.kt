@@ -575,7 +575,7 @@ fun YoutubeMusicAndNewsDeck(
                     )
                     IconButton(
                       onClick = { socialVm.enqueuePlayNext(track) },
-                      modifier = Modifier.size(28.dp),
+                      modifier = Modifier.size(48.dp),
                     ) {
                       Icon(
                         Icons.Default.QueueMusic,

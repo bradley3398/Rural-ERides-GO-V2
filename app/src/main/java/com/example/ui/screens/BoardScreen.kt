@@ -151,6 +151,13 @@ fun BoardScreen(
   var showSlangDecoder by remember { mutableStateOf(false) }
   var showDms by remember { mutableStateOf(false) }
   var dmInitialPeer by remember { mutableStateOf<PublicPilotProfile?>(null) }
+  val requestedDm by socialVm.openDmSheetRequested.collectAsStateWithLifecycle()
+  LaunchedEffect(requestedDm) {
+    if (requestedDm != null) {
+      showDms = true
+      socialVm.clearOpenDmSheetRequest()
+    }
+  }
   var activeCommentPost by remember { mutableStateOf<BoardPost?>(null) }
   var inspectedPilot by remember { mutableStateOf<PublicPilotProfile?>(null) }
   var lightboxImageUrl by remember { mutableStateOf<String?>(null) }

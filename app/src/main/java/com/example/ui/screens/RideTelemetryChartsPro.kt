@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,6 +72,7 @@ internal fun HistoricalPowerAmpsChart(
   settings: MasterSettings,
   chartHeight: Dp = 170.dp,
   modifier: Modifier = Modifier,
+  onTap: (() -> Unit)? = null,
 ) {
   val series = remember(rides) { rides.take(14).reversed() }
   if (series.isEmpty()) return
@@ -131,6 +133,7 @@ internal fun HistoricalPowerAmpsChart(
                 showTooltip = true
               },
               onHoverEnded = { showTooltip = false },
+              onTap = onTap,
             ),
       ) {
         val entrance = entranceState.value
@@ -215,6 +218,71 @@ internal fun HistoricalPowerAmpsChart(
   }
 }
 
+internal data class RiderRadarScores(
+  val latest: List<Float>,
+  val fleetAvg: List<Float>,
+  val axisLabels: List<String>,
+  val peakLabel: String,
+  val avgPctLabel: String,
+  val minLabel: String,
+)
+
+internal fun computeRiderRadarScores(rides: List<RideSession>): RiderRadarScores {
+  val axes = listOf("Speed", "Range", "Climb", "Efficiency", "Endurance")
+  if (rides.isEmpty()) {
+    return RiderRadarScores(
+      latest = emptyList(),
+      fleetAvg = emptyList(),
+      axisLabels = axes,
+      peakLabel = "0%",
+      avgPctLabel = "0%",
+      minLabel = "0%",
+    )
+  }
+  val latest = rides.first()
+  val maxSpd = max(25.0, rides.maxOfOrNull { it.maxSpeedKmh.takeIf { v -> v.isFinite() } ?: 0.0 } ?: 45.0)
+  val maxDist = max(5.0, rides.maxOfOrNull { it.distanceKm.takeIf { v -> v.isFinite() } ?: 0.0 } ?: 15.0)
+  val maxElev = max(40.0, rides.maxOfOrNull { it.elevationGainM.takeIf { v -> v.isFinite() } ?: 0.0 } ?: 120.0)
+  val maxDur = max(600.0, rides.maxOfOrNull { it.durationSec.toDouble() } ?: 1800.0)
+
+  fun safeRatio(num: Double, den: Double): Float {
+    val r = if (den > 0.0 && num.isFinite()) num / den else 0.25
+    return (if (r.isFinite()) r.toFloat() else 0.25f).coerceIn(0.15f, 1f)
+  }
+
+  fun effScore(r: RideSession): Float {
+    val whKm = PevBatteryPhysics.whPerKm(r.whUsed, r.distanceKm).let { if (it.isFinite()) it else 25.0 }
+    return ((42.0 - whKm) / 30.0).toFloat().coerceIn(0.18f, 1f)
+  }
+
+  val lScores = listOf(
+    safeRatio(latest.maxSpeedKmh, maxSpd),
+    safeRatio(latest.distanceKm, maxDist),
+    safeRatio(latest.elevationGainM, maxElev),
+    effScore(latest),
+    safeRatio(latest.durationSec.toDouble(), maxDur),
+  )
+  val fScores = listOf(
+    safeRatio(rides.map { it.maxSpeedKmh }.filter { it.isFinite() }.average(), maxSpd),
+    safeRatio(rides.map { it.distanceKm }.filter { it.isFinite() }.average(), maxDist),
+    safeRatio(rides.map { it.elevationGainM }.filter { it.isFinite() }.average(), maxElev),
+    rides.map { effScore(it).toDouble() }.average().let { if (it.isFinite()) it.toFloat() else 0.5f }.coerceIn(0.15f, 1f),
+    safeRatio(rides.map { it.durationSec.toDouble() }.average(), maxDur),
+  )
+
+  val maxIdx = lScores.indices.maxByOrNull { lScores[it] } ?: 0
+  val minIdx = lScores.indices.minByOrNull { lScores[it] } ?: 0
+  val avgPct = (lScores.average() * 100.0).let { if (it.isFinite()) it else 0.0 }
+  return RiderRadarScores(
+    latest = lScores,
+    fleetAvg = fScores,
+    axisLabels = axes,
+    peakLabel = "${(lScores[maxIdx] * 100f).toInt()}% ${axes[maxIdx]}",
+    avgPctLabel = "${"%.1f".format(avgPct)}% Overall",
+    minLabel = "${(lScores[minIdx] * 100f).toInt()}% ${axes[minIdx]}",
+  )
+}
+
 /**
  * 9. RIDER 5-AXIS PERFORMANCE SPIDER / RADAR PENTAGON CHART (Latest Ride vs Fleet Average)
  */
@@ -224,48 +292,17 @@ internal fun RiderPerformanceRadarChart(
   settings: MasterSettings,
   chartHeight: Dp = 195.dp,
   modifier: Modifier = Modifier,
+  onTap: (() -> Unit)? = null,
 ) {
   if (rides.isEmpty()) return
   val latest = rides.first()
   val triggerKey = remember(rides.size, latest.id) { "radar_${rides.size}_${latest.id}" }
   val entranceState = rememberChartEntranceState(triggerKey = triggerKey, reducedMotion = settings.reducedMotion, durationMs = 640)
 
-  val axes = remember { listOf("Speed", "Range", "Climb", "Efficiency", "Endurance") }
-  val (latestScores, fleetScores) =
-    remember(rides, settings.distanceUnit) {
-      val maxSpd = max(25.0, rides.maxOfOrNull { it.maxSpeedKmh } ?: 45.0)
-      val maxDist = max(5.0, rides.maxOfOrNull { it.distanceKm } ?: 15.0)
-      val maxElev = max(40.0, rides.maxOfOrNull { it.elevationGainM } ?: 120.0)
-      val maxDur = max(600.0, rides.maxOfOrNull { it.durationSec.toDouble() } ?: 1800.0)
-
-      fun safeRatio(num: Double, den: Double): Float {
-        val r = if (den > 0.0 && num.isFinite()) num / den else 0.25
-        return (if (r.isFinite()) r.toFloat() else 0.25f).coerceIn(0.15f, 1f)
-      }
-
-      fun effScore(r: RideSession): Float {
-        val whKm = PevBatteryPhysics.whPerKm(r.whUsed, r.distanceKm).let { if (it.isFinite()) it else 25.0 }
-        return ((42.0 - whKm) / 30.0).toFloat().coerceIn(0.18f, 1f)
-      }
-
-      val lScores =
-        listOf(
-          safeRatio(latest.maxSpeedKmh, maxSpd),
-          safeRatio(latest.distanceKm, maxDist),
-          safeRatio(latest.elevationGainM, maxElev),
-          effScore(latest),
-          safeRatio(latest.durationSec.toDouble(), maxDur),
-        )
-      val fScores =
-        listOf(
-          safeRatio(rides.map { it.maxSpeedKmh }.filter { it.isFinite() }.average(), maxSpd),
-          safeRatio(rides.map { it.distanceKm }.filter { it.isFinite() }.average(), maxDist),
-          safeRatio(rides.map { it.elevationGainM }.filter { it.isFinite() }.average(), maxElev),
-          rides.map { effScore(it).toDouble() }.average().let { if (it.isFinite()) it.toFloat() else 0.5f }.coerceIn(0.15f, 1f),
-          safeRatio(rides.map { it.durationSec.toDouble() }.average(), maxDur),
-        )
-      lScores to fScores
-    }
+  val radar = remember(rides) { computeRiderRadarScores(rides) }
+  val axes = radar.axisLabels
+  val latestScores = radar.latest
+  val fleetScores = radar.fleetAvg
 
   val primaryC = MaterialTheme.colorScheme.primary
   val secondaryC = MaterialTheme.colorScheme.secondary
@@ -280,7 +317,12 @@ internal fun RiderPerformanceRadarChart(
       }
     }
 
-    Canvas(modifier = Modifier.fillMaxWidth().height(chartHeight)) {
+    Canvas(
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(chartHeight)
+        .then(if (onTap != null) Modifier.clickable { onTap() } else Modifier),
+    ) {
       val entrance = entranceState.value
       if (size.width < 24f || size.height < 24f) return@Canvas
       val cx = size.width / 2f
@@ -357,6 +399,7 @@ internal fun CumulativeOdometerRoiChart(
   settings: MasterSettings,
   chartHeight: Dp = 155.dp,
   modifier: Modifier = Modifier,
+  onTap: (() -> Unit)? = null,
 ) {
   val ordered = remember(rides) { rides.take(24).reversed() }
   if (ordered.isEmpty()) return
@@ -414,6 +457,7 @@ internal fun CumulativeOdometerRoiChart(
                 showTooltip = true
               },
               onHoverEnded = { showTooltip = false },
+              onTap = onTap,
             ),
       ) {
         val entrance = entranceState.value
@@ -472,39 +516,51 @@ internal fun InteractiveRidePlaybackScrubber(
   ride: RideSession,
   activeVehicle: PevVehicle?,
   settings: MasterSettings,
+  externalProgress: Float? = null,
+  onProgressChange: ((Float) -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   val speedCurve = remember(ride.id, settings.distanceUnit) { buildRideSpeedProfile(ride, settings.distanceUnit) }
   val elevCurve = remember(ride.id, settings.distanceUnit) { buildRideElevationProfile(ride, settings.distanceUnit) }
-  var progress by remember(ride.id) { mutableFloatStateOf(0f) }
+  var internalProgress by remember(ride.id) { mutableFloatStateOf(0f) }
+  val progress = (externalProgress ?: internalProgress).coerceIn(0f, 1f)
+  fun setProgress(value: Float) {
+    val clamped = value.coerceIn(0f, 1f)
+    internalProgress = clamped
+    onProgressChange?.invoke(clamped)
+  }
   var playing by remember(ride.id) { mutableStateOf(false) }
 
   LaunchedEffect(playing, ride.id) {
     while (playing) {
       delay(65L)
-      val next = progress + 0.015f
+      val next = (externalProgress ?: internalProgress) + 0.015f
       if (next >= 1f) {
-        progress = 1f
+        setProgress(1f)
         playing = false
       } else {
-        progress = next
+        setProgress(next)
       }
     }
   }
 
-  val idx = ((progress * (speedCurve.size - 1)).toInt()).coerceIn(0, speedCurve.lastIndex.coerceAtLeast(0))
-  val spdVal = speedCurve.getOrElse(idx) { 0.0 }
-  val elevVal = elevCurve.getOrElse(idx) { 0.0 }
+  val idx = if (speedCurve.isEmpty()) 0 else ((progress * (speedCurve.size - 1)).toInt()).coerceIn(0, speedCurve.lastIndex)
+  val spdVal = speedCurve.getOrElse(idx) { 0.0 }.takeIf { it.isFinite() } ?: 0.0
+  val elevVal = elevCurve.getOrElse(idx) { 0.0 }.takeIf { it.isFinite() } ?: 0.0
   val spdUnit = speedUnitLabel(settings.distanceUnit)
   val elevUnit = elevationUnitLabel(settings.distanceUnit)
-  val elapsedAtPosSec = (ride.durationSec * progress).toInt()
+  val safeDuration = ride.durationSec.coerceAtLeast(0L)
+  val elapsedAtPosSec = (safeDuration * progress).toInt()
 
-  val nomV = activeVehicle?.voltage ?: 52.0
+  val nomV = activeVehicle?.voltage?.takeIf { it.isFinite() && it >= 12.0 } ?: 52.0
   val startPct = if (ride.startBatteryPct >= 0) ride.startBatteryPct.toDouble() else 95.0
   val endPct = if (ride.endBatteryPct >= 0) ride.endBatteryPct.toDouble() else (startPct - 20.0).coerceAtLeast(15.0)
-  val estSoc = startPct + (endPct - startPct) * progress
-  val estVolts = PevBatteryPhysics.voltageForSoc(nomV, estSoc, settings.batteryChemistry)
-  val estWatts = ((ride.whUsed / (ride.durationSec / 3600.0).coerceAtLeast(0.02)) * (0.45 + 0.9 * (spdVal / (speedCurve.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0)))).toInt().coerceIn(0, 8000)
+  val estSoc = (startPct + (endPct - startPct) * progress).coerceIn(0.0, 100.0)
+  val estVolts = PevBatteryPhysics.voltageForSoc(nomV, estSoc, settings.batteryChemistry).takeIf { it.isFinite() } ?: nomV
+  val safeWh = ride.whUsed.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+  val maxSpdPeak = (speedCurve.maxOrNull()?.takeIf { it.isFinite() && it >= 1.0 } ?: 1.0)
+  val estWattsRaw = (safeWh / (safeDuration / 3600.0).coerceAtLeast(0.02)) * (0.45 + 0.9 * (spdVal / maxSpdPeak))
+  val estWatts = (if (estWattsRaw.isFinite()) estWattsRaw.toInt() else 0).coerceIn(0, 8000)
 
   Surface(
     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
@@ -525,7 +581,7 @@ internal fun InteractiveRidePlaybackScrubber(
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
           IconButton(
             onClick = {
-              if (progress >= 0.99f) progress = 0f
+              if (progress >= 0.99f) setProgress(0f)
               playing = !playing
             },
             modifier = Modifier.size(48.dp).testTag("ride_replay_play_pause_btn"),
@@ -539,7 +595,7 @@ internal fun InteractiveRidePlaybackScrubber(
           IconButton(
             onClick = {
               playing = false
-              progress = 0f
+              setProgress(0f)
             },
             modifier = Modifier.size(48.dp).testTag("ride_replay_reset_btn"),
           ) {
@@ -552,7 +608,7 @@ internal fun InteractiveRidePlaybackScrubber(
         value = progress,
         onValueChange = {
           playing = false
-          progress = it
+          setProgress(it)
         },
         modifier = Modifier.fillMaxWidth(),
       )

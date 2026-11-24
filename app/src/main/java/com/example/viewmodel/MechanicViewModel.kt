@@ -19,9 +19,12 @@ import com.example.data.UiState
 import com.example.data.VisionAnomalyBox
 import com.example.data.YouTubeVideoItem
 import java.util.UUID
+import com.example.core.ReminderScheduler
+import com.example.data.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -39,6 +42,7 @@ data class MechanicDiagSession(
 
 class MechanicViewModel(application: Application) : AndroidViewModel(application) {
 
+  private val ctx = application.applicationContext
   private val aiRepo = GeminiAiRepository()
   private val prefs = application.getSharedPreferences("mechanic_workshop_history_v1", Context.MODE_PRIVATE)
 
@@ -59,6 +63,31 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
 
   private val _checkedItems = MutableStateFlow<Set<String>>(emptySet())
   val checkedItems: StateFlow<Set<String>> = _checkedItems.asStateFlow()
+
+  data class MaintenanceItem(
+    val key: String,
+    val title: String,
+    val intervalKm: Double,
+    val lastServicedKm: Double,
+    val description: String,
+  )
+
+  private val _maintenanceItems =
+    MutableStateFlow<List<MaintenanceItem>>(
+      listOf(
+        MaintenanceItem("tires", "Tire Wear & Pressure Check", 500.0, 0.0, "Inspect tread depth and maintain correct PSI"),
+        MaintenanceItem("brakes", "Brake Pad & Caliper Inspection", 350.0, 0.0, "Check pad thickness and rotor alignment"),
+        MaintenanceItem("drivetrain", "Chain / Belt & Sprocket Lube", 160.0, 0.0, "Clean, lubricate and check tension"),
+        MaintenanceItem("battery", "Battery Pack & BMS Balance Check", 800.0, 0.0, "Verify cell group delta and terminal torque"),
+      )
+    )
+  val maintenanceItems: StateFlow<List<MaintenanceItem>> = _maintenanceItems.asStateFlow()
+
+  fun markMaintenanceServiced(itemKey: String, currentKm: Double) {
+    _maintenanceItems.update { list ->
+      list.map { if (it.key == itemKey) it.copy(lastServicedKm = currentKm) else it }
+    }
+  }
 
   private val _errorCodeState = MutableStateFlow<UiState<ErrorCodeDiagResult>?>(null)
   val errorCodeState: StateFlow<UiState<ErrorCodeDiagResult>?> = _errorCodeState.asStateFlow()
@@ -374,6 +403,15 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
                 )
             }
             syncActiveSession(scope = scope)
+            val settings = SettingsStore(ctx).settingsFlow.first()
+            if (settings.aiNotifsEnabled) {
+              ReminderScheduler.postAiNotification(
+                context = ctx,
+                title = "AI Mechanic Diagnosis Ready",
+                body = diag.diagnosisText.take(150),
+                targetTab = "MECHANIC",
+              )
+            }
           }
           res.onFailure { err ->
             if (err is kotlinx.coroutines.CancellationException) throw err
