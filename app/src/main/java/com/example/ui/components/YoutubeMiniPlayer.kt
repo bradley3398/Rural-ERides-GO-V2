@@ -1015,13 +1015,13 @@ private fun openInYouTubeApp(context: Context, videoId: String) {
 }
 
 internal fun youtubeEmbedOriginForPackage(packageName: String): String {
-  val cleanPkg = packageName.trim().ifBlank { "com.aistudio.volttrail.kqrmvx" }
+  val cleanPkg = packageName.trim().ifBlank { com.example.BuildConfig.APPLICATION_ID }
   return "https://$cleanPkg"
 }
 
 internal fun buildYoutubeIframeHtml(
   videoId: String,
-  origin: String = youtubeEmbedOriginForPackage("com.aistudio.volttrail.kqrmvx"),
+  origin: String = youtubeEmbedOriginForPackage(com.example.BuildConfig.APPLICATION_ID),
 ): String {
   val safeId = sanitizeYoutubeVideoId(videoId)
   val encodedOrigin = URLEncoder.encode(origin, "UTF-8")
