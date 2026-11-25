@@ -397,7 +397,7 @@ fun YoutubeMiniPlayerHost(
 
         if (miniSearchOpen) {
           item {
-            TacticalCard(highlight = true, title = "SEARCH_MUSIC_MEDIA.EXE") {
+            TacticalCard(highlight = true, title = "Search Riding Music") {
               Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedTextField(
                   value = miniSearchQuery,
@@ -492,7 +492,7 @@ fun YoutubeMiniPlayerHost(
         }
 
         item {
-          TacticalCard(highlight = true, title = "MEDIA_PLAYER.EXE") {
+          TacticalCard(highlight = true, title = "Media Player") {
             Text(
               video.title,
               style = MaterialTheme.typography.titleMedium,
@@ -816,7 +816,7 @@ fun YoutubeMiniPlayerHost(
       Column(Modifier.fillMaxWidth()) {
         if (isClassic && settings.showClassicTitleBars) {
           ClassicWindowTitleBar(
-            title = "MINI_PLAYER.EXE",
+            title = "Mini Player",
             trailingBadge = if (playing) "PLAY" else "PAUSE",
             active = true,
           )

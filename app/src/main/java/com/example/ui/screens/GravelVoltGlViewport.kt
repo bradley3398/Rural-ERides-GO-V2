@@ -251,7 +251,6 @@ private class GravelVoltGlRenderer(
     when (finish.blueprintType) {
       Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE,
       Pev3dBlueprintType.EUC_AERO_TRAIL, -> {
-        // Tall single armored wheel + twin flanking battery shells + CNC power pads + roll cage
         drawPartRotated(px, py + 0.05f, pz, 0.24f, 0.44f, 0.44f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
         drawPartRotated(px - 0.16f, py + 0.20f, pz, 0.12f, 0.62f, 0.56f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.15f)
         drawPartRotated(px + 0.16f, py + 0.20f, pz, 0.12f, 0.62f, 0.56f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.15f)
@@ -262,7 +261,6 @@ private class GravelVoltGlRenderer(
       Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD,
       Pev3dBlueprintType.SCOOTER_TUBULAR_RACING,
       Pev3dBlueprintType.SCOOTER_MONOCOQUE_AERO, -> {
-        // Compact 11" wheels + wide flat deck + tall raked stem (or twin stems) + crossbar
         drawPartRotated(px, py - 0.22f, pz - 0.64f, 0.16f, 0.24f, 0.24f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
         drawPartRotated(px, py - 0.22f, pz + 0.64f, 0.16f, 0.24f, 0.24f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
         drawPartRotated(px, py - 0.10f, pz, 0.46f, 0.16f, 1.18f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.18f)
@@ -277,14 +275,12 @@ private class GravelVoltGlRenderer(
         drawPartRotated(px, py - 0.02f, pz + 0.62f, 0.26f, 0.09f, 0.08f, 0f, bankRad, boostCol[0], boostCol[1], boostCol[2], 1.0f)
       }
       Pev3dBlueprintType.HYDROFOIL_EFOIL -> {
-        // Skimming surfboard hull + vertical hydrofoil mast + submerged wing pod
         drawPartRotated(px, py + 0.06f, pz, 0.72f, 0.12f, 1.55f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.22f)
         drawPartRotated(px, py - 0.22f, pz + 0.15f, 0.08f, 0.52f, 0.20f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.25f)
         drawPartRotated(px, py - 0.44f, pz + 0.10f, 0.82f, 0.06f, 0.22f, 0f, bankRad, 0.20f, 0.85f, 0.95f, 0.45f)
         drawPartRotated(px, py + 0.16f, pz - 0.68f, 0.22f, 0.08f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f)
       }
       else -> {
-        // eMoto & eBike silhouettes
         drawPartRotated(px, py - 0.15f, pz - 0.68f, 0.20f, 0.34f, 0.34f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
         drawPartRotated(px, py - 0.15f, pz + 0.68f, 0.20f, 0.34f, 0.34f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
         drawPartRotated(px, py + 0.12f, pz, 0.34f, 0.28f, 1.35f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.15f)
@@ -299,7 +295,6 @@ private class GravelVoltGlRenderer(
       drawPartRotated(px, py + 0.22f, pz + 1.05f, 0.22f, 0.22f, 0.55f, 0f, bankRad, 0.15f, 0.95f, 1.0f, 1.0f)
     }
 
-    // Turn signals
     if (state.turnSignalActive && state.turnSignalDir != 0) {
       val sx = if (state.turnSignalDir < 0) px - 0.44f else px + 0.44f
       drawPartRotated(sx, py + 0.74f, pz - 0.46f, 0.12f, 0.12f, 0.12f, 0f, bankRad, 1.0f, 0.68f, 0.05f, 1.0f)
@@ -450,7 +445,7 @@ private class GravelVoltGlRenderer(
 }
 
 @Composable
-internal fun GravelVoltVulkanViewport(
+internal fun GravelVoltGlViewport(
   vehicleName: String,
   lanePos: Float,
   jumpHeight: Float,

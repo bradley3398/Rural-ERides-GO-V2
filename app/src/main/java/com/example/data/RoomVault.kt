@@ -27,6 +27,11 @@ data class OfflineRideEntity(
   val polylineCsv: String,
   val syncedToCloud: Boolean,
   val createdAtMs: Long,
+  val vehicleId: String = "",
+  val startBatteryPct: Int = -1,
+  val endBatteryPct: Int = -1,
+  val weatherSummary: String = "",
+  val aiDebrief: String = "",
 )
 
 data class CopilotSessionEntity(
@@ -51,6 +56,10 @@ interface OfflineRideDao {
   fun observeRides(userId: String): Flow<List<OfflineRideEntity>>
 
   suspend fun upsert(ride: OfflineRideEntity)
+
+  suspend fun deleteRide(rideId: String)
+
+  suspend fun updateAiDebrief(rideId: String, aiDebrief: String)
 
   suspend fun clearUserRides(userId: String)
 }
@@ -108,6 +117,11 @@ class AppDatabase private constructor(context: Context) {
               put("polylineCsv", ride.polylineCsv)
               put("syncedToCloud", if (ride.syncedToCloud) 1 else 0)
               put("createdAtMs", ride.createdAtMs)
+              put("vehicleId", ride.vehicleId)
+              put("startBatteryPct", ride.startBatteryPct)
+              put("endBatteryPct", ride.endBatteryPct)
+              put("weatherSummary", ride.weatherSummary)
+              put("aiDebrief", ride.aiDebrief)
             }
           dbHelper.writableDatabase.insertWithOnConflict(
             "offline_rides",
@@ -115,6 +129,21 @@ class AppDatabase private constructor(context: Context) {
             values,
             SQLiteDatabase.CONFLICT_REPLACE,
           )
+        }
+        ridesChanged.tryEmit(Unit)
+      }
+
+      override suspend fun deleteRide(rideId: String) {
+        withContext(Dispatchers.IO) {
+          dbHelper.writableDatabase.delete("offline_rides", "id = ?", arrayOf(rideId))
+        }
+        ridesChanged.tryEmit(Unit)
+      }
+
+      override suspend fun updateAiDebrief(rideId: String, aiDebrief: String) {
+        withContext(Dispatchers.IO) {
+          val values = ContentValues().apply { put("aiDebrief", aiDebrief) }
+          dbHelper.writableDatabase.update("offline_rides", values, "id = ?", arrayOf(rideId))
         }
         ridesChanged.tryEmit(Unit)
       }
@@ -206,7 +235,7 @@ class AppDatabase private constructor(context: Context) {
     val result = mutableListOf<OfflineRideEntity>()
     dbHelper.readableDatabase
       .rawQuery(
-        "SELECT id, userId, vehicleName, title, durationSec, distanceKm, maxSpeedKmh, avgSpeedKmh, elevationGainM, whUsed, polylineCsv, syncedToCloud, createdAtMs FROM offline_rides WHERE userId = ? ORDER BY createdAtMs DESC",
+        "SELECT id, userId, vehicleName, title, durationSec, distanceKm, maxSpeedKmh, avgSpeedKmh, elevationGainM, whUsed, polylineCsv, syncedToCloud, createdAtMs, vehicleId, startBatteryPct, endBatteryPct, weatherSummary, aiDebrief FROM offline_rides WHERE userId = ? ORDER BY createdAtMs DESC",
         arrayOf(userId),
       )
       .use { c ->
@@ -226,6 +255,11 @@ class AppDatabase private constructor(context: Context) {
               polylineCsv = c.getString(10),
               syncedToCloud = c.getInt(11) != 0,
               createdAtMs = c.getLong(12),
+              vehicleId = if (c.isNull(13)) "" else c.getString(13),
+              startBatteryPct = if (c.isNull(14)) -1 else c.getInt(14),
+              endBatteryPct = if (c.isNull(15)) -1 else c.getInt(15),
+              weatherSummary = if (c.isNull(16)) "" else c.getString(16),
+              aiDebrief = if (c.isNull(17)) "" else c.getString(17),
             )
           )
         }
@@ -282,7 +316,7 @@ class AppDatabase private constructor(context: Context) {
   }
 
   private class VaultSqliteHelper(context: Context) :
-    SQLiteOpenHelper(context, "rural_erides_vault.db", null, 1) {
+    SQLiteOpenHelper(context, "rural_erides_vault.db", null, 2) {
 
     init {
       setWriteAheadLoggingEnabled(true)
@@ -323,10 +357,35 @@ class AppDatabase private constructor(context: Context) {
           whUsed REAL NOT NULL,
           polylineCsv TEXT NOT NULL,
           syncedToCloud INTEGER NOT NULL,
-          createdAtMs INTEGER NOT NULL
+          createdAtMs INTEGER NOT NULL,
+          vehicleId TEXT NOT NULL DEFAULT '',
+          startBatteryPct INTEGER NOT NULL DEFAULT -1,
+          endBatteryPct INTEGER NOT NULL DEFAULT -1,
+          weatherSummary TEXT NOT NULL DEFAULT '',
+          aiDebrief TEXT NOT NULL DEFAULT ''
         )
         """.trimIndent()
       )
+      val existingCols = mutableSetOf<String>()
+      db.rawQuery("PRAGMA table_info(offline_rides)", null).use { c ->
+        val nameIdx = c.getColumnIndex("name")
+        while (c.moveToNext()) {
+          if (nameIdx >= 0) existingCols += c.getString(nameIdx)
+        }
+      }
+      val extraCols =
+        listOf(
+          "vehicleId" to "TEXT NOT NULL DEFAULT ''",
+          "startBatteryPct" to "INTEGER NOT NULL DEFAULT -1",
+          "endBatteryPct" to "INTEGER NOT NULL DEFAULT -1",
+          "weatherSummary" to "TEXT NOT NULL DEFAULT ''",
+          "aiDebrief" to "TEXT NOT NULL DEFAULT ''",
+        )
+      for ((col, def) in extraCols) {
+        if (col !in existingCols) {
+          db.execSQL("ALTER TABLE offline_rides ADD COLUMN $col $def")
+        }
+      }
       db.execSQL(
         """
         CREATE TABLE IF NOT EXISTS copilot_sessions (

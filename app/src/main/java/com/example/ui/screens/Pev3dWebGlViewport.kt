@@ -25,7 +25,7 @@ import java.io.ByteArrayInputStream
  * Self-contained Chromium WebGL 2.0 glTF/GLB PBR Renderer for PEV 3D Labs.
  * Loads the live procedural binary .glb rig (with embedded normal, metallic-roughness,
  * and albedo PNGs + KHR_materials_clearcoat) over a local intercepted memory stream
- * (zero internet/CDN dependencies, zero Filament/Vulkan).
+ * (zero internet or CDN dependencies, pure Chromium WebGL 2.0).
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -110,7 +110,7 @@ internal fun Pev3dWebGlViewport(
     val wv = webViewRef[0] ?: return@LaunchedEffect
     glbVersion++
     val ver = glbVersion
-    val url = "https://local.volttrail.webgl/rig_$ver.glb"
+    val url = "https://local.ruralerides.webgl/rig_$ver.glb"
     runCatching { wv.evaluateJavascript("if(window.loadPevGlb)window.loadPevGlb('$url',$rigMetaJson);", null) }
   }
 
@@ -168,7 +168,7 @@ internal fun Pev3dWebGlViewport(
           webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
               val url = request?.url?.toString().orEmpty()
-              if (url.startsWith("https://local.volttrail.webgl/rig_") && url.endsWith(".glb")) {
+              if (url.startsWith("https://local.ruralerides.webgl/rig_") && url.endsWith(".glb")) {
                 val bytes = glbHolder[0] ?: return null
                 return WebResourceResponse(
                   "model/gltf-binary",
@@ -194,7 +194,7 @@ internal fun Pev3dWebGlViewport(
               return true
             }
           }
-          loadDataWithBaseURL("https://local.volttrail.webgl/", WEBGL_GLB_PBR_HTML, "text/html", "UTF-8", null)
+          loadDataWithBaseURL("https://local.ruralerides.webgl/", WEBGL_GLB_PBR_HTML, "text/html", "UTF-8", null)
           webViewRef[0] = this
         }
       }.getOrElse {

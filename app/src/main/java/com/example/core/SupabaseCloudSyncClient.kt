@@ -46,7 +46,8 @@ internal object SupabaseCloudSyncClient {
       .build()
   }
 
-  private fun supabaseRestBaseUrl(): String = ""
+  private fun supabaseRestBaseUrl(): String =
+    SupabaseAuthService.sanitizeBaseUrl(com.example.BuildConfig.SUPABASE_URL)
 
   private fun isMissingPostgrestSchemaOrTable(code: Int, bodyStr: String): Boolean {
     if (code == 404) return true
@@ -59,7 +60,7 @@ internal object SupabaseCloudSyncClient {
   }
 
   private fun Request.Builder.withSupabaseRestHeaders(accessToken: String): Request.Builder {
-    val key = ""
+    val key = SupabaseAuthService.sanitizeAnonKey(com.example.BuildConfig.SUPABASE_ANON_KEY)
     header("apikey", key)
     header("Accept", "application/json")
     header("User-Agent", "RuralERidesGO/11.0 (Android)")

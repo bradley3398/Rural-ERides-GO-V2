@@ -107,19 +107,20 @@ class TelemetryEngine(context: Context) {
   private val _telemetry = MutableStateFlow(LiveTelemetrySnapshot())
   val telemetry: StateFlow<LiveTelemetrySnapshot> = _telemetry.asStateFlow()
 
-  private var locationStarted = false
-  private var nativeListenerRegistered = false
-  private var gnssRegistered = false
-  private var activeIntervalMs = -1L
-  private var sensorsStarted = false
+  private val locationLock = Any()
+  @Volatile private var locationStarted = false
+  @Volatile private var nativeListenerRegistered = false
+  @Volatile private var gnssRegistered = false
+  @Volatile private var activeIntervalMs = -1L
+  @Volatile private var sensorsStarted = false
   private var requestedPollingHz = 10
   private var requestedUiThrottleMs = 80L
   private var lastLocation: Location? = null
   private var lastLocationUpdatedMs: Long = 0L
   private var lastAltitudeM: Double? = null
-  private var rideStartTimeMs: Long = 0L
-  private var crashThresholdG: Float = 8.0f
-  private var gpsAccuracyLimitM: Int = 25
+  @Volatile private var rideStartTimeMs: Long = 0L
+  @Volatile private var crashThresholdG: Float = 8.0f
+  @Volatile private var gpsAccuracyLimitM: Int = 25
 
   // Background Looper for location & GNSS updates
   private var locationThread: HandlerThread? = null
@@ -527,10 +528,20 @@ class TelemetryEngine(context: Context) {
     _telemetry.update { it.copy(crashDetected = false) }
   }
 
-  fun updateSpeedLimitMeta(roadName: String, limitMph: Int?, inSchoolZone: Boolean) {
+  fun updateSpeedLimitMeta(
+    roadName: String,
+    limitMph: Int?,
+    inSchoolZone: Boolean,
+    limitSource: String = "",
+  ) {
     val sanitizedLimit = limitMph?.takeIf { it in 5..85 }
     _telemetry.update {
-      it.copy(roadName = roadName, speedLimitMph = sanitizedLimit, inSchoolZone = inSchoolZone)
+      it.copy(
+        roadName = roadName,
+        speedLimitMph = sanitizedLimit,
+        inSchoolZone = inSchoolZone,
+        roadLimitSource = limitSource,
+      )
     }
   }
 
@@ -540,18 +551,24 @@ class TelemetryEngine(context: Context) {
 
   private fun processLocation(loc: Location) {
     if (loc.latitude == 0.0 && loc.longitude == 0.0) return
-    val prev = lastLocation
-    val nowMs = System.currentTimeMillis()
-    if (prev != null) {
-      if (loc.time > 0L && prev.time > 0L && loc.time + 5_000L < prev.time) return
-      val recentFineFix = (nowMs - lastLocationUpdatedMs) < 5_000L && prev.hasAccuracy() && prev.accuracy <= 25f
-      if (recentFineFix && loc.hasAccuracy() && loc.accuracy > 100f) return
+    val prev: Location?
+    val speedKmh: Double
+    val accuracy: Float
+    val acceptable: Boolean
+    synchronized(locationLock) {
+      prev = lastLocation
+      val nowMs = System.currentTimeMillis()
+      if (prev != null) {
+        if (loc.time > 0L && prev.time > 0L && loc.time + 5_000L < prev.time) return
+        val recentFineFix = (nowMs - lastLocationUpdatedMs) < 5_000L && prev.hasAccuracy() && prev.accuracy <= 25f
+        if (recentFineFix && loc.hasAccuracy() && loc.accuracy > 100f) return
+      }
+      speedKmh = if (loc.hasSpeed()) (loc.speed * 3.6).coerceAtLeast(0.0) else 0.0
+      accuracy = loc.accuracy
+      acceptable = accuracy <= gpsAccuracyLimitM || accuracy == 0f
+      lastLocation = loc
+      lastLocationUpdatedMs = nowMs
     }
-    val speedKmh = if (loc.hasSpeed()) (loc.speed * 3.6).coerceAtLeast(0.0) else 0.0
-    val accuracy = loc.accuracy
-    val acceptable = accuracy <= gpsAccuracyLimitM || accuracy == 0f
-    lastLocation = loc
-    lastLocationUpdatedMs = nowMs
 
     _telemetry.update { cur ->
       var nextDistKm = cur.tripDistanceKm

@@ -83,9 +83,44 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
     )
   val maintenanceItems: StateFlow<List<MaintenanceItem>> = _maintenanceItems.asStateFlow()
 
+  private val _savedSpecKeys = MutableStateFlow<Set<String>>(emptySet())
+  val savedSpecKeys: StateFlow<Set<String>> = _savedSpecKeys.asStateFlow()
+
+  private val _savedPartKeys = MutableStateFlow<Set<String>>(emptySet())
+  val savedPartKeys: StateFlow<Set<String>> = _savedPartKeys.asStateFlow()
+
+  var lastAutoSpokenMsgId: String = ""
+    private set
+
+  fun markDiagAutoSpoken(id: String) {
+    lastAutoSpokenMsgId = id
+  }
+
+  fun toggleSavedSpec(key: String) {
+    _savedSpecKeys.update { cur ->
+      val next = if (key in cur) cur - key else cur + key
+      prefs.edit().putStringSet("saved_spec_keys", next).apply()
+      next
+    }
+  }
+
+  fun toggleSavedPart(key: String) {
+    _savedPartKeys.update { cur ->
+      val next = if (key in cur) cur - key else cur + key
+      prefs.edit().putStringSet("saved_part_keys", next).apply()
+      next
+    }
+  }
+
   fun markMaintenanceServiced(itemKey: String, currentKm: Double) {
     _maintenanceItems.update { list ->
-      list.map { if (it.key == itemKey) it.copy(lastServicedKm = currentKm) else it }
+      val next = list.map { if (it.key == itemKey) it.copy(lastServicedKm = currentKm) else it }
+      runCatching {
+        val obj = JSONObject()
+        next.forEach { obj.put(it.key, it.lastServicedKm) }
+        prefs.edit().putString("maint_serviced_json", obj.toString()).apply()
+      }
+      next
     }
   }
 
@@ -219,8 +254,21 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
         loaded.firstOrNull()?.let { first ->
           _activeSessionId.value = first.id
           _diagMessages.value = first.messages
+          lastAutoSpokenMsgId = first.messages.lastOrNull { !it.isUser }?.id.orEmpty()
         }
       }
+      val maintRaw = prefs.getString("maint_serviced_json", "").orEmpty()
+      if (maintRaw.isNotBlank()) {
+        val obj = JSONObject(maintRaw)
+        _maintenanceItems.update { list ->
+          list.map { item ->
+            if (obj.has(item.key)) item.copy(lastServicedKm = obj.optDouble(item.key, item.lastServicedKm))
+            else item
+          }
+        }
+      }
+      _savedSpecKeys.value = prefs.getStringSet("saved_spec_keys", emptySet()).orEmpty().toSet()
+      _savedPartKeys.value = prefs.getStringSet("saved_part_keys", emptySet()).orEmpty().toSet()
       val specHist = prefs.getString("spec_history", "").orEmpty().split("||").filter { it.isNotBlank() }
       val partsHist = prefs.getString("parts_history", "").orEmpty().split("||").filter { it.isNotBlank() }
       _specSearchHistory.value = specHist
@@ -313,6 +361,7 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
     val target = _diagSessions.value.firstOrNull { it.id == sessionId } ?: return
     _activeSessionId.value = target.id
     _diagMessages.value = target.messages
+    lastAutoSpokenMsgId = target.messages.lastOrNull { !it.isUser }?.id.orEmpty()
     _wiringPinout.value = emptyMap()
   }
 
@@ -324,6 +373,7 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
       val fallback = remaining.firstOrNull()
       _activeSessionId.value = fallback?.id.orEmpty()
       _diagMessages.value = fallback?.messages.orEmpty()
+      lastAutoSpokenMsgId = fallback?.messages?.lastOrNull { !it.isUser }?.id.orEmpty()
     }
   }
 
@@ -362,6 +412,12 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
     imageLabels: List<String>,
     modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
   ) {
+    val recentHistory = _diagMessages.value.takeLast(6)
+    val historySummary =
+      recentHistory.joinToString("\n") { m ->
+        val role = if (m.isUser) "Pilot" else "MechanicAI"
+        "$role: ${m.text.take(350)}"
+      }
     val userMsg =
       MechanicDiagMessage(
         id = UUID.randomUUID().toString(),
@@ -387,6 +443,7 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
               scope = scope,
               detailLevel = detailLevel,
               modelId = modelId,
+              historySummary = historySummary,
             )
           res.onSuccess { diag ->
             if (diag.wiringMap.isNotEmpty()) {

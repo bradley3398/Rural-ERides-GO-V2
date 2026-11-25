@@ -1,14 +1,22 @@
 package com.example.data
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.util.Base64
 import android.util.Log
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.BuildConfig
 import java.io.IOException
+import java.net.URLDecoder
 import java.net.URLEncoder
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +82,8 @@ class SupabaseAuthService(private val context: Context) {
     val USER_EMAIL = stringPreferencesKey("sb_user_email")
     val USER_CALLSIGN = stringPreferencesKey("sb_user_callsign")
     val USER_ROLE = stringPreferencesKey("sb_user_role")
+    val PKCE_VERIFIER = stringPreferencesKey("sb_pkce_verifier")
+    val PKCE_STATE = stringPreferencesKey("sb_pkce_state")
   }
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -97,10 +107,10 @@ class SupabaseAuthService(private val context: Context) {
     }
   }
 
-  fun isConfigured(): Boolean = false
+  fun isConfigured(): Boolean = isConfiguredValues(baseUrl(), anonKey())
 
-  private fun baseUrl(): String = ""
-  private fun anonKey(): String = ""
+  private fun baseUrl(): String = sanitizeBaseUrl(BuildConfig.SUPABASE_URL)
+  private fun anonKey(): String = sanitizeAnonKey(BuildConfig.SUPABASE_ANON_KEY)
 
   private fun Request.Builder.withSupabaseHeaders(
     userAccessToken: String? = null,
@@ -233,7 +243,7 @@ class SupabaseAuthService(private val context: Context) {
     withContext(Dispatchers.IO) {
       if (!isConfigured()) {
         return@withContext SupabaseAuthResult.Error(
-          "Use Google + Firebase Sign-In for cloud sync on public builds."
+          "Supabase backend not configured yet. Set SUPABASE_URL and SUPABASE_ANON_KEY in AI Studio Secrets."
         )
       }
       val cleanEmail = email.trim().lowercase()
@@ -289,7 +299,7 @@ class SupabaseAuthService(private val context: Context) {
     withContext(Dispatchers.IO) {
       if (!isConfigured()) {
         return@withContext SupabaseAuthResult.Error(
-          "Use Google + Firebase Sign-In for cloud sync on public builds."
+          "Supabase backend not configured yet. Set SUPABASE_URL and SUPABASE_ANON_KEY in AI Studio Secrets."
         )
       }
       val cleanEmail = email.trim().lowercase()
@@ -345,6 +355,164 @@ class SupabaseAuthService(private val context: Context) {
         Log.e(TAG, "Supabase sign-up failed", e)
         SupabaseAuthResult.Error(e.localizedMessage ?: "Network error during registration.")
       }
+    }
+
+  suspend fun launchGoogleOAuthInBrowser(activity: Activity): Result<Unit> =
+    withContext(Dispatchers.IO) {
+      runCatching {
+        if (!isConfigured()) {
+          error("Supabase backend not configured yet. Set SUPABASE_URL and SUPABASE_ANON_KEY in AI Studio Secrets.")
+        }
+        val verifier = generatePkceVerifier()
+        val challenge = computePkceChallenge(verifier)
+        val state = generatePkceVerifier().take(24)
+        context.supabaseAuthStore.edit { prefs ->
+          prefs[Keys.PKCE_VERIFIER] = verifier
+          prefs[Keys.PKCE_STATE] = state
+        }
+        val encodedRedirect = URLEncoder.encode(OAUTH_REDIRECT_URI, "UTF-8")
+        val authUrl =
+          "${baseUrl()}/auth/v1/authorize" +
+            "?provider=google" +
+            "&redirect_to=$encodedRedirect" +
+            "&code_challenge=$challenge" +
+            "&code_challenge_method=s256" +
+            "&state=$state" +
+            "&prompt=select_account"
+        val authUri = Uri.parse(authUrl)
+        withContext(Dispatchers.Main) {
+          val customTabsLaunched =
+            runCatching {
+              val customTabs = CustomTabsIntent.Builder().setShowTitle(true).build()
+              customTabs.intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+              customTabs.launchUrl(activity, authUri)
+            }.isSuccess
+          if (!customTabsLaunched) {
+            activity.startActivity(
+              Intent(Intent.ACTION_VIEW, authUri).addCategory(Intent.CATEGORY_BROWSABLE)
+            )
+          }
+        }
+      }
+    }
+
+  suspend fun handleOAuthCallbackUri(uri: Uri): SupabaseAuthResult =
+    withContext(Dispatchers.IO) {
+      if (!isConfigured()) {
+        return@withContext SupabaseAuthResult.Error("Supabase backend not configured.")
+      }
+      val queryParams = parseUrlParams(uri.encodedQuery)
+      val fragmentParams = parseUrlParams(uri.encodedFragment)
+      val allParams = fragmentParams + queryParams
+
+      val oauthErr = allParams["error_description"] ?: allParams["error"]
+      if (!oauthErr.isNullOrBlank()) {
+        return@withContext SupabaseAuthResult.Error("Google OAuth failed: $oauthErr")
+      }
+
+      val prefs = context.supabaseAuthStore.data.first()
+      val savedState = prefs[Keys.PKCE_STATE].orEmpty()
+      val returnedState = allParams["state"].orEmpty()
+      if (savedState.isNotBlank() && returnedState.isNotBlank() && savedState != returnedState) {
+        return@withContext SupabaseAuthResult.Error("OAuth state mismatch. Please retry Google Browser Sign-In.")
+      }
+
+      val authCode = allParams["code"].orEmpty()
+      if (authCode.isNotBlank()) {
+        val verifier = prefs[Keys.PKCE_VERIFIER].orEmpty()
+        if (verifier.isBlank()) {
+          return@withContext SupabaseAuthResult.Error("Missing PKCE verifier. Please tap Continue with Google again.")
+        }
+        return@withContext try {
+          val payloadStr =
+            JSONObject().apply {
+              put("auth_code", authCode)
+              put("code_verifier", verifier)
+            }.toString()
+          executeWithRetry {
+            Request.Builder()
+              .url("${baseUrl()}/auth/v1/token?grant_type=pkce")
+              .withSupabaseHeaders()
+              .header("Content-Type", "application/json")
+              .post(payloadStr.toRequestBody("application/json".toMediaType()))
+              .build()
+          }.use { resp ->
+            val raw = resp.body?.string().orEmpty()
+            context.supabaseAuthStore.edit {
+              it.remove(Keys.PKCE_VERIFIER)
+              it.remove(Keys.PKCE_STATE)
+            }
+            if (!resp.isSuccessful) {
+              return@withContext SupabaseAuthResult.Error(parseSupabaseError(raw, resp.code))
+            }
+            val parsed = parseSessionJson(JSONObject(raw), fallbackEmail = "", fallbackCallsign = "")
+              ?: return@withContext SupabaseAuthResult.Error("Supabase PKCE exchange returned an incomplete session.")
+            persistSession(parsed)
+            val healed = healOversizedJwtIfNeeded(parsed)
+            SupabaseAuthResult.Success(healed)
+          }
+        } catch (e: CancellationException) {
+          throw e
+        } catch (e: Exception) {
+          Log.e(TAG, "Supabase PKCE token exchange failed", e)
+          SupabaseAuthResult.Error(e.localizedMessage ?: "Failed to complete Google Browser Sign-In.")
+        }
+      }
+
+      val implicitToken = allParams["access_token"].orEmpty()
+      if (implicitToken.isNotBlank()) {
+        val refreshToken = allParams["refresh_token"].orEmpty()
+        val expiresIn = allParams["expires_in"]?.toLongOrNull() ?: 3600L
+        val expiresAt = System.currentTimeMillis() / 1000L + expiresIn
+        return@withContext try {
+          executeWithRetry {
+            Request.Builder()
+              .url("${baseUrl()}/auth/v1/user")
+              .withSupabaseHeaders(implicitToken)
+              .get()
+              .build()
+          }.use { resp ->
+            val raw = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) {
+              return@withContext SupabaseAuthResult.Error(parseSupabaseError(raw, resp.code))
+            }
+            val userObj = JSONObject(raw)
+            val uid = userObj.optString("id")
+            if (uid.isBlank()) {
+              return@withContext SupabaseAuthResult.Error("Google Browser Sign-In returned no user ID.")
+            }
+            val email = userObj.optString("email")
+            val meta = userObj.optJSONObject("user_metadata")
+            val cs =
+              meta?.optString("callsign").orEmpty()
+                .ifBlank { meta?.optString("full_name").orEmpty() }
+                .ifBlank { meta?.optString("name").orEmpty() }
+                .ifBlank { email.substringBefore("@").uppercase() }
+            val session =
+              SupabaseSession(
+                accessToken = implicitToken,
+                refreshToken = refreshToken,
+                expiresAtEpochSec = expiresAt,
+                user = SupabaseUser(
+                  id = uid,
+                  email = email,
+                  callsign = cs,
+                  role = userObj.optString("role", "authenticated").ifBlank { "authenticated" },
+                ),
+              )
+            persistSession(session)
+            val healed = healOversizedJwtIfNeeded(session)
+            SupabaseAuthResult.Success(healed)
+          }
+        } catch (e: CancellationException) {
+          throw e
+        } catch (e: Exception) {
+          Log.e(TAG, "Supabase implicit OAuth hydration failed", e)
+          SupabaseAuthResult.Error(e.localizedMessage ?: "Failed to complete Google Browser Sign-In.")
+        }
+      }
+
+      SupabaseAuthResult.Error("No authorization code or session token returned by Google OAuth.")
     }
 
   suspend fun resendConfirmationEmail(email: String): Result<String> =
@@ -673,6 +841,32 @@ class SupabaseAuthService(private val context: Context) {
   }
 
   companion object {
+    const val OAUTH_REDIRECT_URI = "ruralerides://auth/callback"
+
+    fun generatePkceVerifier(): String {
+      val bytes = ByteArray(32)
+      SecureRandom().nextBytes(bytes)
+      return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+    }
+
+    fun computePkceChallenge(verifier: String): String {
+      val digest = MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII))
+      return Base64.encodeToString(digest, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+    }
+
+    fun parseUrlParams(rawQueryOrFragment: String?): Map<String, String> {
+      val raw = rawQueryOrFragment?.trim()?.trimStart('?', '#').orEmpty()
+      if (raw.isBlank()) return emptyMap()
+      return raw.split('&').mapNotNull { pair ->
+        val idx = pair.indexOf('=')
+        if (idx <= 0) null
+        else {
+          val k = runCatching { URLDecoder.decode(pair.substring(0, idx), "UTF-8") }.getOrDefault(pair.substring(0, idx))
+          val v = runCatching { URLDecoder.decode(pair.substring(idx + 1), "UTF-8") }.getOrDefault(pair.substring(idx + 1))
+          k to v
+        }
+      }.toMap()
+    }
     const val SUPABASE_SCHEMA_SQL: String = """
 create table if not exists public.board_posts (
   id text primary key default gen_random_uuid()::text,
@@ -1025,7 +1219,8 @@ create policy "owner_rw_backups" on public.rider_backups for all to authenticate
       return u.startsWith("https://") &&
         !u.contains("YOUR_PROJECT", ignoreCase = true) &&
         k.isNotBlank() &&
-        !k.contains("MY_SUPABASE", ignoreCase = true)
+        !k.contains("MY_SUPABASE", ignoreCase = true) &&
+        !k.contains("YOUR_SUPABASE", ignoreCase = true)
     }
 
     fun parseSessionJson(

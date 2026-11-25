@@ -83,6 +83,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -163,7 +164,8 @@ fun CopilotScreen(
   val aiSafetyBrief by cockpitVm.aiSafetyBrief.collectAsStateWithLifecycle()
   val chrome = LocalTacticalChrome.current
   val isClassic = isWindowsClassicActive(settings)
-  var dismissedVoltReply by remember { mutableStateOf("") }
+  var dismissedVoltReply by rememberSaveable { mutableStateOf("") }
+  var lastPlayedCoachTip by rememberSaveable { mutableStateOf("") }
 
   val effectiveUid = activeUser?.uid?.ifBlank { "local_pilot" } ?: "local_pilot"
   val personas = remember { CopilotProCatalog.personas12 }
@@ -189,25 +191,25 @@ fun CopilotScreen(
   var activePersona by remember(settings.copilotPersona) {
     mutableStateOf(personas.firstOrNull { it.name == settings.copilotPersona } ?: personas.first())
   }
-  var prompt by remember { mutableStateOf("") }
+  var prompt by rememberSaveable { mutableStateOf("") }
   var attachedBitmap by remember { mutableStateOf<Bitmap?>(null) }
   var useWebSearch by remember(settings.aiWebGrounding) { mutableStateOf(settings.aiWebGrounding) }
   var autoSpeak by remember(settings.autoSpeakAiReplies) { mutableStateOf(settings.autoSpeakAiReplies) }
-  var verbosity by remember { mutableStateOf("Balanced") }
-  var customDirective by remember { mutableStateOf("") }
+  var verbosity by rememberSaveable { mutableStateOf("Balanced") }
+  var customDirective by rememberSaveable { mutableStateOf("") }
 
   // Collapsible tools panel keeps 75-85% of viewport open for reading & writing chat!
   var showToolsDrawer by remember(settings.aiChatCompactTools) { mutableStateOf(!settings.aiChatCompactTools) }
 
   // LIVE CONTEXT INJECTOR TOGGLES
-  var injectTelemetry by remember { mutableStateOf(true) }
-  var injectVehicle by remember { mutableStateOf(true) }
-  var injectWeather by remember { mutableStateOf(true) }
-  var injectRoadLimit by remember { mutableStateOf(true) }
+  var injectTelemetry by rememberSaveable { mutableStateOf(true) }
+  var injectVehicle by rememberSaveable { mutableStateOf(true) }
+  var injectWeather by rememberSaveable { mutableStateOf(true) }
+  var injectRoadLimit by rememberSaveable { mutableStateOf(true) }
 
   var showSkillsModal by remember { mutableStateOf(false) }
-  var skillCategoryFilter by remember { mutableStateOf("All") }
-  var skillSearch by remember { mutableStateOf("") }
+  var skillCategoryFilter by rememberSaveable { mutableStateOf("All") }
+  var skillSearch by rememberSaveable { mutableStateOf("") }
   var showSessionsSheet by remember { mutableStateOf(false) }
   var showSettingsDialog by remember { mutableStateOf(false) }
   var showBriefingsVault by remember { mutableStateOf(false) }
@@ -682,7 +684,11 @@ fun CopilotScreen(
       messages.lastOrNull { !it.isUser }?.text?.takeIf { it.isNotBlank() }
         ?: aiSafetyBrief.takeIf { it.isNotBlank() }
     LaunchedEffect(latestAssistantTip, isClassic, settings.retroAudioCuesEnabled) {
-      if (isClassic && !latestAssistantTip.isNullOrBlank() && latestAssistantTip != dismissedVoltReply) {
+      if (isClassic && !latestAssistantTip.isNullOrBlank() &&
+        latestAssistantTip != dismissedVoltReply &&
+        latestAssistantTip != lastPlayedCoachTip
+      ) {
+        lastPlayedCoachTip = latestAssistantTip
         socialVm.audio.playRetroAudioCue(
           enabled = settings.retroAudioCuesEnabled,
           volumePct = settings.globalVolume,
@@ -856,16 +862,7 @@ fun CopilotScreen(
                   onClick = {
                     tapCue()
                     val customVoice = settings.getActiveCustomVoice()
-                    val ok =
-                      if (customVoice != null) {
-                        socialVm.audio.speakWithCustomVoice(m.text, customVoice, settings.globalVolume)
-                      } else {
-                        socialVm.audio.speakWithVoiceProfile(
-                          text = m.text,
-                          profile = settings.aiVoiceProfile,
-                          volumePct = settings.globalVolume,
-                        )
-                      }
+                    val ok = socialVm.audio.speakWithActiveSettings(m.text, settings)
                     Toast.makeText(
                       ctx,
                       if (ok) "Speaking (${customVoice?.name ?: settings.aiVoiceProfile.label})..." else "Global Volume is 0% — raise volume in Settings",
@@ -1211,10 +1208,11 @@ fun CopilotScreen(
                 Row {
                   IconButton(
                     onClick = {
-                      val ok = socialVm.audio.speakWithVoiceProfile(br.content, settings.aiVoiceProfile, settings.globalVolume)
+                      val customVoice = settings.getActiveCustomVoice()
+                      val ok = socialVm.audio.speakWithActiveSettings(br.content, settings)
                       Toast.makeText(
                         ctx,
-                        if (ok) "Reading briefing (${settings.aiVoiceProfile.label})..." else "Raise Global Volume in Settings to hear briefing",
+                        if (ok) "Reading briefing (${customVoice?.name ?: settings.aiVoiceProfile.label})..." else "Raise Global Volume in Settings to hear briefing",
                         Toast.LENGTH_SHORT,
                       ).show()
                     },

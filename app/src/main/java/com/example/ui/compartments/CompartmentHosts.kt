@@ -133,6 +133,7 @@ fun AuthAndOnboardingCompartmentHost(
         onSupabaseSignUp = { email, pass, cs -> sessionVm.signUpWithSupabase(email, pass, cs) },
         onSupabaseResetPassword = { email -> sessionVm.sendSupabasePasswordReset(email) },
         onSupabaseResendConfirmation = { email -> sessionVm.resendSupabaseConfirmation(email) },
+        onSupabaseGoogleOAuth = { sessionVm.signInWithSupabaseGoogleBrowser(activity) },
         onOpenPrayer = { sessionVm.openPrayerOverlay(true) },
       )
     }

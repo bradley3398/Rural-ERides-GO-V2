@@ -136,6 +136,7 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
                   RideSession(
                     id = r.id,
                     userId = r.userId,
+                    vehicleId = r.vehicleId,
                     vehicleName = r.vehicleName,
                     title = r.title,
                     durationSec = r.durationSec,
@@ -144,8 +145,19 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
                     avgSpeedKmh = r.avgSpeedKmh,
                     elevationGainM = r.elevationGainM,
                     whUsed = r.whUsed,
+                    startBatteryPct = r.startBatteryPct,
+                    endBatteryPct = r.endBatteryPct,
+                    weatherSummary = r.weatherSummary,
+                    aiDebrief = r.aiDebrief,
                     polylinePoints =
                       r.polylineCsv.split(";").filter { it.isNotBlank() },
+                    createdAt =
+                      if (r.createdAtMs > 0L) {
+                        com.google.firebase.Timestamp(
+                          r.createdAtMs / 1000L,
+                          ((r.createdAtMs % 1000L) * 1_000_000L).toInt(),
+                        )
+                      } else null,
                   )
                 }
             }
@@ -307,6 +319,7 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
           OfflineRideEntity(
             id = rid,
             userId = effectiveUid,
+            vehicleId = activeVehicle?.id.orEmpty(),
             vehicleName = vehName,
             title = title.ifBlank { "Backroad Loop" },
             durationSec = snap.elapsedSec.coerceAtLeast(1L),
@@ -315,6 +328,10 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
             avgSpeedKmh = snap.avgSpeedKmh,
             elevationGainM = snap.elevationGainM,
             whUsed = estWh,
+            startBatteryPct = cleanStart,
+            endBatteryPct = cleanEnd,
+            weatherSummary = weatherSummary,
+            aiDebrief = "",
             polylineCsv = polyStrings.joinToString(";"),
             syncedToCloud = synced,
             createdAtMs = System.currentTimeMillis(),
@@ -475,6 +492,7 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
       val res = aiRepo.generateRideDebrief(ride, weatherSummary, modelId, matchedVeh, batteryChemistry)
       res.onSuccess { text ->
         _rides.value = _rides.value.map { if (it.id == ride.id) it.copy(aiDebrief = text) else it }
+        rideDao.updateAiDebrief(ride.id, text)
         if (boundFirebaseAuth && effectiveUid != "local_pilot") {
           riderRepo.updateRideDebrief(effectiveUid, ride.id, text)
         }
@@ -547,22 +565,30 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
 
   fun deleteRide(uid: String, rideId: String) {
     viewModelScope.launch {
-      if (boundFirebaseAuth) {
+      rideDao.deleteRide(rideId)
+      _rides.value = _rides.value.filterNot { it.id == rideId }
+      if (boundFirebaseAuth && uid.isNotBlank()) {
         riderRepo.deleteRideSession(uid, rideId)
-      } else {
-        _rides.value = _rides.value.filterNot { it.id == rideId }
       }
     }
   }
 
-  fun saveVehicle(uid: String, vehicle: PevVehicle, setActive: Boolean = true) {
+  fun saveVehicle(
+    uid: String,
+    vehicle: PevVehicle,
+    setActive: Boolean = true,
+    onActiveSelected: (String) -> Unit = {},
+  ) {
     viewModelScope.launch {
       var savedId = vehicle.id
       if (boundFirebaseAuth) {
         val res = riderRepo.saveVehicle(uid, vehicle)
         res.onSuccess { id ->
           savedId = id
-          if (setActive) riderRepo.setActiveVehicle(uid, id)
+          if (setActive) {
+            riderRepo.setActiveVehicle(uid, id)
+            onActiveSelected(id)
+          }
           _statusBanner.value = "Vehicle ${vehicle.name} saved to garage."
         }
       } else {
@@ -572,6 +598,7 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
         val next = listOf(stored) + _vehicles.value.filterNot { it.id == vid }
         localVault.saveVehicles(uid, next)
         _vehicles.value = next
+        if (setActive) onActiveSelected(vid)
         _statusBanner.value = "Vehicle ${vehicle.name} saved to local vault."
       }
 
@@ -610,9 +637,14 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  fun selectActiveVehicle(uid: String, vehicleId: String) {
+  fun selectActiveVehicle(
+    uid: String,
+    vehicleId: String,
+    onLocalActiveUpdate: (String) -> Unit = {},
+  ) {
+    onLocalActiveUpdate(vehicleId)
     viewModelScope.launch {
-      if (boundFirebaseAuth) {
+      if (boundFirebaseAuth && uid.isNotBlank()) {
         riderRepo.setActiveVehicle(uid, vehicleId)
       }
     }

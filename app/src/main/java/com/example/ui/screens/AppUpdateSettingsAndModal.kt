@@ -82,7 +82,7 @@ fun AppUpdatesSettingsContent(
 
   Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     // 1. CURRENT BUILD & LIVE CHECK CARD
-    TacticalCard(highlight = true, title = "APP_UPDATES.SYS") {
+    TacticalCard(highlight = true, title = "App Updates & Builds") {
       Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,

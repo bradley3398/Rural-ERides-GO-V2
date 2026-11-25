@@ -259,6 +259,15 @@ fun RiderRadarScreen(
       statusTag = statusTag,
       visible = radarVisible,
     )
+    if (telemetry.lat != 0.0 || telemetry.lng != 0.0) {
+      sessionVm.pollRoadSpeedLimit(
+        lat = telemetry.lat,
+        lng = telemetry.lng,
+        hasLimit = telemetry.speedLimitMph != null,
+      ) { road, limit, school, source ->
+        cockpitVm.telemetryEngine.updateSpeedLimitMeta(road, limit, school, source)
+      }
+    }
     if (telemetry.trailPoints.size >= 4) {
       radarVm.refreshElevationSparkline(telemetry.trailPoints)
     }
@@ -386,7 +395,7 @@ fun RiderRadarScreen(
 
       if (!cloudSyncReady) {
         item {
-          TacticalCard(highlight = true, title = "CONVOY_LINK.SYS") {
+          TacticalCard(highlight = true, title = "Convoy Link Status") {
             Text(
               "Local GPS map, RainViewer storm radar, GeoFence, and Ruler work offline. Sign in via Settings (Email or Google) to broadcast live beacons, Walkie PTT audio, and P2P calls.",
               style = MaterialTheme.typography.bodySmall,
@@ -452,7 +461,7 @@ fun RiderRadarScreen(
           if (nearestChargerKm != null) {
             if (nearestChargerKm <= estRemKm * 0.85) "REACH SAFE" else "LOW MARGIN"
           } else "NO PIN"
-        TacticalCard(highlight = statusTag == "SOS", title = "SECTOR_HUD.SYS") {
+        TacticalCard(highlight = statusTag == "SOS", title = "Sector Telemetry & SOS") {
           Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
               Text(
@@ -588,7 +597,7 @@ fun RiderRadarScreen(
 
       // LIVE MAPBOX / OSMDROID TACTICAL MAP
       item {
-        TacticalCard(title = "SECTOR_MAP.EXE") {
+        TacticalCard(title = "Live Sector Map") {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

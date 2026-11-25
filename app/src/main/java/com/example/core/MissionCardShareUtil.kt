@@ -98,7 +98,7 @@ object MissionCardShareUtil {
         textSize = 27f
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
       }
-      canvas.drawText("RURAL ERIDES GO • MISSION_CARD.EXE", titleRect.left + 18f, titleRect.centerY() + 10f, titleTextPaint)
+      canvas.drawText("RURAL ERIDES GO • RIDE SUMMARY", titleRect.left + 18f, titleRect.centerY() + 10f, titleTextPaint)
 
       // Classic _, □, × control boxes
       val ctrlLabels = listOf("_", "□", "×")

@@ -461,8 +461,11 @@ class GeminiAiRepository {
     scope: String,
     detailLevel: String,
     modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    historySummary: String = "",
   ): Result<VisionDiagnosisResult> =
     try {
+      val historyBlock =
+        if (historySummary.isNotBlank()) "Recent workshop conversation:\n$historySummary\n\n" else ""
       val promptText =
         """
         You are the veteran Workshop Chief and PEV master mechanic. Speak straight and concisely.
@@ -470,7 +473,7 @@ class GeminiAiRepository {
         Examine any attached hardware photos closely for scorched wires, MOSFET damage, rotor wear, tire tread, loose fasteners, or connector corrosion.
         Include torque specs (Nm) and multimeter voltage rail checks.
         Provide an actionable checklist and normalized AR bounding boxes (0..1) if components or anomalies are visible in the photo.
-        Operator query: ${query.ifBlank { "Full optical PEV hardware inspection" }}
+        ${historyBlock}Operator query: ${query.ifBlank { "Full optical PEV hardware inspection" }}
         """
           .trimIndent()
 

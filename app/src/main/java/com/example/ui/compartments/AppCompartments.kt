@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.ui.components.RuralPevIcons
 
 /**
- * Defined functional compartments of the VoltTrail rural PEV platform.
+ * Defined functional compartments of the Rural ERides GO PEV platform.
  * Compartmentalization provides strong decoupling between hardware HUD, navigation,
  * AI diagnostics, social networks, 3D CAD visualization, and telemetry analytics.
  */
@@ -54,7 +54,7 @@ enum class OverlayCompartment {
 }
 
 /**
- * State holder for compartmentalized pop-ups across VoltTrail.
+ * State holder for compartmentalized pop-ups across Rural ERides GO.
  */
 @Stable
 class CompartmentPopupsState {

@@ -7,9 +7,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -38,8 +41,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Login
@@ -52,8 +58,8 @@ import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,6 +77,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -94,12 +101,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import com.example.BuildConfig
 import com.example.R
 import com.example.ai.DailyPrayerResult
+import com.example.data.HudStyle
 import com.example.data.PrayerJournalEntry
 import com.example.data.UiState
 import com.example.hardware.VoiceAudioManager
@@ -122,13 +131,14 @@ fun AuthLoginScreen(
   onSupabaseSignUp: (email: String, password: String, callsign: String) -> Unit,
   onSupabaseResetPassword: (email: String) -> Unit,
   onSupabaseResendConfirmation: (email: String) -> Unit = {},
+  onSupabaseGoogleOAuth: () -> Unit = {},
   onOpenPrayer: () -> Unit,
 ) {
   val ctx = LocalContext.current
   val loginPrefs = remember(ctx) { ctx.getSharedPreferences("rural_erides_login_prefs", Context.MODE_PRIVATE) }
 
-  // Default to original Google + Firebase Sign-In gateway
-  var selectedProvider by remember { mutableIntStateOf(1) } // 0 = Supabase GoTrue, 1 = Firebase Google
+  // Prefer Supabase (Email/Password + Non-Play Google OAuth) when configured, otherwise Firebase Google
+  var selectedProvider by remember(supabaseConfigured) { mutableIntStateOf(if (supabaseConfigured) 0 else 1) } // 0 = Supabase GoTrue, 1 = Firebase Google
   var authMode by remember { mutableIntStateOf(0) } // 0 = Sign In, 1 = Register
   var rememberEmail by remember { mutableStateOf(loginPrefs.getBoolean("remember_email", true)) }
   var email by remember { mutableStateOf(if (rememberEmail) loginPrefs.getString("saved_email", "").orEmpty() else "") }
@@ -148,14 +158,16 @@ fun AuthLoginScreen(
     }
   var backdropIdx by remember { mutableIntStateOf(loginPrefs.getInt("login_backdrop_idx", 0).coerceIn(0, 3)) }
 
-  // Feature spotlight cards + Pre-ride tools right on the login screen
+  val hudCount = remember { HudStyle.entries.size }
+
+  // Feature spotlight cards + Pre-ride tools right on the welcome screen
   val featureHighlights =
-    remember {
+    remember(hudCount) {
       listOf(
-        "14 Live HUDs + Compass" to "Superbike, F1, Fighter Jet, Compass Rose & EUC Lean telemetry.",
-        "Turn-by-Turn GPS Nav" to "PEV-safe bike lanes, trails, voice guidance & live EV chargers.",
-        "Live Convoy Radar & PTT" to "Real-time nearby riders, hazard pins & WebRTC walkie-talkie.",
-        "AI Co-Pilot & Workshop" to "Gemini diagnostics, AR optical inspection, 475+ PEV tools.",
+        "$hudCount Live & OEM HUDs" to "Superbike, F1, Fighter Jet, S866, TF11, Bafang DPC18, iSinwheel & EUC Lean telemetry.",
+        "Turn-by-Turn GPS Nav" to "PEV-safe bike lanes, trails, voice guidance, road speed limits & live EV chargers.",
+        "Live Convoy Radar & PTT" to "Real-time nearby riders, hazard pins & live squad walkie-talkie.",
+        "AI Co-Pilot & Workshop" to "Natural voice diagnostics, AR optical inspection & full PEV service tools.",
         "Spec Engine & Parts" to "Multi-photo galleries, in-app PEV videos & verified vendor links.",
       )
     }
@@ -163,6 +175,8 @@ fun AuthLoginScreen(
   var showPreflightChecklist by remember { mutableStateOf(false) }
   var showQuickRangeTool by remember { mutableStateOf(false) }
   var showPrivacyInfo by remember { mutableStateOf(false) }
+  var showMoreGoogleOptions by remember { mutableStateOf(false) }
+  var showErrorTechnicalDetails by remember { mutableStateOf(false) }
 
   // Interactive Pre-Ride Safety Checklist state
   var chkHelmet by remember { mutableStateOf(false) }
@@ -179,10 +193,10 @@ fun AuthLoginScreen(
   val greetingText =
     remember {
       when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-        in 5..11 -> "Good Morning, Rider!"
-        in 12..16 -> "Good Afternoon, Rider!"
-        in 17..20 -> "Good Evening, Rider!"
-        else -> "Welcome Back, Night Rider!"
+        in 5..11 -> "Good Morning, Rider"
+        in 12..16 -> "Good Afternoon, Rider"
+        in 17..20 -> "Good Evening, Rider"
+        else -> "Welcome Back, Night Rider"
       }
     }
   val datePillText = remember { SimpleDateFormat("EEE, MMM d • h:mm a", Locale.getDefault()).format(Date()) }
@@ -202,6 +216,33 @@ fun AuthLoginScreen(
       listOf("TRAIL_VOLT", "PINE_GLIDE", "SUNRISE_72V", "APEX_RIDER", "MEADOW_EUC", "RURAL_TORQUE", "RIDGE_SCOOT", "VALLEY_AMP")
     }
 
+  val isCertOrPlayIssue =
+    remember(statusMessage) {
+      statusMessage.contains("ERROR_INVALID_CERT_HASH", ignoreCase = true) ||
+        statusMessage.contains("SHA-1", ignoreCase = true) ||
+        statusMessage.contains("12500") ||
+        statusMessage.contains("[10]") ||
+        statusMessage.contains("dismissed", ignoreCase = true)
+    }
+  val friendlyStatusMessage =
+    remember(statusMessage, isCertOrPlayIssue, supabaseConfigured) {
+      when {
+        statusMessage.isBlank() -> ""
+        isCertOrPlayIssue ->
+          if (supabaseConfigured) {
+            "One-tap Play sign-in isn't verified on this build. Use Browser Sign-In or Email & Password below."
+          } else {
+            "One-tap Play sign-in needs certificate verification on this build. Try Browser Sign-In below."
+          }
+        else -> statusMessage
+      }
+    }
+
+  val glassCardBg = Color(0xDF0B141E)
+  val glassBorder = Color(0x38FFFFFF)
+  val accentGold = Color(0xFFFACC15)
+  val accentEmerald = Color(0xFF22C55E)
+
   Box(modifier = Modifier.fillMaxSize()) {
     Image(
       painter = painterResource(id = scenicBackdrops[backdropIdx].second),
@@ -209,7 +250,7 @@ fun AuthLoginScreen(
       contentScale = ContentScale.Crop,
       modifier = Modifier.fillMaxSize(),
     )
-    // Warm sunlit welcoming scrim that keeps the golden countryside trail clearly visible while maintaining crisp text contrast
+    // Atmospheric cinematic scrim that frames the scenic background and gives high readability below
     Box(
       modifier =
         Modifier
@@ -218,10 +259,10 @@ fun AuthLoginScreen(
             Brush.verticalGradient(
               colorStops =
                 arrayOf(
-                  0.00f to Color(0x660B1712),
-                  0.32f to Color(0x440D1B15),
-                  0.62f to Color(0xB8081119),
-                  1.00f to Color(0xEB070C14),
+                  0.00f to Color(0x5508120F),
+                  0.28f to Color(0x3B0A1713),
+                  0.58f to Color(0xC2071018),
+                  1.00f to Color(0xF5060B12),
                 )
             )
           )
@@ -235,122 +276,150 @@ fun AuthLoginScreen(
           .widthIn(max = 560.dp)
           .systemBarsPadding()
           .verticalScroll(rememberScrollState())
-          .padding(horizontal = 18.dp, vertical = 16.dp),
+          .padding(horizontal = 18.dp, vertical = 14.dp),
       verticalArrangement = Arrangement.spacedBy(14.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-      // TOP WELCOMING DATE & SCENIC BACKDROP SWITCHER BAR
+      // TOP DATE & SCENIC BACKDROP SWITCHER BAR
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Surface(
-          color = Color(0xAA0C1A16),
-          shape = RoundedCornerShape(20.dp),
-          border = BorderStroke(1.dp, Color(0x66FACC15)),
+          color = Color(0xB80A151E),
+          shape = CircleShape,
+          border = BorderStroke(1.dp, glassBorder),
         ) {
           Text(
             text = datePillText,
             style = MaterialTheme.typography.labelSmall,
-            color = Color(0xFFFDF6E3),
+            color = Color(0xFFF8FAFC),
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
           )
         }
         Surface(
-          color = Color(0xAA0C1A16),
-          shape = RoundedCornerShape(20.dp),
-          border = BorderStroke(1.dp, Color(0x6685A736)),
+          color = Color(0xB80A151E),
+          shape = CircleShape,
+          border = BorderStroke(1.dp, accentEmerald.copy(alpha = 0.55f)),
           onClick = {
             backdropIdx = (backdropIdx + 1) % scenicBackdrops.size
             loginPrefs.edit().putInt("login_backdrop_idx", backdropIdx).apply()
           },
-          modifier = Modifier.testTag("login_cycle_backdrop_button"),
+          modifier = Modifier.minimumInteractiveComponentSize().testTag("login_cycle_backdrop_button"),
         ) {
           Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
           ) {
-            Icon(Icons.Default.Landscape, contentDescription = "Switch Background", tint = Color(0xFFD9F99D), modifier = Modifier.size(14.dp))
+            Icon(Icons.Default.Landscape, contentDescription = "Switch Background", tint = Color(0xFFD9F99D), modifier = Modifier.size(15.dp))
             Text(
               text = scenicBackdrops[backdropIdx].first,
               style = MaterialTheme.typography.labelSmall,
-              color = Color(0xFFFDF6E3),
+              color = Color(0xFFF8FAFC),
               fontWeight = FontWeight.SemiBold,
             )
           }
         }
       }
 
-      // WELCOMING HERO BADGE & GREETING
-      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 6.dp)) {
-        Image(
-          painter = painterResource(id = R.drawable.img_rural_erides_icon_pro_1795214959357),
-          contentDescription = "Rural ERides GO Icon",
-          modifier =
-            Modifier
-              .size(92.dp)
-              .shadow(12.dp, RoundedCornerShape(22.dp))
-              .clip(RoundedCornerShape(22.dp))
-              .border(2.dp, Color(0xCCFACC15), RoundedCornerShape(22.dp)),
-        )
-        Spacer(Modifier.height(10.dp))
-        Surface(
-          color = Color(0x990D1F17),
-          shape = RoundedCornerShape(14.dp),
-          border = BorderStroke(1.dp, Color(0x55FFFFFF)),
-        ) {
-          Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-          ) {
-            Text(
-              text = greetingText,
-              style = MaterialTheme.typography.labelLarge,
-              color = Color(0xFFFDE047),
-              fontWeight = FontWeight.Bold,
-            )
-            Text(
-              "RURAL ERIDES GO",
-              style = MaterialTheme.typography.headlineMedium,
-              color = Color.White,
-              fontWeight = FontWeight.Black,
-            )
-            Text(
-              "Welcome to the open trail • GPS Nav, Live Radar, 14 HUDs & AI Workshop",
-              style = MaterialTheme.typography.bodySmall,
-              color = Color(0xFFE2E8F0),
-              textAlign = TextAlign.Center,
-            )
-          }
+      // WELCOMING HERO BADGE & PUBLIC RELEASE HEADER
+      Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
+      ) {
+        Box(contentAlignment = Alignment.Center) {
+          Box(
+            modifier =
+              Modifier
+                .size(106.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                  Brush.radialGradient(
+                    listOf(accentGold.copy(alpha = 0.28f), accentEmerald.copy(alpha = 0.14f), Color.Transparent)
+                  )
+                )
+          )
+          Image(
+            painter = painterResource(id = R.drawable.img_rural_erides_icon_pro_1795214959357),
+            contentDescription = "Rural ERides GO Icon",
+            modifier =
+              Modifier
+                .size(92.dp)
+                .shadow(16.dp, RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(24.dp))
+                .border(1.5.dp, accentGold.copy(alpha = 0.85f), RoundedCornerShape(24.dp)),
+          )
         }
+        Spacer(Modifier.height(12.dp))
+        Surface(
+          color = Color(0xB80A151E),
+          shape = CircleShape,
+          border = BorderStroke(1.dp, accentGold.copy(alpha = 0.45f)),
+        ) {
+          Text(
+            text = greetingText,
+            style = MaterialTheme.typography.labelMedium,
+            color = Color(0xFFFDE047),
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+          )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+          "RURAL ERIDES GO",
+          style = MaterialTheme.typography.headlineMedium,
+          color = Color.White,
+          fontWeight = FontWeight.Black,
+          letterSpacing = 1.2.sp,
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+          "GPS Navigation • Live Convoy Radar • $hudCount HUDs • AI Workshop",
+          style = MaterialTheme.typography.bodySmall,
+          color = Color(0xFFE2E8F0),
+          textAlign = TextAlign.Center,
+        )
       }
 
       // INTERACTIVE FEATURE SPOTLIGHT CAROUSEL
-      Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+      Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           itemsIndexed(featureHighlights) { idx, (title, _) ->
-            FilterChip(
-              selected = selectedFeatureIdx == idx,
+            val selected = selectedFeatureIdx == idx
+            Surface(
+              color = if (selected) accentEmerald.copy(alpha = 0.22f) else Color(0xB80A151E),
+              shape = CircleShape,
+              border = BorderStroke(1.dp, if (selected) accentEmerald else glassBorder),
               onClick = { selectedFeatureIdx = idx },
-              label = { Text(title, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) },
-            )
+              modifier = Modifier.minimumInteractiveComponentSize(),
+            ) {
+              Text(
+                text = title,
+                maxLines = 1,
+                softWrap = false,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) Color(0xFFDCFCE7) else Color(0xFFCBD5E1),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+              )
+            }
           }
         }
         Surface(
-          color = Color(0xBF0B1522),
-          shape = RoundedCornerShape(10.dp),
-          border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+          color = glassCardBg,
+          shape = RoundedCornerShape(16.dp),
+          border = BorderStroke(1.dp, glassBorder),
           modifier = Modifier.fillMaxWidth(),
         ) {
           Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
           ) {
-            Icon(Icons.Default.Explore, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.Explore, contentDescription = null, tint = accentEmerald, modifier = Modifier.size(18.dp))
             Text(
               text = featureHighlights[selectedFeatureIdx].second,
               style = MaterialTheme.typography.bodySmall,
@@ -360,369 +429,551 @@ fun AuthLoginScreen(
         }
       }
 
-      // MAIN AUTHENTICATION GATEWAY CARD
-      TacticalCard(highlight = true, modifier = Modifier.fillMaxWidth()) {
-        Row(
-          Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          Text(
-            "PILOT SIGN-IN GATEWAY",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
-          )
-          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(14.dp))
-            Text("Cloud Sync Ready", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-          }
-        }
-        Spacer(Modifier.height(8.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-          FilterChip(
-            selected = selectedProvider == 0,
-            onClick = { selectedProvider = 0 },
-            label = { Text("Supabase GoTrue", maxLines = 1, softWrap = false) },
-            leadingIcon = { Icon(Icons.Default.Storage, null, modifier = Modifier.size(16.dp)) },
-            modifier = Modifier.weight(1f).testTag("auth_provider_supabase"),
-          )
-          FilterChip(
-            selected = selectedProvider == 1,
-            onClick = { selectedProvider = 1 },
-            label = { Text("Google + Firebase", maxLines = 1, softWrap = false) },
-            leadingIcon = { Icon(Icons.Default.Cloud, null, modifier = Modifier.size(16.dp)) },
-            modifier = Modifier.weight(1f).testTag("auth_provider_firebase"),
-          )
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        if (selectedProvider == 0) {
-          Text(
-            if (supabaseConfigured) "Supabase GoTrue Connected • Email/Password + Live Board Sync"
-            else "Use Google + Firebase Sign-In for cloud sync & live rider features.",
-            style = MaterialTheme.typography.labelSmall,
-            color = if (supabaseConfigured) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary,
-          )
-          Spacer(Modifier.height(8.dp))
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-              selected = authMode == 0,
-              onClick = { authMode = 0 },
-              label = { Text("Sign In") },
-              modifier = Modifier.testTag("supabase_mode_signin"),
-            )
-            FilterChip(
-              selected = authMode == 1,
-              onClick = { authMode = 1 },
-              label = { Text("Register Pilot") },
-              modifier = Modifier.testTag("supabase_mode_signup"),
-            )
-          }
-
-          if (authMode == 1) {
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-              value = callsign,
-              onValueChange = { callsign = it.uppercase().take(24) },
-              label = { Text("Permanent Pilot Callsign (One-Time)") },
-              supportingText = { Text("Choose carefully — once created, your callsign is permanently locked.") },
-              leadingIcon = { Icon(Icons.Default.Lock, null, modifier = Modifier.size(18.dp)) },
-              trailingIcon = {
-                IconButton(
-                  onClick = {
-                    val base = callsignSuggestions.random()
-                    callsign = "${base}_${(10..99).random()}"
-                  },
-                  modifier = Modifier.testTag("suggest_callsign_button"),
-                ) {
-                  Icon(Icons.Default.Casino, contentDescription = "Suggest Callsign")
-                }
-              },
-              singleLine = true,
-              modifier = Modifier.fillMaxWidth().testTag("supabase_callsign_input"),
-            )
-          }
-
-          Spacer(Modifier.height(8.dp))
-          OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email Address") },
-            leadingIcon = { Icon(Icons.Default.Email, null) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("supabase_email_input"),
-          )
-
-          Spacer(Modifier.height(8.dp))
-          OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-              IconButton(onClick = { showPassword = !showPassword }) {
-                Icon(
-                  if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                  contentDescription = "Toggle Password Visibility",
-                )
-              }
-            },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("supabase_password_input"),
-          )
-
-          // Live Password Strength Indicator when registering
-          if (authMode == 1 && password.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            val strengthLabel =
-              when (passwordScore) {
-                0, 1 -> "Weak password (add numbers/uppercase)"
-                2 -> "Fair password"
-                3 -> "Good password"
-                else -> "Strong pilot password"
-              }
-            val strengthCol =
-              when (passwordScore) {
-                0, 1 -> MaterialTheme.colorScheme.error
-                2 -> Color(0xFFFBBF24)
-                else -> Color(0xFF22C55E)
-              }
-            LinearProgressIndicator(
-              progress = { (passwordScore / 4f).coerceIn(0.15f, 1f) },
-              color = strengthCol,
-              modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(strengthLabel, style = MaterialTheme.typography.labelSmall, color = strengthCol)
-          }
-
+      // MAIN GLASSMORPHIC AUTHENTICATION CARD
+      Surface(
+        color = glassCardBg,
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, glassBorder),
+        shadowElevation = 12.dp,
+        modifier = Modifier.fillMaxWidth(),
+      ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
           Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
           ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Checkbox(
-                checked = rememberEmail,
-                onCheckedChange = { checked ->
-                  rememberEmail = checked
-                  loginPrefs.edit().putBoolean("remember_email", checked).apply()
-                  if (!checked) loginPrefs.edit().remove("saved_email").apply()
-                },
-              )
-              Text("Remember Email", style = MaterialTheme.typography.labelSmall)
-            }
-            if (authMode == 0) {
-              TextButton(
-                onClick = { onSupabaseResetPassword(email) },
-                enabled = !busy && email.isNotBlank(),
-              ) {
-                Text("Forgot Password?")
-              }
-            }
-          }
-
-          if (statusMessage.isNotBlank()) {
             Text(
-              statusMessage,
-              style = MaterialTheme.typography.labelMedium,
-              color =
-                if (statusMessage.contains("sent", true) || statusMessage.contains("confirm", true)) {
-                  MaterialTheme.colorScheme.primary
-                } else {
-                  MaterialTheme.colorScheme.error
-                },
+              "Sign In to Ride",
+              style = MaterialTheme.typography.titleMedium,
+              color = Color.White,
+              fontWeight = FontWeight.Bold,
             )
-            if (statusMessage.contains("confirm", true) || statusMessage.contains("verify", true)) {
-              Spacer(Modifier.height(6.dp))
-              OutlinedButton(
-                onClick = { onSupabaseResendConfirmation(email) },
-                enabled = !busy && email.isNotBlank(),
-                modifier = Modifier.fillMaxWidth().testTag("supabase_resend_confirmation_button"),
+            Surface(
+              color = accentEmerald.copy(alpha = 0.16f),
+              shape = CircleShape,
+              border = BorderStroke(1.dp, accentEmerald.copy(alpha = 0.45f)),
+            ) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
               ) {
-                Icon(Icons.Default.Email, null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Resend Verification Email", maxLines = 1)
+                Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = accentEmerald, modifier = Modifier.size(13.dp))
+                Text("Cloud Ready", style = MaterialTheme.typography.labelSmall, color = Color(0xFF86EFAC), fontWeight = FontWeight.SemiBold)
               }
-            }
-            if (statusMessage.contains("520") || statusMessage.contains("paused", true) || statusMessage.contains("unavailable", true)) {
-              Spacer(Modifier.height(6.dp))
-              OutlinedButton(
-                onClick = {
-                  selectedProvider = 1
-                  onSignInGoogle()
-                },
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth().testTag("supabase_520_google_fallback_button"),
-              ) {
-                Icon(Icons.Default.Cloud, null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Use Google + Firebase Sign-In Instead", maxLines = 1)
-              }
-            }
-            Spacer(Modifier.height(8.dp))
-          }
-
-          Button(
-            onClick = {
-              if (rememberEmail && email.isNotBlank()) {
-                loginPrefs.edit().putString("saved_email", email.trim()).apply()
-              }
-              if (authMode == 0) onSupabaseSignIn(email, password)
-              else onSupabaseSignUp(email, password, callsign)
-            },
-            enabled = !busy && email.isNotBlank() && password.isNotBlank(),
-            modifier = Modifier.fillMaxWidth().height(50.dp).testTag("supabase_auth_submit_button"),
-          ) {
-            if (busy) {
-              CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-              Icon(if (authMode == 0) Icons.Default.Login else Icons.Default.PersonAdd, null)
-              Spacer(Modifier.width(8.dp))
-              Text(if (authMode == 0) "Sign In & Ride" else "Create Pilot Account")
             }
           }
-        } else {
-          Text(
-            "Firebase Cloud Auth • Instant Google Sign-In with Firestore Live Board, Radar Beacons, WebRTC Walkie-Talkie & Encrypted DMs.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
           Spacer(Modifier.height(12.dp))
-          if (statusMessage.isNotBlank()) {
-            Text(
-              statusMessage,
-              style = MaterialTheme.typography.labelMedium,
-              color = MaterialTheme.colorScheme.error,
-            )
-            Spacer(Modifier.height(8.dp))
-          }
-          Button(
-            onClick = onSignInGoogle,
-            enabled = !busy,
-            modifier = Modifier.fillMaxWidth().height(52.dp).testTag("google_sign_in_button"),
+
+          // Sleek segmented provider pill switcher
+          Surface(
+            color = Color(0xFF070E16),
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, Color(0x28FFFFFF)),
+            modifier = Modifier.fillMaxWidth(),
           ) {
-            if (busy) {
-              CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-              Icon(Icons.Default.Login, contentDescription = null)
-              Spacer(Modifier.width(8.dp))
-              Text("Sign in with Google")
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(4.dp),
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+              val sbSel = selectedProvider == 0
+              Surface(
+                color = if (sbSel) accentEmerald.copy(alpha = 0.22f) else Color.Transparent,
+                shape = RoundedCornerShape(10.dp),
+                border = if (sbSel) BorderStroke(1.dp, accentEmerald.copy(alpha = 0.7f)) else null,
+                onClick = { selectedProvider = 0 },
+                modifier = Modifier.weight(1f).minimumInteractiveComponentSize().testTag("auth_provider_supabase"),
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                  horizontalArrangement = Arrangement.Center,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Icon(Icons.Default.Storage, null, tint = if (sbSel) Color(0xFF86EFAC) else Color(0xFF94A3B8), modifier = Modifier.size(16.dp))
+                  Spacer(Modifier.width(6.dp))
+                  Text(
+                    "Email / Account",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (sbSel) FontWeight.Bold else FontWeight.Medium,
+                    color = if (sbSel) Color.White else Color(0xFF94A3B8),
+                  )
+                }
+              }
+
+              val fbSel = selectedProvider == 1
+              Surface(
+                color = if (fbSel) accentGold.copy(alpha = 0.20f) else Color.Transparent,
+                shape = RoundedCornerShape(10.dp),
+                border = if (fbSel) BorderStroke(1.dp, accentGold.copy(alpha = 0.7f)) else null,
+                onClick = { selectedProvider = 1 },
+                modifier = Modifier.weight(1f).minimumInteractiveComponentSize().testTag("auth_provider_firebase"),
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                  horizontalArrangement = Arrangement.Center,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Icon(Icons.Default.Cloud, null, tint = if (fbSel) Color(0xFFFDE047) else Color(0xFF94A3B8), modifier = Modifier.size(16.dp))
+                  Spacer(Modifier.width(6.dp))
+                  Text(
+                    "Google Sign-In",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (fbSel) FontWeight.Bold else FontWeight.Medium,
+                    color = if (fbSel) Color.White else Color(0xFF94A3B8),
+                  )
+                }
+              }
             }
           }
-          Spacer(Modifier.height(8.dp))
-          OutlinedButton(
-            onClick = onSignInGooglePicker,
-            enabled = !busy,
-            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("google_picker_sign_in_button"),
-          ) {
-            Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Google Account Picker (Android 14 / Tablet)")
-          }
-          Spacer(Modifier.height(8.dp))
-          OutlinedButton(
-            onClick = onSignInGoogleBrowser,
-            enabled = !busy,
-            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("google_browser_sign_in_button"),
-          ) {
-            Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Google Browser Sign-In (Backup)")
-          }
-        }
 
-        Spacer(Modifier.height(10.dp))
-        OutlinedButton(
-          onClick = onOpenPrayer,
-          modifier = Modifier.fillMaxWidth().height(48.dp).testTag("open_riders_prayer_button"),
-        ) {
-          Icon(Icons.Default.AutoAwesome, contentDescription = null)
-          Spacer(Modifier.width(8.dp))
-          Text("Rider's Prayer & Safety Blessing")
+          Spacer(Modifier.height(12.dp))
+
+          if (selectedProvider == 0) {
+            Text(
+              if (supabaseConfigured) "Sign in with email & password or continue with browser-based Google account access."
+              else "Add SUPABASE_URL and SUPABASE_ANON_KEY in Secrets to enable email accounts and browser Google OAuth.",
+              style = MaterialTheme.typography.bodySmall,
+              color = Color(0xFFCBD5E1),
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+              onClick = onSupabaseGoogleOAuth,
+              enabled = !busy && supabaseConfigured,
+              shape = RoundedCornerShape(14.dp),
+              modifier = Modifier.fillMaxWidth().height(48.dp).testTag("supabase_google_oauth_button"),
+            ) {
+              Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(18.dp))
+              Spacer(Modifier.width(8.dp))
+              Text("Continue with Google (Browser)")
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              FilterChip(
+                selected = authMode == 0,
+                onClick = { authMode = 0 },
+                label = { Text("Sign In") },
+                modifier = Modifier.testTag("supabase_mode_signin"),
+              )
+              FilterChip(
+                selected = authMode == 1,
+                onClick = { authMode = 1 },
+                label = { Text("Create Account") },
+                modifier = Modifier.testTag("supabase_mode_signup"),
+              )
+            }
+
+            if (authMode == 1) {
+              Spacer(Modifier.height(8.dp))
+              OutlinedTextField(
+                value = callsign,
+                onValueChange = { callsign = it.uppercase().take(24) },
+                label = { Text("Permanent Rider Callsign (One-Time)") },
+                supportingText = { Text("Choose carefully — once created, your callsign is locked to your profile.") },
+                leadingIcon = { Icon(Icons.Default.Lock, null, modifier = Modifier.size(18.dp)) },
+                trailingIcon = {
+                  IconButton(
+                    onClick = {
+                      val base = callsignSuggestions.random()
+                      callsign = "${base}_${(10..99).random()}"
+                    },
+                    modifier = Modifier.testTag("suggest_callsign_button"),
+                  ) {
+                    Icon(Icons.Default.Casino, contentDescription = "Suggest Callsign")
+                  }
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().testTag("supabase_callsign_input"),
+              )
+            }
+
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+              value = email,
+              onValueChange = { email = it },
+              label = { Text("Email Address") },
+              leadingIcon = { Icon(Icons.Default.Email, null) },
+              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth().testTag("supabase_email_input"),
+            )
+
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+              value = password,
+              onValueChange = { password = it },
+              label = { Text("Password") },
+              visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+              trailingIcon = {
+                IconButton(onClick = { showPassword = !showPassword }) {
+                  Icon(
+                    if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = "Toggle Password Visibility",
+                  )
+                }
+              },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth().testTag("supabase_password_input"),
+            )
+
+            // Live Password Strength Indicator when registering
+            if (authMode == 1 && password.isNotEmpty()) {
+              Spacer(Modifier.height(6.dp))
+              val strengthLabel =
+                when (passwordScore) {
+                  0, 1 -> "Weak password (add numbers/uppercase)"
+                  2 -> "Fair password"
+                  3 -> "Good password"
+                  else -> "Strong password"
+                }
+              val strengthCol =
+                when (passwordScore) {
+                  0, 1 -> MaterialTheme.colorScheme.error
+                  2 -> Color(0xFFFBBF24)
+                  else -> Color(0xFF22C55E)
+                }
+              LinearProgressIndicator(
+                progress = { (passwordScore / 4f).coerceIn(0.15f, 1f) },
+                color = strengthCol,
+                modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+              )
+              Spacer(Modifier.height(2.dp))
+              Text(strengthLabel, style = MaterialTheme.typography.labelSmall, color = strengthCol)
+            }
+
+            Row(
+              Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                  checked = rememberEmail,
+                  onCheckedChange = { checked ->
+                    rememberEmail = checked
+                    loginPrefs.edit().putBoolean("remember_email", checked).apply()
+                    if (!checked) loginPrefs.edit().remove("saved_email").apply()
+                  },
+                )
+                Text("Remember Email", style = MaterialTheme.typography.labelSmall, color = Color(0xFFE2E8F0))
+              }
+              if (authMode == 0) {
+                TextButton(
+                  onClick = { onSupabaseResetPassword(email) },
+                  enabled = !busy && email.isNotBlank(),
+                ) {
+                  Text("Forgot Password?")
+                }
+              }
+            }
+
+            if (friendlyStatusMessage.isNotBlank()) {
+              val isPositiveNotice =
+                friendlyStatusMessage.contains("sent", true) || friendlyStatusMessage.contains("confirm", true)
+              Surface(
+                color = (if (isPositiveNotice) accentEmerald else MaterialTheme.colorScheme.error).copy(alpha = 0.14f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, (if (isPositiveNotice) accentEmerald else MaterialTheme.colorScheme.error).copy(alpha = 0.45f)),
+                modifier = Modifier.fillMaxWidth(),
+              ) {
+                Text(
+                  friendlyStatusMessage,
+                  style = MaterialTheme.typography.labelMedium,
+                  color = if (isPositiveNotice) Color(0xFF86EFAC) else Color(0xFFFCA5A5),
+                  modifier = Modifier.padding(10.dp),
+                )
+              }
+              if (statusMessage.contains("confirm", true) || statusMessage.contains("verify", true)) {
+                Spacer(Modifier.height(6.dp))
+                OutlinedButton(
+                  onClick = { onSupabaseResendConfirmation(email) },
+                  enabled = !busy && email.isNotBlank(),
+                  shape = RoundedCornerShape(12.dp),
+                  modifier = Modifier.fillMaxWidth().testTag("supabase_resend_confirmation_button"),
+                ) {
+                  Icon(Icons.Default.Email, null, modifier = Modifier.size(16.dp))
+                  Spacer(Modifier.width(6.dp))
+                  Text("Resend Verification Email", maxLines = 1)
+                }
+              }
+              if (statusMessage.contains("520") || statusMessage.contains("paused", true) || statusMessage.contains("unavailable", true)) {
+                Spacer(Modifier.height(6.dp))
+                OutlinedButton(
+                  onClick = {
+                    selectedProvider = 1
+                    onSignInGoogle()
+                  },
+                  enabled = !busy,
+                  shape = RoundedCornerShape(12.dp),
+                  modifier = Modifier.fillMaxWidth().testTag("supabase_520_google_fallback_button"),
+                ) {
+                  Icon(Icons.Default.Cloud, null, modifier = Modifier.size(16.dp))
+                  Spacer(Modifier.width(6.dp))
+                  Text("Use Google Sign-In Instead", maxLines = 1)
+                }
+              }
+              Spacer(Modifier.height(8.dp))
+            }
+
+            Button(
+              onClick = {
+                if (rememberEmail && email.isNotBlank()) {
+                  loginPrefs.edit().putString("saved_email", email.trim()).apply()
+                }
+                if (authMode == 0) onSupabaseSignIn(email, password)
+                else onSupabaseSignUp(email, password, callsign)
+              },
+              enabled = !busy && email.isNotBlank() && password.isNotBlank(),
+              shape = RoundedCornerShape(14.dp),
+              colors = ButtonDefaults.buttonColors(containerColor = accentEmerald, contentColor = Color(0xFF04140B)),
+              modifier = Modifier.fillMaxWidth().height(50.dp).testTag("supabase_auth_submit_button"),
+            ) {
+              if (busy) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFF04140B))
+              } else {
+                Icon(if (authMode == 0) Icons.Default.Login else Icons.Default.PersonAdd, null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (authMode == 0) "Sign In & Ride" else "Create Account", fontWeight = FontWeight.Bold)
+              }
+            }
+          } else {
+            Text(
+              "Instant Google access with live community board, convoy radar, walkie-talkie & encrypted messages.",
+              style = MaterialTheme.typography.bodySmall,
+              color = Color(0xFFCBD5E1),
+            )
+            Spacer(Modifier.height(12.dp))
+            if (friendlyStatusMessage.isNotBlank()) {
+              Surface(
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f)),
+                modifier = Modifier.fillMaxWidth(),
+              ) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFFFCA5A5), modifier = Modifier.size(16.dp))
+                    Text(
+                      friendlyStatusMessage,
+                      style = MaterialTheme.typography.labelMedium,
+                      color = Color(0xFFFCA5A5),
+                      modifier = Modifier.weight(1f),
+                    )
+                  }
+                  if (isCertOrPlayIssue && statusMessage != friendlyStatusMessage) {
+                    TextButton(
+                      onClick = { showErrorTechnicalDetails = !showErrorTechnicalDetails },
+                      contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                    ) {
+                      Text(
+                        if (showErrorTechnicalDetails) "Hide technical details" else "Show technical details",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFFDE047),
+                      )
+                    }
+                    AnimatedVisibility(visible = showErrorTechnicalDetails) {
+                      Text(
+                        statusMessage,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFCBD5E1),
+                      )
+                    }
+                  }
+                }
+              }
+              if (isCertOrPlayIssue) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                  onClick = {
+                    if (supabaseConfigured) onSupabaseGoogleOAuth()
+                    else selectedProvider = 0
+                  },
+                  enabled = !busy,
+                  shape = RoundedCornerShape(14.dp),
+                  modifier = Modifier.fillMaxWidth().height(48.dp).testTag("non_play_google_fallback_button"),
+                ) {
+                  Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(18.dp))
+                  Spacer(Modifier.width(8.dp))
+                  Text(
+                    if (supabaseConfigured) "Continue with Google (Browser)"
+                    else "Switch to Email Sign-In"
+                  )
+                }
+              }
+              Spacer(Modifier.height(10.dp))
+            }
+            Button(
+              onClick = onSignInGoogle,
+              enabled = !busy,
+              shape = RoundedCornerShape(14.dp),
+              colors = ButtonDefaults.buttonColors(containerColor = accentEmerald, contentColor = Color(0xFF04140B)),
+              modifier = Modifier.fillMaxWidth().height(52.dp).testTag("google_sign_in_button"),
+            ) {
+              if (busy) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFF04140B))
+              } else {
+                Icon(Icons.Default.Login, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Sign in with Google", fontWeight = FontWeight.Bold)
+              }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(
+              modifier =
+                Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(10.dp))
+                  .clickable { showMoreGoogleOptions = !showMoreGoogleOptions }
+                  .minimumInteractiveComponentSize()
+                  .padding(horizontal = 6.dp, vertical = 6.dp),
+              horizontalArrangement = Arrangement.Center,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Text(
+                if (showMoreGoogleOptions) "Hide alternative Google sign-in options" else "More Google sign-in options",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFCBD5E1),
+              )
+              Spacer(Modifier.width(4.dp))
+              Icon(
+                if (showMoreGoogleOptions) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = Color(0xFFCBD5E1),
+                modifier = Modifier.size(18.dp),
+              )
+            }
+            AnimatedVisibility(visible = showMoreGoogleOptions) {
+              Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                OutlinedButton(
+                  onClick = onSignInGooglePicker,
+                  enabled = !busy,
+                  shape = RoundedCornerShape(14.dp),
+                  modifier = Modifier.fillMaxWidth().height(48.dp).testTag("google_picker_sign_in_button"),
+                ) {
+                  Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
+                  Spacer(Modifier.width(8.dp))
+                  Text("Google Account Picker (Android 14 / Tablet)")
+                }
+                OutlinedButton(
+                  onClick = onSignInGoogleBrowser,
+                  enabled = !busy,
+                  shape = RoundedCornerShape(14.dp),
+                  modifier = Modifier.fillMaxWidth().height(48.dp).testTag("google_browser_sign_in_button"),
+                ) {
+                  Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(18.dp))
+                  Spacer(Modifier.width(8.dp))
+                  Text("Google Browser Sign-In (Backup)")
+                }
+              }
+            }
+          }
+
+          Spacer(Modifier.height(10.dp))
+          OutlinedButton(
+            onClick = onOpenPrayer,
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, glassBorder),
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("open_riders_prayer_button"),
+          ) {
+            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = accentGold)
+            Spacer(Modifier.width(8.dp))
+            Text("Rider's Prayer & Safety Blessing", color = Color(0xFFF8FAFC))
+          }
         }
       }
 
-      // PRE-FLIGHT QUICK TOOLS RIGHT ON THE LOGIN SCREEN
-      TacticalCard(modifier = Modifier.fillMaxWidth()) {
-        Text("PRE-RIDE RIDER TOOLS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          FilterChip(
-            selected = showPreflightChecklist,
-            onClick = { showPreflightChecklist = !showPreflightChecklist },
-            label = { Text("Safety Check ($readyCount/5)", maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) },
-            leadingIcon = { Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(15.dp)) },
-            modifier = Modifier.weight(1f).testTag("login_preflight_toggle"),
+      // PRE-RIDE RIDER TOOLS
+      Surface(
+        color = glassCardBg,
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, glassBorder),
+        modifier = Modifier.fillMaxWidth(),
+      ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+          Text(
+            "Pre-Ride Rider Tools",
+            style = MaterialTheme.typography.titleSmall,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
           )
-          FilterChip(
-            selected = showQuickRangeTool,
-            onClick = { showQuickRangeTool = !showQuickRangeTool },
-            label = { Text("Range Calc", maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) },
-            leadingIcon = { Icon(Icons.Default.BatteryChargingFull, null, modifier = Modifier.size(15.dp)) },
-            modifier = Modifier.weight(1f).testTag("login_range_calc_toggle"),
-          )
-        }
-
-        AnimatedVisibility(visible = showPreflightChecklist) {
-          Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            LegalCheckRow("Helmet, gloves & eye protection ready", chkHelmet) { chkHelmet = it }
-            LegalCheckRow("Tire PSI & sidewalls inspected", chkTires) { chkTires = it }
-            LegalCheckRow("Battery pack charge & port cover secure", chkBattery) { chkBattery = it }
-            LegalCheckRow("Headlight & rear brake light tested", chkLights) { chkLights = it }
-            LegalCheckRow("Brakes, folding latch & stem tight", chkBrakes) { chkBrakes = it }
+          Spacer(Modifier.height(8.dp))
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+              selected = showPreflightChecklist,
+              onClick = { showPreflightChecklist = !showPreflightChecklist },
+              label = { Text("Safety Check ($readyCount/5)", maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) },
+              leadingIcon = { Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(15.dp)) },
+              modifier = Modifier.weight(1f).testTag("login_preflight_toggle"),
+            )
+            FilterChip(
+              selected = showQuickRangeTool,
+              onClick = { showQuickRangeTool = !showQuickRangeTool },
+              label = { Text("Range Estimator", maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) },
+              leadingIcon = { Icon(Icons.Default.BatteryChargingFull, null, modifier = Modifier.size(15.dp)) },
+              modifier = Modifier.weight(1f).testTag("login_range_calc_toggle"),
+            )
           }
-        }
 
-        AnimatedVisibility(visible = showQuickRangeTool) {
-          val whPerMi = (18.0 + (calcCruiseMph - 15.0).coerceAtLeast(0.0) * 1.35)
-          val estRangeMi = (calcPackWh * 0.85 / whPerMi).coerceAtLeast(1.0)
-          val estChargeHrs = (calcPackWh / 300.0) * 1.12
-          Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Battery Pack: ${calcPackWh.roundToInt()} Wh • Cruise: ${calcCruiseMph.roundToInt()} MPH", style = MaterialTheme.typography.labelSmall)
-            Slider(value = calcPackWh, onValueChange = { calcPackWh = it }, valueRange = 300f..5000f)
-            Slider(value = calcCruiseMph, onValueChange = { calcCruiseMph = it }, valueRange = 12f..55f)
-            Surface(
-              color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-              shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.fillMaxWidth(),
-            ) {
-              Row(
-                Modifier.fillMaxWidth().padding(10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+          AnimatedVisibility(visible = showPreflightChecklist) {
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+              LegalCheckRow("Helmet, gloves & eye protection ready", chkHelmet) { chkHelmet = it }
+              LegalCheckRow("Tire PSI & sidewalls inspected", chkTires) { chkTires = it }
+              LegalCheckRow("Battery pack charge & port cover secure", chkBattery) { chkBattery = it }
+              LegalCheckRow("Headlight & rear brake light tested", chkLights) { chkLights = it }
+              LegalCheckRow("Brakes, folding latch & stem tight", chkBrakes) { chkBrakes = it }
+            }
+          }
+
+          AnimatedVisibility(visible = showQuickRangeTool) {
+            val whPerMi = (18.0 + (calcCruiseMph - 15.0).coerceAtLeast(0.0) * 1.35)
+            val estRangeMi = (calcPackWh * 0.85 / whPerMi).coerceAtLeast(1.0)
+            val estChargeHrs = (calcPackWh / 300.0) * 1.12
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Text("Battery Pack: ${calcPackWh.roundToInt()} Wh • Cruise: ${calcCruiseMph.roundToInt()} MPH", style = MaterialTheme.typography.labelSmall, color = Color(0xFFE2E8F0))
+              Slider(value = calcPackWh, onValueChange = { calcPackWh = it }, valueRange = 300f..5000f)
+              Slider(value = calcCruiseMph, onValueChange = { calcCruiseMph = it }, valueRange = 12f..55f)
+              Surface(
+                color = accentEmerald.copy(alpha = 0.14f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth(),
               ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                  Icon(Icons.Default.Speed, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                  Text("Est. Real Range: ~${"%.1f".format(estRangeMi)} mi", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                Row(
+                  Modifier.fillMaxWidth().padding(10.dp),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Default.Speed, null, tint = accentEmerald, modifier = Modifier.size(18.dp))
+                    Text("Est. Real Range: ~${"%.1f".format(estRangeMi)} mi", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = Color.White)
+                  }
+                  Text("~${"%.1f".format(estChargeHrs)}h @ 5A", style = MaterialTheme.typography.labelSmall, color = accentGold)
                 }
-                Text("~${"%.1f".format(estChargeHrs)}h @ 5A", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
               }
             }
           }
-        }
 
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-          Text(
-            "v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) • GPS • Maps • Cloud Live",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-          TextButton(onClick = { showPrivacyInfo = !showPrivacyInfo }) {
-            Text(if (showPrivacyInfo) "Hide Info" else "Privacy & Safety", fontSize = 11.sp)
+          Spacer(Modifier.height(6.dp))
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(
+              "v${BuildConfig.VERSION_NAME} • GPS • Offline Vault • Cloud Sync",
+              style = MaterialTheme.typography.labelSmall,
+              color = Color(0xFF94A3B8),
+            )
+            TextButton(onClick = { showPrivacyInfo = !showPrivacyInfo }) {
+              Text(if (showPrivacyInfo) "Hide Info" else "Privacy & Safety", fontSize = 11.sp, color = accentEmerald)
+            }
           }
-        }
-        AnimatedVisibility(visible = showPrivacyInfo) {
-          Text(
-            "Your exact GPS location is never shared on Radar unless you toggle Live Beacon ON. Emergency contacts and ride telemetry stay synced privately to your account.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
+          AnimatedVisibility(visible = showPrivacyInfo) {
+            Text(
+              "Your exact GPS location is never shared on Radar unless you toggle Live Beacon ON. Emergency contacts and ride telemetry stay synced privately to your account.",
+              style = MaterialTheme.typography.bodySmall,
+              color = Color(0xFFCBD5E1),
+            )
+          }
         }
       }
       Spacer(Modifier.height(8.dp))
@@ -944,6 +1195,7 @@ fun RidersPrayerModal(
   prayerState: UiState<DailyPrayerResult>,
   journal: List<PrayerJournalEntry>,
   voiceAudio: VoiceAudioManager,
+  settings: com.example.data.MasterSettings = com.example.data.MasterSettings(),
   canSaveToCloud: Boolean,
   onReroll: () -> Unit,
   onSaveJournal: (title: String, body: String, category: String) -> Unit,
@@ -1004,7 +1256,7 @@ fun RidersPrayerModal(
                   Text("New Blessing")
                 }
                 OutlinedButton(
-                  onClick = { voiceAudio.speakText("${p.verse}. ${p.prayer}. Safety reminder: ${p.safetyTip}") },
+                  onClick = { voiceAudio.speakWithActiveSettings("${p.verse}. ${p.prayer}. Safety reminder: ${p.safetyTip}", settings) },
                   modifier = Modifier.weight(1f).testTag("speak_prayer_button"),
                 ) {
                   Icon(Icons.Default.VolumeUp, contentDescription = null)
@@ -1037,7 +1289,7 @@ fun RidersPrayerModal(
             Text(sinnersPrayer, style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(10.dp))
             Button(
-              onClick = { voiceAudio.speakText(sinnersPrayer) },
+              onClick = { voiceAudio.speakWithActiveSettings(sinnersPrayer, settings) },
               modifier = Modifier.fillMaxWidth(),
             ) {
               Icon(Icons.Default.VolumeUp, contentDescription = null)

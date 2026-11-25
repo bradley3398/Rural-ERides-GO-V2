@@ -86,11 +86,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,7 +108,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -137,6 +139,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import com.example.data.getActiveCustomVoice
+
 @Composable
 fun MechanicScreen(
   sessionVm: SessionViewModel,
@@ -145,9 +149,11 @@ fun MechanicScreen(
   radarVm: RadarViewModel,
   socialVm: CopilotSocialViewModel? = null,
 ) {
-  var activeTab by remember { mutableIntStateOf(0) }
+  var activeTab by rememberSaveable { mutableIntStateOf(0) }
   val settings by sessionVm.settings.collectAsStateWithLifecycle()
   val vehicles by cockpitVm.vehicles.collectAsStateWithLifecycle()
+  val telemetry by cockpitVm.telemetry.collectAsStateWithLifecycle()
+  val currentOdomKm = (vehicles.firstOrNull()?.odometerKm ?: 0.0) + telemetry.tripDistanceKm
   val activeRigSummary =
     remember(vehicles) {
       vehicles.firstOrNull()?.let { "${it.name} (${it.voltage.toInt()}V ${it.batteryChemistry}, ${it.batteryWh}Wh, ${it.tireSize})" }
@@ -177,7 +183,7 @@ fun MechanicScreen(
 
     when (activeTab) {
       0 -> VisionArMechanicTab(sessionVm, cockpitVm, mechanicVm, radarVm, socialVm)
-      1 -> EngineeringLabTab(mechanicVm, settings.aiModelId, activeRigSummary)
+      1 -> EngineeringLabTab(mechanicVm, settings.aiModelId, activeRigSummary, currentOdomKm, settings.distanceUnit)
       2 -> SpecEngineTab(mechanicVm, cockpitVm, sessionVm, socialVm, settings.aiModelId)
       3 -> PartsFinderTab(mechanicVm, cockpitVm, socialVm, settings.aiModelId)
     }
@@ -223,13 +229,13 @@ private fun VisionArMechanicTab(
     )
   }
 
-  var prompt by remember { mutableStateOf("") }
+  var prompt by rememberSaveable { mutableStateOf("") }
   var primaryBitmap by remember { mutableStateOf<Bitmap?>(null) }
   var secondaryBitmap by remember { mutableStateOf<Bitmap?>(null) }
-  var opticalScope by remember { mutableStateOf("GENERAL") }
-  var detailLevel by remember(settings.mechanicDefaultDepth) { mutableStateOf(settings.mechanicDefaultDepth) }
-  var thermalOverlay by remember { mutableStateOf(false) }
-  var showBenchDrawer by remember(settings.aiChatCompactTools) { mutableStateOf(!settings.aiChatCompactTools) }
+  var opticalScope by rememberSaveable { mutableStateOf("GENERAL") }
+  var detailLevel by rememberSaveable(settings.mechanicDefaultDepth) { mutableStateOf(settings.mechanicDefaultDepth) }
+  var thermalOverlay by rememberSaveable { mutableStateOf(false) }
+  var showBenchDrawer by rememberSaveable(settings.aiChatCompactTools) { mutableStateOf(!settings.aiChatCompactTools) }
   var showLiveBenchCam by remember { mutableStateOf(false) }
   var showCameraSheet by remember { mutableStateOf(false) }
   var showCameraFallbackDialog by remember { mutableStateOf(false) }
@@ -415,7 +421,6 @@ private fun VisionArMechanicTab(
     )
   }
 
-  var lastAutoSpokenMechId by remember { mutableStateOf("") }
   LaunchedEffect(messages.size, busy, settings.aiChatAutoScroll, settings.autoSpeakAiReplies) {
     if (settings.aiChatAutoScroll) {
       val target = (messages.size + if (busy) 1 else 0).coerceAtLeast(1) - 1
@@ -425,9 +430,9 @@ private fun VisionArMechanicTab(
     }
     if (!busy && settings.autoSpeakAiReplies) {
       val latestAi = messages.lastOrNull { !it.isUser && it.text.isNotBlank() }
-      if (latestAi != null && latestAi.id != lastAutoSpokenMechId) {
-        lastAutoSpokenMechId = latestAi.id
-        sessionVm.voiceAudio.speakWithVoiceProfile(latestAi.text, settings.aiVoiceProfile, settings.globalVolume)
+      if (latestAi != null && latestAi.id != mechanicVm.lastAutoSpokenMsgId) {
+        mechanicVm.markDiagAutoSpoken(latestAi.id)
+        sessionVm.voiceAudio.speakWithActiveSettings(latestAi.text, settings)
       }
     }
   }
@@ -858,15 +863,11 @@ private fun VisionArMechanicTab(
                 IconButton(
                   onClick = {
                     tapCue()
-                    val ok =
-                      sessionVm.voiceAudio.speakWithVoiceProfile(
-                        text = msg.text,
-                        profile = settings.aiVoiceProfile,
-                        volumePct = settings.globalVolume,
-                      )
+                    val customVoice = settings.getActiveCustomVoice()
+                    val ok = sessionVm.voiceAudio.speakWithActiveSettings(msg.text, settings)
                     Toast.makeText(
                       ctx,
-                      if (ok) "Speaking diagnosis (${settings.aiVoiceProfile.label})..." else "Global Volume is 0% — raise volume in Settings",
+                      if (ok) "Speaking diagnosis (${customVoice?.name ?: settings.aiVoiceProfile.label})..." else "Global Volume is 0% — raise volume in Settings",
                       Toast.LENGTH_SHORT,
                     ).show()
                   },
@@ -1414,7 +1415,8 @@ private fun VisionArMechanicTab(
       nearestCharger = liveChargers.firstOrNull(),
       initialMode = ArHudMode.OPTICAL_INSPECT,
       onCaptureForVisionAi = { bmp ->
-        if (primaryBitmap == null) primaryBitmap = bmp else secondaryBitmap = bmp
+        val prevPrimary = primaryBitmap
+        if (prevPrimary == null) primaryBitmap = bmp else secondaryBitmap = bmp
         showLiveArHud = false
         val arPrompt =
           prompt.trim().ifBlank {
@@ -1422,14 +1424,14 @@ private fun VisionArMechanicTab(
           }
         Toast.makeText(ctx, "AR frame captured — running Vision AI diagnosis", Toast.LENGTH_SHORT).show()
         mechanicVm.runVisionDiagnosis(
-          primaryBitmap = bmp,
-          secondaryBitmap = if (primaryBitmap != null && primaryBitmap !== bmp) primaryBitmap else secondaryBitmap,
+          primaryBitmap = prevPrimary ?: bmp,
+          secondaryBitmap = if (prevPrimary != null) bmp else null,
           query = arPrompt,
           fleetInfo = fleetSummary,
           unitSystem = if (settings.distanceUnit == "km") "METRIC" else "IMPERIAL",
           scope = opticalScope,
           detailLevel = detailLevel,
-          imageLabels = listOf("Live AR Frame"),
+          imageLabels = if (prevPrimary != null) listOf("Angle 1", "Live AR Frame") else listOf("Live AR Frame"),
           modelId = settings.aiModelId,
         )
       },
@@ -1560,6 +1562,21 @@ private fun LiveMaintenanceBenchCameraPane(
   var cameraBindError by remember { mutableStateOf<String?>(null) }
   var cameraReady by remember { mutableStateOf(false) }
   val accent = MaterialTheme.colorScheme.primary
+
+  DisposableEffect(lifecycleOwner) {
+    onDispose {
+      runCatching { ProcessCameraProvider.getInstance(ctx).get().unbindAll() }
+    }
+  }
+
+  val legacyBenchGalleryFallback =
+    rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+      if (uri != null) {
+        val bmp = decodeSampledBitmap(ctx, uri)
+        if (bmp != null) onInspectLiveFrame(bmp)
+        else Toast.makeText(ctx, "Could not decode selected photo", Toast.LENGTH_SHORT).show()
+      }
+    }
 
   val benchGalleryFallback =
     rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -1701,7 +1718,15 @@ private fun LiveMaintenanceBenchCameraPane(
         }
         TacticalOutlinedButton(
           enabled = !busy,
-          onClick = { benchGalleryFallback.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+          onClick = {
+            runCatching {
+              benchGalleryFallback.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }.onFailure {
+              runCatching { legacyBenchGalleryFallback.launch("image/*") }.onFailure {
+                Toast.makeText(ctx, "No gallery app available on this device", Toast.LENGTH_SHORT).show()
+              }
+            }
+          },
           modifier = Modifier.testTag("mechanic_bench_gallery_fallback_button"),
         ) {
           Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1726,6 +1751,12 @@ internal fun CameraXCaptureSheet(
   var previewViewRef by remember { mutableStateOf<PreviewView?>(null) }
   var cameraBindError by remember { mutableStateOf<String?>(null) }
   var cameraReady by remember { mutableStateOf(false) }
+
+  DisposableEffect(lifecycleOwner) {
+    onDispose {
+      runCatching { ProcessCameraProvider.getInstance(ctx).get().unbindAll() }
+    }
+  }
 
   val sysCamFallback =
     rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->

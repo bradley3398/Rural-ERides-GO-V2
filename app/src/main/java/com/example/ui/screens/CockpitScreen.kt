@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CompassCalibration
@@ -207,6 +208,7 @@ fun CockpitScreen(
   var dismissedVoltMsg by remember { mutableStateOf("") }
   var shareStatusNotice by remember { mutableStateOf("") }
   var showTrailToolkit by remember { mutableStateOf(false) }
+  var showPevProSuite by remember { mutableStateOf(false) }
   var showLiveArHud by remember { mutableStateOf(false) }
   var showMissionMusicDialog by remember { mutableStateOf(false) }
   var preferredArMode by remember { mutableStateOf(ArHudMode.TELEMETRY_HUD) }
@@ -329,7 +331,14 @@ fun CockpitScreen(
     rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
       if (uri != null) {
         val csv = cockpitVm.exportRidesAsCsv(rides)
-        ctx.contentResolver.openOutputStream(uri)?.use { it.write(csv.toByteArray()) }
+        runCatching {
+          ctx.contentResolver.openOutputStream(uri)?.use { it.write(csv.toByteArray()) }
+            ?: error("Unable to open destination file.")
+        }.onSuccess {
+          shareStatusNotice = "Exported ${rides.size} ride(s) as CSV."
+        }.onFailure { err ->
+          shareStatusNotice = "CSV export failed: ${err.localizedMessage ?: "write error"}"
+        }
       }
     }
 
@@ -337,7 +346,14 @@ fun CockpitScreen(
   val exportGpxLauncher =
     rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
       if (uri != null && pendingGpxText.isNotBlank()) {
-        ctx.contentResolver.openOutputStream(uri)?.use { it.write(pendingGpxText.toByteArray()) }
+        runCatching {
+          ctx.contentResolver.openOutputStream(uri)?.use { it.write(pendingGpxText.toByteArray()) }
+            ?: error("Unable to open destination file.")
+        }.onSuccess {
+          shareStatusNotice = "GPX track exported."
+        }.onFailure { err ->
+          shareStatusNotice = "GPX export failed: ${err.localizedMessage ?: "write error"}"
+        }
       }
     }
 
@@ -367,12 +383,33 @@ fun CockpitScreen(
   }
 
   LaunchedEffect(telemetry.lat, telemetry.lng, settings.autoWeatherSync) {
-    if (telemetry.lat != 0.0) {
+    if (telemetry.lat != 0.0 || telemetry.lng != 0.0) {
       if (settings.autoWeatherSync) {
         sessionVm.refreshWeatherIfNeeded(telemetry.lat, telemetry.lng)
       }
-      sessionVm.pollRoadSpeedLimit(telemetry.lat, telemetry.lng) { road, limit, school ->
-        cockpitVm.telemetryEngine.updateSpeedLimitMeta(road, limit, school)
+      sessionVm.pollRoadSpeedLimit(
+        lat = telemetry.lat,
+        lng = telemetry.lng,
+        hasLimit = telemetry.speedLimitMph != null,
+      ) { road, limit, school, source ->
+        cockpitVm.telemetryEngine.updateSpeedLimitMeta(road, limit, school, source)
+      }
+    }
+  }
+
+  LaunchedEffect(telemetry.lat, telemetry.lng, telemetry.speedLimitMph) {
+    if ((telemetry.lat != 0.0 || telemetry.lng != 0.0) && telemetry.speedLimitMph == null) {
+      repeat(3) {
+        delay(8_000L)
+        if (cockpitVm.telemetry.value.speedLimitMph != null) return@LaunchedEffect
+        sessionVm.pollRoadSpeedLimit(
+          lat = cockpitVm.telemetry.value.lat,
+          lng = cockpitVm.telemetry.value.lng,
+          force = true,
+          hasLimit = false,
+        ) { road, limit, school, source ->
+          cockpitVm.telemetryEngine.updateSpeedLimitMeta(road, limit, school, source)
+        }
       }
     }
   }
@@ -547,6 +584,17 @@ fun CockpitScreen(
               schoolStrict = settings.schoolZoneStrict,
               legalComplianceMode = settings.legalComplianceMode,
               pevLegalClass = settings.pevLegalClass,
+              roadLimitSource = telemetry.roadLimitSource,
+              onRefresh = {
+                sessionVm.pollRoadSpeedLimit(
+                  lat = telemetry.lat,
+                  lng = telemetry.lng,
+                  force = true,
+                  hasLimit = telemetry.speedLimitMph != null,
+                ) { road, limit, school, source ->
+                  cockpitVm.telemetryEngine.updateSpeedLimitMeta(road, limit, school, source)
+                }
+              },
             )
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -939,6 +987,17 @@ fun CockpitScreen(
                   sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback && settings.buttonHapticFeedback, VoiceAudioManager.HapticCue.LIGHT_TICK)
                   showTrailToolkit = true
                 }
+
+                QuickActionTile(
+                  icon = Icons.Default.Build,
+                  label = "Pro Suite",
+                  tint = Color(0xFF22C55E),
+                  tag = "cockpit_pev_pro_suite_button",
+                  modifier = Modifier.weight(1f),
+                ) {
+                  sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback && settings.buttonHapticFeedback, VoiceAudioManager.HapticCue.LIGHT_TICK)
+                  showPevProSuite = true
+                }
               }
 
               // ROW 2: AI LAB, 3D LAB, PRAYER & HEALTH
@@ -1178,7 +1237,7 @@ fun CockpitScreen(
 
       if (statusBanner.isNotBlank() || cloudBackupMessage.isNotBlank() || shareStatusNotice.isNotBlank()) {
         item {
-          TacticalCard(highlight = true, title = "SYSTEM_ALERT.SYS") {
+          TacticalCard(highlight = true, title = "System Alerts") {
             if (statusBanner.isNotBlank()) {
               Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(statusBanner, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
@@ -1204,7 +1263,7 @@ fun CockpitScreen(
       // 2. GPS PERMISSION CTA IF NEEDED
       if (!cockpitVm.telemetryEngine.hasLocationPermission()) {
         item {
-          TacticalCard(highlight = true, title = "GPS_ARMING.EXE") {
+          TacticalCard(highlight = true, title = "GPS Telemetry Setup") {
             Text("ENABLE LIVE GPS TELEMETRY", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Text("Grant location permission for live speedometer, road speed limit signs, Open-Meteo weather, and trail recording.", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
@@ -1237,7 +1296,11 @@ fun CockpitScreen(
             val selected = activeVehicle?.id == veh.id
             val chrome = LocalTacticalChrome.current
             Surface(
-              onClick = { activeUser?.uid?.let { cockpitVm.selectActiveVehicle(it, veh.id) } },
+              onClick = {
+                cockpitVm.selectActiveVehicle(effectiveUid, veh.id) { selectedId ->
+                  sessionVm.setActiveVehicleId(selectedId)
+                }
+              },
               shape = chrome.smallShape,
               color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
               border = BorderStroke(if (selected) 1.4.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
@@ -1313,7 +1376,7 @@ fun CockpitScreen(
           if (dispDist > 0.05) "${"%.1f".format(estUsedWh / dispDist)} Wh/${distUnitLabel(settings.distanceUnit)}"
           else "-- Wh/${distUnitLabel(settings.distanceUnit)}"
 
-        TacticalCard(highlight = telemetry.recording, title = "COCKPIT_HUD.EXE") {
+        TacticalCard(highlight = telemetry.recording, title = "Live Ride Cockpit") {
           val cockpitView = LocalView.current
           DisposableEffect(settings.keepScreenBrightOnRide, telemetry.recording) {
             if (settings.keepScreenBrightOnRide && telemetry.recording) {
@@ -1560,6 +1623,17 @@ fun CockpitScreen(
           schoolStrict = settings.schoolZoneStrict,
           legalComplianceMode = settings.legalComplianceMode,
           pevLegalClass = settings.pevLegalClass,
+          roadLimitSource = telemetry.roadLimitSource,
+          onRefresh = {
+            sessionVm.pollRoadSpeedLimit(
+              lat = telemetry.lat,
+              lng = telemetry.lng,
+              force = true,
+              hasLimit = telemetry.speedLimitMph != null,
+            ) { road, limit, school, source ->
+              cockpitVm.telemetryEngine.updateSpeedLimitMeta(road, limit, school, source)
+            }
+          },
         )
       }
 
@@ -2061,7 +2135,9 @@ fun CockpitScreen(
           showVehicleDialog = null
         },
         onSave = { veh, nextWeightLbs, nextAvatarBase64 ->
-          activeUser?.uid?.let { cockpitVm.saveVehicle(it, veh) }
+          cockpitVm.saveVehicle(effectiveUid, veh) { savedId ->
+            sessionVm.setActiveVehicleId(savedId)
+          }
           sessionVm.updateRiderProfileDetails(nextWeightLbs, nextAvatarBase64) { msg ->
             shareStatusNotice = msg
           }
@@ -2092,6 +2168,10 @@ fun CockpitScreen(
         voiceAudio = sessionVm.voiceAudio,
         onDismiss = { showTrailToolkit = false },
       )
+    }
+
+    if (showPevProSuite) {
+      PevProSuiteModal(onDismiss = { showPevProSuite = false })
     }
 
     if (showLiveArHud) {

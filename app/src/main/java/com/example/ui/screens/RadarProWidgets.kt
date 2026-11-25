@@ -226,7 +226,7 @@ fun RadarProControlDeck(
     }
   }
 
-  TacticalCard(title = "RADAR_PRO_SUITE.SYS (TACTICAL SCOPE & LIVE TOOLS)", modifier = Modifier.testTag("radar_pro_suite_card")) {
+  TacticalCard(title = "Radar Pro Scope & Tools", modifier = Modifier.testTag("radar_pro_suite_card")) {
     // 0. ANIMATED LIVE TACTICAL RADAR SWEEP SCOPE (100% REAL FIRESTORE & GPS BEARINGS)
     val radarScopeRadiusKm = (settings.radarRadiusMiles.coerceIn(1, 100) * 1.60934)
     val primaryCol = MaterialTheme.colorScheme.primary
@@ -686,7 +686,7 @@ fun RiderMatchFilterDeck(
   var zipDraft by remember(settings.matchHomeZipOrTown) { mutableStateOf(settings.matchHomeZipOrTown) }
   var minRangeDraft by remember(settings.matchMinRangeMi) { mutableIntStateOf(settings.matchMinRangeMi) }
 
-  TacticalCard(title = "RIDER_MATCH.FILTER ($matchedPilotsCount/$totalPilotsCount COMPATIBLE)", modifier = Modifier.testTag("rider_match_filter_deck")) {
+  TacticalCard(title = "Rider Match ($matchedPilotsCount/$totalPilotsCount Compatible)", modifier = Modifier.testTag("rider_match_filter_deck")) {
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -837,7 +837,7 @@ fun RuralBailoutAndDaylightCard(
   val marginError = marginLabel == "TURN BACK NOW"
   val sunsetMin = remember(weather?.sunset) { parseSunsetMinutesRemaining(weather?.sunset.orEmpty()) }
 
-  TacticalCard(highlight = marginError, title = "BAILOUT_RTB & DAYLIGHT.SYS") {
+  TacticalCard(highlight = marginError, title = "Return-to-Base & Daylight") {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
@@ -904,7 +904,7 @@ fun RuralNetworkSeedCard(
   var rideTime by remember { mutableStateOf("Sat 10:00 AM") }
   var rideDetails by remember { mutableStateOf("All PEVs welcome — bring helmet & charger.") }
 
-  TacticalCard(title = "RURAL_NETWORK_SEED.SYS") {
+  TacticalCard(title = "Regional Rider Network") {
     Text(
       "Build your local riding crew in ${settings.matchHomeZipOrTown.ifBlank { settings.customWeatherCity.ifBlank { "your area" } }} — share a rider invite or drop a public Group Ride beacon + Board post.",
       style = MaterialTheme.typography.labelSmall,

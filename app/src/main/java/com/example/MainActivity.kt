@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -63,7 +64,6 @@ import com.example.ui.screens.DirectMessagesSheet
 import com.example.ui.screens.LiveCallOverlayHost
 import com.example.ui.screens.RidersPrayerModal
 import com.example.ui.screens.StartupSplashSequence
-import com.example.ui.screens.WalkieTalkieSheet
 import com.example.ui.theme.RuralERidesTheme
 import com.example.ui.theme.TacticalBackgroundCanvas
 import com.example.ui.theme.sanitizeVisualStyleForSeason
@@ -75,19 +75,43 @@ import com.example.viewmodel.SessionViewModel
 
 class MainActivity : FragmentActivity() {
   private val openUpdatesFromNotif = mutableStateOf(false)
+  private val pendingTargetTab = mutableStateOf<String?>(null)
+  private val pendingOpenDm = mutableStateOf(false)
+  private val pendingOAuthUri = mutableStateOf<Uri?>(null)
+
+  private fun captureIntentExtras(incoming: Intent?) {
+    if (incoming?.getBooleanExtra(ReminderScheduler.EXTRA_OPEN_UPDATES, false) == true) {
+      openUpdatesFromNotif.value = true
+    }
+    incoming?.getStringExtra(ReminderScheduler.EXTRA_TARGET_TAB)?.takeIf { it.isNotBlank() }?.let {
+      pendingTargetTab.value = it
+    }
+    if (incoming?.getBooleanExtra(ReminderScheduler.EXTRA_OPEN_DM, false) == true) {
+      pendingOpenDm.value = true
+    }
+    val uri = incoming?.data ?: return
+    if (uri.scheme == "ruralerides" && uri.host == "auth") {
+      pendingOAuthUri.value = uri
+      incoming.data = null
+    }
+  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     configureAppCheck(this, intent)
-    if (intent?.getBooleanExtra(ReminderScheduler.EXTRA_OPEN_UPDATES, false) == true) {
-      openUpdatesFromNotif.value = true
-    }
+    captureIntentExtras(intent)
     enableEdgeToEdge()
     setContent {
       VoltTrailRootApp(
         activity = this,
         openUpdatesFromNotification = openUpdatesFromNotif.value,
         onConsumedOpenUpdatesNotification = { openUpdatesFromNotif.value = false },
+        pendingTargetTab = pendingTargetTab.value,
+        onConsumedTargetTab = { pendingTargetTab.value = null },
+        pendingOpenDm = pendingOpenDm.value,
+        onConsumedOpenDm = { pendingOpenDm.value = false },
+        pendingOAuthUri = pendingOAuthUri.value,
+        onConsumedOAuthUri = { pendingOAuthUri.value = null },
       )
     }
   }
@@ -95,9 +119,7 @@ class MainActivity : FragmentActivity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
-    if (intent.getBooleanExtra(ReminderScheduler.EXTRA_OPEN_UPDATES, false)) {
-      openUpdatesFromNotif.value = true
-    }
+    captureIntentExtras(intent)
   }
 }
 
@@ -106,6 +128,12 @@ fun VoltTrailRootApp(
   activity: FragmentActivity,
   openUpdatesFromNotification: Boolean = false,
   onConsumedOpenUpdatesNotification: () -> Unit = {},
+  pendingTargetTab: String? = null,
+  onConsumedTargetTab: () -> Unit = {},
+  pendingOpenDm: Boolean = false,
+  onConsumedOpenDm: () -> Unit = {},
+  pendingOAuthUri: Uri? = null,
+  onConsumedOAuthUri: () -> Unit = {},
   sessionVm: SessionViewModel = viewModel(),
   cockpitVm: CockpitViewModel = viewModel(),
   radarVm: RadarViewModel = viewModel(),
@@ -144,6 +172,12 @@ fun VoltTrailRootApp(
     }
   }
 
+  LaunchedEffect(pendingOAuthUri) {
+    val uri = pendingOAuthUri ?: return@LaunchedEffect
+    sessionVm.handleSupabaseOAuthCallback(uri)
+    onConsumedOAuthUri()
+  }
+
   LaunchedEffect(activeUser?.uid, activeUser?.firebaseAuthenticated) {
     cockpitVm.bindUser(activeUser?.uid, activeUser?.firebaseAuthenticated == true)
   }
@@ -153,8 +187,21 @@ fun VoltTrailRootApp(
   var activeOverlay by rememberSaveable { mutableStateOf(OverlayCompartment.NONE) }
   var telemetryStudioRideId by rememberSaveable { mutableStateOf<String?>(null) }
   var startMenuOpen by remember { mutableStateOf(false) }
-  var walkieOpen by rememberSaveable { mutableStateOf(false) }
   var dmSheetOpen by rememberSaveable { mutableStateOf(false) }
+
+  LaunchedEffect(pendingTargetTab, pendingOpenDm) {
+    pendingTargetTab?.let { tabKey ->
+      runCatching { PrimaryTabCompartment.valueOf(tabKey.uppercase()) }.getOrNull()?.let { target ->
+        activeOverlay = OverlayCompartment.NONE
+        activeTab = target
+      }
+      onConsumedTargetTab()
+    }
+    if (pendingOpenDm) {
+      dmSheetOpen = true
+      onConsumedOpenDm()
+    }
+  }
 
   val popupsState = rememberCompartmentPopupsState()
 
@@ -485,14 +532,6 @@ fun VoltTrailRootApp(
               }
             }
 
-            if (walkieOpen) {
-              WalkieTalkieSheet(
-                sessionVm = sessionVm,
-                radarVm = radarVm,
-                onClose = { walkieOpen = false },
-              )
-            }
-
             if (dmSheetOpen) {
               DirectMessagesSheet(
                 sessionVm = sessionVm,
@@ -511,6 +550,7 @@ fun VoltTrailRootApp(
                 prayerState = dailyPrayerState,
                 journal = prayers,
                 voiceAudio = sessionVm.voiceAudio,
+                settings = settings,
                 canSaveToCloud = activeUser != null,
                 onReroll = { sessionVm.loadDailyPrayer(profile?.callsign ?: "Pilot") },
                 onSaveJournal = { title, body, category ->

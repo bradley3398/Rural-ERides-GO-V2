@@ -521,6 +521,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   }
 
   fun createCopilotSession(uid: String, title: String, persona: String) {
+    cancelCopilotPrompt()
     val sid = "chat_${UUID.randomUUID().toString().take(8)}"
     viewModelScope.launch {
       chatDao.upsertSession(
@@ -532,7 +533,6 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
           updatedAtMs = System.currentTimeMillis(),
         )
       )
-      cancelCopilotPrompt()
       selectCopilotSession(sid)
     }
   }
@@ -569,14 +569,16 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   }
 
   fun deleteCopilotSession(sessionId: String) {
+    if (_activeSessionId.value == sessionId) {
+      cancelCopilotPrompt()
+      msgJob?.cancel()
+      msgJob = null
+      _activeSessionId.value = ""
+      _messages.value = emptyList()
+    }
     viewModelScope.launch {
       chatDao.deleteSessionMessages(sessionId)
       chatDao.deleteSession(sessionId)
-      if (_activeSessionId.value == sessionId) {
-        cancelCopilotPrompt()
-        _activeSessionId.value = ""
-        _messages.value = emptyList()
-      }
     }
   }
 
@@ -613,7 +615,11 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     copilotJob =
       viewModelScope.launch {
         var streamingSession: VoiceAudioManager.StreamingTtsBufferSession? = null
+        var completedNormally = false
         try {
+          val historyBeforeTurn =
+            if (_activeSessionId.value.isBlank()) emptyList()
+            else _messages.value.toList()
           val sid =
             _activeSessionId.value.ifBlank {
               val newSid = "chat_${UUID.randomUUID().toString().take(8)}"
@@ -651,7 +657,9 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
           val useStreamingBuffer = autoSpeak && volumePct > 0 && settings.ttsPreloadBufferEnabled
 
           var sentenceSplitter: VoiceAudioManager.StreamingSentenceSplitter? = null
-          var lastStreamOffset = 0
+          var emittedSpeechLen = 0
+          val fullWidgetRegex = Regex("\\[WIDGET:\\s*(TELEMETRY|WEATHER|SOS)\\s*]")
+          val trailingIncompleteTagRegex = Regex("\\[(?:W(?:I(?:D(?:G(?:E(?:T(?::[^\\]]*)?)?)?)?)?)?)?$")
 
           if (useStreamingBuffer) {
             val session =
@@ -659,9 +667,9 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
                 profile = effectiveVoiceProfile,
                 customVoice = activeCustomVoice,
                 volumePct = volumePct,
-                speechRateMult = activeCustomVoice?.speechRate ?: 1.0f,
-                pitchMult = activeCustomVoice?.pitch ?: 1.0f,
-                preferFastLocal = true,
+                speechRateMult = settings.ttsSpeechRate,
+                pitchMult = settings.ttsPitch,
+                preferFastLocal = false,
                 bufferDepth = settings.ttsPreloadBufferDepth,
               )
             streamingSession = session
@@ -669,9 +677,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
               VoiceAudioManager.StreamingSentenceSplitter { sentence ->
                 val cleanSentence =
                   sentence
-                    .replace("[WIDGET: TELEMETRY]", "")
-                    .replace("[WIDGET: WEATHER]", "")
-                    .replace("[WIDGET: SOS]", "")
+                    .replace(fullWidgetRegex, "")
                     .trim()
                 if (cleanSentence.isNotBlank()) {
                   session.enqueueTextFragment(cleanSentence)
@@ -681,7 +687,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
 
           aiRepo
             .streamCopilotResponse(
-              history = _messages.value,
+              history = historyBeforeTurn.filterNot { it.id == userMsg.id },
               prompt = userMsg.text,
               bitmap = bitmap,
               personaPrompt = personaPrompt,
@@ -701,14 +707,17 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
                 throw e
               }
               streamingSession?.cancel()
+              streamingSession = null
               finalAnswer = "AI Co-Pilot Error: ${e.message ?: "Request failed."}"
             }
             .collect { partial ->
               finalAnswer = partial
-              _streamingText.value = partial
-              if (useStreamingBuffer && sentenceSplitter != null && partial.length > lastStreamOffset) {
-                val delta = partial.substring(lastStreamOffset)
-                lastStreamOffset = partial.length
+              val strippedFull = partial.replace(fullWidgetRegex, "")
+              val safeDisplay = strippedFull.replace(trailingIncompleteTagRegex, "").trimEnd()
+              _streamingText.value = safeDisplay
+              if (useStreamingBuffer && sentenceSplitter != null && safeDisplay.length > emittedSpeechLen) {
+                val delta = safeDisplay.substring(emittedSpeechLen)
+                emittedSpeechLen = safeDisplay.length
                 sentenceSplitter.feed(delta)
               }
             }
@@ -722,9 +731,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
             }
           val cleaned =
             finalAnswer
-              .replace("[WIDGET: TELEMETRY]", "")
-              .replace("[WIDGET: WEATHER]", "")
-              .replace("[WIDGET: SOS]", "")
+              .replace(fullWidgetRegex, "")
               .trim()
               .ifBlank { "No response received." }
 
@@ -749,15 +756,14 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
             )
           )
 
-          if (useStreamingBuffer) {
+          if (useStreamingBuffer && streamingSession != null) {
+            if (cleaned.length > emittedSpeechLen) {
+              sentenceSplitter?.feed(cleaned.substring(emittedSpeechLen))
+            }
             sentenceSplitter?.flush()
             streamingSession?.finish()
           } else if (autoSpeak && volumePct > 0) {
-            if (activeCustomVoice != null) {
-              audio.speakWithCustomVoice(cleaned, activeCustomVoice, volumePct)
-            } else {
-              audio.speakWithVoiceProfile(cleaned, effectiveVoiceProfile, volumePct)
-            }
+            audio.speakWithActiveSettings(cleaned, settings, volumePct)
           }
 
           if (settings.aiNotifsEnabled) {
@@ -768,7 +774,11 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
               targetTab = "COPILOT",
             )
           }
+          completedNormally = true
         } finally {
+          if (!completedNormally) {
+            streamingSession?.cancel()
+          }
           _streamingText.value = ""
           _copilotBusy.value = false
         }

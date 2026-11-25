@@ -557,7 +557,7 @@ fun GravelVoltGameScreen(
       GameEntityRenderItem(e.lane, e.z, code)
     }
     var gameBackendBadge by remember { mutableStateOf("OPENGL ES 3D") }
-    GravelVoltVulkanViewport(
+    GravelVoltGlViewport(
       vehicleName = vehicleName,
       lanePos = lanePos,
       jumpHeight = jumpHeight,

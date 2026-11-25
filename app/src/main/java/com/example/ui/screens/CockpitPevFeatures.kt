@@ -448,7 +448,7 @@ fun PevAccelBrakeTimerCard(
     }
   }
 
-  TacticalCard(highlight = armed, title = "DRAG_BRAKE_BOX.EXE") {
+  TacticalCard(highlight = armed, title = "Acceleration & Braking Timer") {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Timer, null, tint = MaterialTheme.colorScheme.primary)
@@ -1098,7 +1098,7 @@ fun RuralTrailReadinessCard(
     if (settings.distanceUnit == "mi") "${(telemetry.altitudeM * 3.28084).roundToInt()} ft"
     else "${telemetry.altitudeM.roundToInt()} m"
 
-  TacticalCard(title = "RURAL_TRAIL_READINESS.EXE") {
+  TacticalCard(title = "Trail Readiness & Conditions") {
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,

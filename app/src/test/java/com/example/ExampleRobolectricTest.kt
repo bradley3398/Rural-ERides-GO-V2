@@ -5,10 +5,14 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.ai.GeminiAiRepository
 import com.example.ai.GeminiModelCatalog
 import com.example.core.LiveCloudServices
+import com.example.core.MapsSpeedLimitClient
 import com.example.core.MissionCardShareUtil
 import com.example.core.PevBatteryPhysics
 import com.example.data.AiVoiceProfile
+import com.example.data.AppDatabase
 import com.example.data.CustomVoiceProfile
+import com.example.data.HudStyle
+import com.example.data.OfflineRideEntity
 import com.example.data.VoiceDspProfile
 import com.example.data.parseCustomVoiceProfiles
 import com.example.data.serializeCustomVoiceProfiles
@@ -164,6 +168,26 @@ class ExampleRobolectricTest {
     assertTrue(SupabaseAuthService.isValidEmail("rider@ruralerides.com"))
     assertFalse(SupabaseAuthService.isValidEmail("not-an-email"))
     assertFalse(SupabaseAuthService.isValidEmail("@missing.com"))
+    assertFalse(SupabaseAuthService.isConfiguredValues("https://abc.supabase.co", "YOUR_SUPABASE_ANON_KEY"))
+  }
+
+  @Test
+  fun `supabase non-play oauth pkce challenge and callback params parse cleanly`() {
+    // RFC 7636 Appendix B test vector
+    val challenge = SupabaseAuthService.computePkceChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
+    assertEquals("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", challenge)
+
+    val verifier = SupabaseAuthService.generatePkceVerifier()
+    assertTrue(verifier.length >= 43)
+
+    val pkceParams = SupabaseAuthService.parseUrlParams("?code=auth_code_123&state=st_abc")
+    assertEquals("auth_code_123", pkceParams["code"])
+    assertEquals("st_abc", pkceParams["state"])
+
+    val implicitParams = SupabaseAuthService.parseUrlParams("#access_token=jwt_tok&refresh_token=ref_1&expires_in=3600")
+    assertEquals("jwt_tok", implicitParams["access_token"])
+    assertEquals("ref_1", implicitParams["refresh_token"])
+    assertEquals("3600", implicitParams["expires_in"])
   }
 
   @Test
@@ -1004,5 +1028,92 @@ class ExampleRobolectricTest {
     assertEquals(3, sentences.size)
     assertEquals("Keep eyes on the curve ahead!", sentences[1])
     assertEquals("Creek crossing is clear.", sentences[2])
+  }
+
+  @Test
+  fun `rural-erides-go google services resources match com aistudio volttrail kqrmvx`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    assertEquals("rural-erides-go", context.getString(R.string.project_id))
+    assertEquals("1:1030367232900:android:b96563e096b095d6c993d1", context.getString(R.string.google_app_id))
+    assertEquals(
+      "1030367232900-gqci4dcbsd2fo92m6b2oupupo8sqkvpi.apps.googleusercontent.com",
+      context.getString(R.string.default_web_client_id),
+    )
+    assertEquals("(default)", context.getString(R.string.firestore_database_id))
+  }
+
+  @Test
+  fun `maps speed limit client parses prefixed zones maxspeed types and statutory fallbacks`() {
+    // DE:30 -> 30 km/h -> ~19 mph; FR:zone30 -> ~19 mph; US:urban -> 25 mph
+    assertEquals(19, MapsSpeedLimitClient.parseRoadSpeedLimitMph("DE:30", defaultAsKmh = true))
+    assertEquals(19, MapsSpeedLimitClient.parseRoadSpeedLimitMph("FR:zone30", defaultAsKmh = true))
+    assertEquals(25, MapsSpeedLimitClient.parseRoadSpeedLimitMph("US:urban", defaultAsKmh = true))
+    assertEquals(10, MapsSpeedLimitClient.parseMaxSpeedTypeMph("AT:walk"))
+    assertEquals(20, MapsSpeedLimitClient.parseMaxSpeedTypeMph("school"))
+    assertEquals(25, MapsSpeedLimitClient.estimateStatutorySpeedLimitMph("residential"))
+    assertEquals(45, MapsSpeedLimitClient.estimateStatutorySpeedLimitMph("primary"))
+    assertNull(MapsSpeedLimitClient.estimateStatutorySpeedLimitMph("unknown_path_class"))
+  }
+
+  @Test
+  fun `hud style catalog includes 20 huds including oem pev controller displays`() {
+    val names = HudStyle.entries.map { it.name }.toSet()
+    assertTrue("Expected at least 20 HUD styles, got ${names.size}", names.size >= 20)
+    listOf(
+      "S866_LCD",
+      "TF11_LCD",
+      "BAFANG_DPC18",
+      "ISINWHEEL_TFT",
+      "NINEBOT_MATRIX",
+      "SW900_LCD",
+      "VSETT_EY3",
+    ).forEach { expectedOemHud ->
+      assertTrue("Missing OEM HUD style $expectedOemHud", expectedOemHud in names)
+    }
+  }
+
+  @Test
+  fun `room vault persists offline ride vehicle metadata ai debrief updates and deletion`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val dao = AppDatabase.get(context).offlineRideDao()
+    val uid = "test_vault_uid"
+    dao.clearUserRides(uid)
+
+    val ride = OfflineRideEntity(
+      id = "ride_vault_001",
+      userId = uid,
+      vehicleName = "Bafang Ultra Trail",
+      title = "Ridge Gravel Sprint",
+      durationSec = 940L,
+      distanceKm = 14.2,
+      maxSpeedKmh = 48.0,
+      avgSpeedKmh = 31.5,
+      elevationGainM = 185.0,
+      whUsed = 310.0,
+      polylineCsv = "36.37,-94.20;36.38,-94.21",
+      syncedToCloud = false,
+      createdAtMs = 1764000000000L,
+      vehicleId = "veh_bafang_01",
+      startBatteryPct = 92,
+      endBatteryPct = 68,
+      weatherSummary = "Clear 68F",
+      aiDebrief = "",
+    )
+    dao.upsert(ride)
+
+    val initialList = dao.observeRides(uid).first()
+    assertEquals(1, initialList.size)
+    assertEquals("veh_bafang_01", initialList[0].vehicleId)
+    assertEquals(92, initialList[0].startBatteryPct)
+    assertEquals(68, initialList[0].endBatteryPct)
+    assertEquals("Clear 68F", initialList[0].weatherSummary)
+
+    dao.updateAiDebrief("ride_vault_001", "Smooth throttle cadence with minimal voltage sag.")
+    val updatedList = dao.observeRides(uid).first()
+    assertEquals("Smooth throttle cadence with minimal voltage sag.", updatedList[0].aiDebrief)
+
+    dao.deleteRide("ride_vault_001")
+    val afterDelete = dao.observeRides(uid).first()
+    assertTrue(afterDelete.isEmpty())
   }
 }

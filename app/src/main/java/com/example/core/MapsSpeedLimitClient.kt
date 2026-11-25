@@ -22,7 +22,16 @@ internal object MapsSpeedLimitClient {
   internal fun parseRoadSpeedLimitMph(rawTag: String, defaultAsKmh: Boolean = true): Int? {
     val cleaned = rawTag.trim()
     if (cleaned.isBlank()) return null
-    val normalized = cleaned.replace(digitUnitBoundaryRegex, " ")
+    val lower = cleaned.lowercase()
+    // Handle OSM zone/type codes like "US:urban", "DE:rural", "AT:walk", "implicit"
+    if (lower.none { it.isDigit() }) {
+      return parseMaxSpeedTypeMph(lower)
+    }
+    // Strip country prefix like "DE:30" or "FR:zone30" before extracting token
+    val normalized =
+      cleaned
+        .replace(Regex("""^[A-Za-z]{2}:(?:zone)?"""), "")
+        .replace(digitUnitBoundaryRegex, " ")
     val token = firstSpeedTokenRegex.find(normalized)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
     val isExplicitMph = cleaned.contains("mph", ignoreCase = true)
     val isExplicitKmh =
@@ -37,11 +46,74 @@ internal object MapsSpeedLimitClient {
     }
   }
 
+  internal fun parseMaxSpeedTypeMph(rawType: String): Int? {
+    val t = rawType.trim().lowercase()
+    return when {
+      t.contains("walk") || t.contains("living_street") -> 10
+      t.contains("school") -> 20
+      t.contains("urban") -> if (t.startsWith("us:") || t.startsWith("uk:") || t.startsWith("gb:")) 25 else 31
+      t.contains("rural") -> if (t.startsWith("us:")) 55 else if (t.startsWith("uk:") || t.startsWith("gb:")) 60 else 50
+      t.contains("motorway") -> if (t.startsWith("us:")) 65 else 70
+      t.contains("nsl_single") -> 60
+      t.contains("nsl_dual") -> 70
+      else -> null
+    }
+  }
+
+  internal fun estimateStatutorySpeedLimitMph(highwayType: String): Int? =
+    when (highwayType.trim().lowercase()) {
+      "motorway", "motorway_link" -> 65
+      "trunk", "trunk_link" -> 55
+      "primary", "primary_link" -> 45
+      "secondary", "secondary_link" -> 40
+      "tertiary", "tertiary_link" -> 35
+      "unclassified" -> 30
+      "residential" -> 25
+      "service", "track", "cycleway", "bridleway", "path" -> 20
+      "living_street" -> 15
+      else -> null
+    }
+
+  private fun highwayPriority(highway: String): Int =
+    when (highway.trim().lowercase()) {
+      "primary", "trunk", "secondary", "tertiary" -> 5
+      "unclassified", "residential" -> 4
+      "living_street", "cycleway" -> 3
+      "track", "service" -> 2
+      "footway", "pedestrian", "steps", "path" -> 1
+      else -> 0
+    }
+
+  private fun extractTagSpeedMph(tags: JSONObject): Pair<Int?, String> {
+    val speedKeys =
+      listOf(
+        "maxspeed" to true,
+        "maxspeed:forward" to true,
+        "maxspeed:backward" to true,
+        "maxspeed:advisory" to true,
+        "zone:maxspeed" to true,
+        "maxspeed:type" to true,
+        "source:maxspeed" to true,
+      )
+    for ((key, defKmh) in speedKeys) {
+      if (tags.has(key)) {
+        val raw = tags.optString(key, "").trim()
+        val parsed = parseRoadSpeedLimitMph(raw, defaultAsKmh = defKmh)
+        if (parsed != null) return parsed to "OSM LIVE"
+      }
+    }
+    val hw = tags.optString("highway", "")
+    val statutory = estimateStatutorySpeedLimitMph(hw)
+    if (statutory != null) return statutory to "ROAD CLASS"
+    return null to ""
+  }
+
   suspend fun fetchLiveRoadAndSpeedLimit(lat: Double, lng: Double): Result<LiveCloudServices.RoadSignInfo> =
     withContext(Dispatchers.IO) {
       runCatching {
         var road = ""
         var limitMph: Int? = null
+        var limitSource = ""
         var schoolNearby = false
 
         val ttKeys = ApiKeyRing.tomTomKeys()
@@ -68,44 +140,132 @@ internal object MapsSpeedLimitClient {
               if (street.isNotBlank()) road = street
               val limitStr = addr?.optString("speedLimit").orEmpty()
               val mph = parseRoadSpeedLimitMph(limitStr, defaultAsKmh = false)
-              if (mph != null) limitMph = mph
+              if (mph != null) {
+                limitMph = mph
+                limitSource = "TOMTOM LIVE"
+              }
             }
           }
         }
 
-        // Query Overpass OSM for speed limits & school zones (plus road name if missing)
-        runCatching {
-          val query =
-            """[out:json][timeout:6];(way(around:45,$lat,$lng)["highway"];node(around:120,$lat,$lng)["amenity"="school"];way(around:120,$lat,$lng)["amenity"="school"];);out tags 6;"""
-          val encoded = URLEncoder.encode(query, "UTF-8")
-          val overpassUrl = "https://overpass-api.de/api/interpreter?data=$encoded"
-          val req =
-            Request.Builder()
-              .url(overpassUrl)
-              .header("User-Agent", "RuralERidesGO/2.0 Android")
-              .get()
-              .build()
-          val body =
-            httpClient.newCall(req).execute().use { resp ->
-              if (resp.isSuccessful) resp.body?.string().orEmpty() else ""
-            }
-          if (body.isNotBlank()) {
-            val elements = JSONObject(body).optJSONArray("elements")
-            if (elements != null) {
-              for (i in 0 until elements.length()) {
-                val tags = elements.optJSONObject(i)?.optJSONObject("tags") ?: continue
-                if (tags.optString("amenity") == "school" || tags.optString("school") != "") {
-                  schoolNearby = true
-                }
-                if (tags.has("name") && road.isBlank()) {
-                  road = tags.optString("name", "")
-                }
-                if (tags.has("maxspeed") && limitMph == null) {
-                  val ms = tags.optString("maxspeed")
-                  val parsedMph = parseRoadSpeedLimitMph(ms, defaultAsKmh = true)
-                  if (parsedMph != null) {
-                    limitMph = parsedMph
+        // Query Overpass OSM mirrors for speed limits, road names, highway classes & school zones
+        val overpassQuery =
+          """[out:json][timeout:8];(way(around:65,$lat,$lng)["highway"];node(around:130,$lat,$lng)["amenity"="school"];way(around:130,$lat,$lng)["amenity"="school"];);out tags 25;"""
+        val encodedOverpass = URLEncoder.encode(overpassQuery, "UTF-8")
+        val overpassMirrors =
+          listOf(
+            "https://overpass-api.de/api/interpreter?data=$encodedOverpass",
+            "https://overpass.kumi.systems/api/interpreter?data=$encodedOverpass",
+            "https://maps.mail.ru/osm/tools/overpass/api/interpreter?data=$encodedOverpass",
+          )
+        for (mirrorUrl in overpassMirrors) {
+          var gotValidResponse = false
+          runCatching {
+            val req =
+              Request.Builder()
+                .url(mirrorUrl)
+                .header("User-Agent", "RuralERidesGO/53.0 Android")
+                .get()
+                .build()
+            val body =
+              httpClient.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) resp.body?.string().orEmpty() else ""
+              }
+            if (body.isNotBlank() && body.trimStart().startsWith("{")) {
+              val elements = JSONObject(body).optJSONArray("elements")
+              if (elements != null) {
+                gotValidResponse = true
+                var bestHighwayScore = -1
+                var bestNamedRoad = ""
+                var bestStatutoryLimit: Int? = null
+                var bestExplicitLimit: Int? = null
+
+                for (i in 0 until elements.length()) {
+                  val tags = elements.optJSONObject(i)?.optJSONObject("tags") ?: continue
+                  if (tags.optString("amenity") == "school" || tags.optString("school").isNotBlank()) {
+                    schoolNearby = true
                   }
+                  val hw = tags.optString("highway", "")
+                  if (hw.isBlank()) continue
+                  val score = highwayPriority(hw)
+                  val candidateName =
+                    tags.optString("name", "").ifBlank { tags.optString("ref", "") }
+                  if (candidateName.isNotBlank() && (bestNamedRoad.isBlank() || score > bestHighwayScore)) {
+                    bestNamedRoad = candidateName
+                  }
+                  val (candLimit, candSrc) = extractTagSpeedMph(tags)
+                  if (candLimit != null) {
+                    if (candSrc == "OSM LIVE" && (bestExplicitLimit == null || score >= bestHighwayScore)) {
+                      bestExplicitLimit = candLimit
+                    } else if (bestStatutoryLimit == null || score > bestHighwayScore) {
+                      bestStatutoryLimit = candLimit
+                    }
+                  }
+                  if (score > bestHighwayScore) bestHighwayScore = score
+                }
+
+                if (road.isBlank() && bestNamedRoad.isNotBlank()) road = bestNamedRoad
+                if (limitMph == null) {
+                  when {
+                    bestExplicitLimit != null -> {
+                      limitMph = bestExplicitLimit
+                      limitSource = "OSM LIVE"
+                    }
+                    bestStatutoryLimit != null -> {
+                      limitMph = bestStatutoryLimit
+                      limitSource = "ROAD CLASS"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if (gotValidResponse) break
+        }
+
+        // Keyless Nominatim Reverse Geocode fallback if road name or limit is still missing
+        if (road.isBlank() || limitMph == null) {
+          runCatching {
+            val nomUrl =
+              "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lng&zoom=17&addressdetails=1&extratags=1"
+            val req =
+              Request.Builder()
+                .url(nomUrl)
+                .header("User-Agent", "RuralERidesGO/53.0 Android")
+                .get()
+                .build()
+            val body =
+              httpClient.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) resp.body?.string().orEmpty() else ""
+              }
+            if (body.isNotBlank() && body.trimStart().startsWith("{")) {
+              val obj = JSONObject(body)
+              val addr = obj.optJSONObject("address")
+              if (road.isBlank()) {
+                val nomRoad =
+                  addr?.optString("road").orEmpty()
+                    .ifBlank { addr?.optString("neighbourhood").orEmpty() }
+                    .ifBlank { addr?.optString("hamlet").orEmpty() }
+                    .ifBlank { addr?.optString("village").orEmpty() }
+                    .ifBlank { addr?.optString("town").orEmpty() }
+                    .ifBlank { addr?.optString("county").orEmpty() }
+                    .ifBlank { obj.optString("name").orEmpty() }
+                if (nomRoad.isNotBlank()) road = nomRoad
+              }
+              val extra = obj.optJSONObject("extratags")
+              if (limitMph == null && extra != null) {
+                val (cand, src) = extractTagSpeedMph(extra)
+                if (cand != null) {
+                  limitMph = cand
+                  limitSource = src
+                }
+              }
+              if (limitMph == null) {
+                val catType = obj.optString("type", "")
+                val statutory = estimateStatutorySpeedLimitMph(catType)
+                if (statutory != null) {
+                  limitMph = statutory
+                  limitSource = "ROAD CLASS"
                 }
               }
             }
@@ -135,6 +295,7 @@ internal object MapsSpeedLimitClient {
           roadName = road.ifBlank { "Rural Sector Trail" },
           speedLimitMph = limitMph,
           inSchoolZone = schoolNearby,
+          limitSource = limitSource,
         )
       }
     }

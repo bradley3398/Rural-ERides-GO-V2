@@ -3,7 +3,7 @@ package com.example.ui.screens
 import android.util.Log
 
 /**
- * Resource Lifecycle Manager for VoltTrail's multi-engine 3D viewports
+ * Resource Lifecycle Manager for Rural ERides GO's multi-engine 3D viewports
  * (OpenGL ES 3.0 GGX PBR, Chromium WebGL 2.0, and Compose GPU Vector Mesh).
  * Centralizes cleanup hooks so native GL/WebGL surfaces pause cleanly and release GPU buffers.
  */

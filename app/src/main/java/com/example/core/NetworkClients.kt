@@ -1,6 +1,7 @@
 package com.example.core
 
 import android.content.Context
+import com.example.BuildConfig
 import com.example.data.ActiveNavRoute
 import com.example.data.BoardComment
 import com.example.data.BoardPost
@@ -57,7 +58,8 @@ object LiveCloudServices {
   }
 
   fun hasYoutubeKey(): Boolean = ApiKeyRing.youtubeKeys().isNotEmpty()
-  fun hasSupabaseConfig(): Boolean = false
+  fun hasSupabaseConfig(): Boolean =
+    SupabaseAuthService.isConfiguredValues(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
   fun hasWeatherKey(): Boolean = ApiKeyRing.weatherKeys().isNotEmpty()
   fun hasTavilyKey(): Boolean = ApiKeyRing.tavilyKeys().isNotEmpty()
   fun hasBraveKey(): Boolean = ApiKeyRing.braveKeys().isNotEmpty()
@@ -101,6 +103,7 @@ object LiveCloudServices {
     val roadName: String,
     val speedLimitMph: Int?,
     val inSchoolZone: Boolean,
+    val limitSource: String = "",
   )
 
   internal fun parseRoadSpeedLimitMph(rawTag: String, defaultAsKmh: Boolean = true): Int? =

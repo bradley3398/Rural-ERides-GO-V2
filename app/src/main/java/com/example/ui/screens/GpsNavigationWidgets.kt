@@ -130,7 +130,7 @@ fun LiveTurnByTurnNavBanner(
 
   TacticalCard(
     highlight = true,
-    title = "LIVE_GPS_NAV.SYS",
+    title = "Turn-by-Turn Navigation",
     modifier = Modifier.fillMaxWidth().testTag("live_gps_nav_banner"),
   ) {
     Row(
@@ -334,7 +334,7 @@ fun GpsNavigationPlannerCard(
   val haptics = LocalHapticFeedback.current
   val ctx = LocalContext.current
 
-  TacticalCard(highlight = true, title = "GPS_NAV_PLANNER.EXE") {
+  TacticalCard(highlight = true, title = "Route Planner") {
     Row(
       modifier = Modifier.fillMaxWidth(),
       verticalAlignment = Alignment.CenterVertically,

@@ -100,7 +100,7 @@ fun WeatherMatrixCard(
       else -> !settings.useCustomWeatherLoc
     }
 
-  TacticalCard(title = "WEATHER_MATRIX.EXE") {
+  TacticalCard(title = "Live Ride Weather") {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
       Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
         Icon(Icons.Default.WbSunny, null, tint = MaterialTheme.colorScheme.tertiary)
@@ -448,7 +448,7 @@ fun YoutubeMusicAndNewsDeck(
   var showNewsLocInput by remember { mutableStateOf(false) }
   var newsSharePayload by remember { mutableStateOf<SocialSharePayload?>(null) }
 
-  TacticalCard(highlight = activeVideo != null, title = "DASHBOARD_MINI_PLAYER.EXE") {
+  TacticalCard(highlight = activeVideo != null, title = "Dashboard Media Player") {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
       Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
         Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.primary)
@@ -594,7 +594,7 @@ fun YoutubeMusicAndNewsDeck(
     }
   }
 
-  TacticalCard(title = "PEV_NEWS_WIRE.EXE") {
+  TacticalCard(title = "PEV News Wire") {
     val activeLocSummary =
       when (settings.newsLocationScope) {
         "GPS" -> if (resolvedGpsCity.isNotBlank()) "Local: $resolvedGpsCity" else "Local GPS (Auto)"

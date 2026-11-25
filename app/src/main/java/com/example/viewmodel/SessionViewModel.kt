@@ -509,6 +509,35 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  fun signInWithSupabaseGoogleBrowser(activity: Activity) {
+    viewModelScope.launch {
+      silentGoogleJob?.cancel()
+      runCatching { silentGoogleJob?.join() }
+      _authBusy.value = true
+      _authStatusMessage.value = "Opening Non-Play Google Browser Sign-In..."
+      supabaseService
+        .launchGoogleOAuthInBrowser(activity)
+        .onFailure { err ->
+          _authStatusMessage.value = err.message ?: "Unable to open Google Browser Sign-In."
+        }
+      _authBusy.value = false
+    }
+  }
+
+  fun handleSupabaseOAuthCallback(uri: Uri) {
+    if (uri.scheme != "ruralerides" || uri.host != "auth") return
+    viewModelScope.launch {
+      _authBusy.value = true
+      _authStatusMessage.value = "Completing Non-Play Google Sign-In..."
+      when (val res = supabaseService.handleOAuthCallbackUri(uri)) {
+        is SupabaseAuthResult.Success -> _authStatusMessage.value = ""
+        is SupabaseAuthResult.EmailConfirmationRequired -> _authStatusMessage.value = res.message
+        is SupabaseAuthResult.Error -> _authStatusMessage.value = res.message
+      }
+      _authBusy.value = false
+    }
+  }
+
   fun sendSupabasePasswordReset(email: String) {
     viewModelScope.launch {
       _authBusy.value = true
@@ -633,6 +662,38 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
       }
       _authBusy.value = false
+    }
+  }
+
+  fun setActiveVehicleId(vehicleId: String) {
+    if (vehicleId.isBlank()) return
+    val active = activeUser.value
+    val effectiveUid = active?.uid?.ifBlank { "local_pilot" } ?: "local_pilot"
+    val curProfile = _profile.value
+    if (curProfile != null) {
+      val updated = curProfile.copy(activeVehicleId = vehicleId)
+      _profile.value = updated
+      if (active?.firebaseAuthenticated != true) {
+        viewModelScope.launch { localVault.saveProfile(updated) }
+      }
+    } else {
+      val created =
+        RiderProfile(
+          id = effectiveUid,
+          userId = effectiveUid,
+          displayName = active?.displayName?.ifBlank { "Pilot" } ?: "Pilot",
+          callsign = active?.displayName?.uppercase()?.take(24)?.ifBlank { "PILOT" } ?: "PILOT",
+          email = active?.email.orEmpty(),
+          activeVehicleId = vehicleId,
+          acceptedLegal = true,
+        )
+      _profile.value = created
+      if (active?.firebaseAuthenticated != true) {
+        viewModelScope.launch { localVault.saveProfile(created) }
+      }
+    }
+    if (active?.firebaseAuthenticated == true) {
+      viewModelScope.launch { riderRepo.setActiveVehicle(active.uid, vehicleId) }
     }
   }
 
@@ -853,15 +914,31 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  fun pollRoadSpeedLimit(lat: Double, lng: Double, onUpdate: (String, Int?, Boolean) -> Unit) {
+  fun pollRoadSpeedLimit(
+    lat: Double,
+    lng: Double,
+    force: Boolean = false,
+    hasLimit: Boolean = false,
+    onUpdate: (String, Int?, Boolean, String) -> Unit,
+  ) {
     if (lat == 0.0 && lng == 0.0) return
     val now = System.currentTimeMillis()
-    if (now - lastRoadLookupMs < 14_000L) return
+    val cooldownMs =
+      when {
+        force -> 0L
+        !hasLimit -> 4_500L
+        else -> 14_000L
+      }
+    if (!force && now - lastRoadLookupMs < cooldownMs) return
     lastRoadLookupMs = now
     viewModelScope.launch {
-      LiveCloudServices.fetchLiveRoadAndSpeedLimit(lat, lng).onSuccess { info ->
-        onUpdate(info.roadName, info.speedLimitMph, info.inSchoolZone)
-      }
+      LiveCloudServices.fetchLiveRoadAndSpeedLimit(lat, lng)
+        .onSuccess { info ->
+          onUpdate(info.roadName, info.speedLimitMph, info.inSchoolZone, info.limitSource)
+        }
+        .onFailure {
+          if (force || !hasLimit) lastRoadLookupMs = 0L
+        }
     }
   }
 

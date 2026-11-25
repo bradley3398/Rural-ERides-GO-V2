@@ -46,7 +46,6 @@ browser = "1.8.0"
 playServicesAuth = "21.3.0"
 osmdroid = "6.1.20"
 androidYoutubePlayer = "12.1.1"
-filament = "1.56.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -106,9 +105,6 @@ firebase-appcheck-recaptcha = { group = "com.google.firebase", name = "firebase-
 firebase-appcheck-debug = { group = "com.google.firebase", name = "firebase-appcheck-debug" }
 osmdroid-android = { group = "org.osmdroid", name = "osmdroid-android", version.ref = "osmdroid" }
 android-youtube-player = { group = "com.pierfrancescosoffritti.androidyoutubeplayer", name = "core", version.ref = "androidYoutubePlayer" }
-filament-android = { group = "com.google.android.filament", name = "filament-android", version.ref = "filament" }
-filament-gltfio = { group = "com.google.android.filament", name = "gltfio-android", version.ref = "filament" }
-filament-utils = { group = "com.google.android.filament", name = "filament-utils-android", version.ref = "filament" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

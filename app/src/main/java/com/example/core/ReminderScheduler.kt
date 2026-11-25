@@ -46,7 +46,7 @@ class ReminderWorker(
 
     ReminderScheduler.postNotification(
       context = applicationContext,
-      title = "VoltTrail Pre-Ride Readiness Check",
+      title = "Rural ERides GO Pre-Ride Check",
       body =
         buildString {
           append("Check tire PSI (every ${settings.psiReminderDays}d) & torque bolts every ${settings.maintReminderKm} km.")
@@ -85,7 +85,7 @@ object ReminderScheduler {
 
       val remindersChannel = NotificationChannel(
         CHANNEL_REMINDERS,
-        "VoltTrail Rider Reminders",
+        "Rural ERides GO Rider Reminders",
         NotificationManager.IMPORTANCE_DEFAULT,
       ).apply {
         description = "Scheduled tire PSI checks, maintenance intervals, and trail safety"
@@ -95,7 +95,7 @@ object ReminderScheduler {
 
       val aiChannel = NotificationChannel(
         CHANNEL_AI,
-        "VoltTrail AI & Diagnostics",
+        "Rural ERides GO AI & Diagnostics",
         NotificationManager.IMPORTANCE_HIGH,
       ).apply {
         description = "AI Co-Pilot tactical advice, AI mechanic diagnoses, and ride debriefs"
@@ -106,7 +106,7 @@ object ReminderScheduler {
 
       val socialChannel = NotificationChannel(
         CHANNEL_SOCIAL,
-        "VoltTrail Community & Social",
+        "Rural ERides GO Community & Social",
         NotificationManager.IMPORTANCE_DEFAULT,
       ).apply {
         description = "New board dispatches, community discussions, and trail condition reports"
@@ -116,7 +116,7 @@ object ReminderScheduler {
 
       val dmChannel = NotificationChannel(
         CHANNEL_DM,
-        "VoltTrail Direct Messages & Squad Comms",
+        "Rural ERides GO Direct Messages & Squad Comms",
         NotificationManager.IMPORTANCE_HIGH,
       ).apply {
         description = "Direct private messages and squad communication alerts"

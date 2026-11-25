@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.media.RingtoneManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -259,8 +260,13 @@ fun SettingsMatrixScreen(
   val systemRingtonePicker =
     rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
       if (res.resultCode == Activity.RESULT_OK) {
-        @Suppress("DEPRECATION")
-        val pickedUri = res.data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+        val pickedUri =
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            res.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+          } else {
+            @Suppress("DEPRECATION")
+            res.data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+          }
         if (pickedUri != null) {
           sessionVm.updateSettings {
             it.copy(
@@ -382,7 +388,7 @@ fun SettingsMatrixScreen(
           onRefreshSupabaseSession = { sessionVm.refreshSupabaseSessionNow() },
         )
         Spacer(Modifier.height(10.dp))
-        TacticalCard(highlight = true, title = "CLOUD_BACKUP.SYS") {
+        TacticalCard(highlight = true, title = "Cloud Backup & Sync") {
           Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(Icons.Default.CloudDone, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Text("CLOUD VAULT BACKUP & RESTORE", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
@@ -468,7 +474,7 @@ fun SettingsMatrixScreen(
           }
         }
         Spacer(Modifier.height(10.dp))
-        TacticalCard(title = "VAULT_EXPORT.SYS") {
+        TacticalCard(title = "Data Vault & Reset") {
           Text("DATA SAVER, JSON VAULT & RESET", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
           AndroidSettingSwitch("Data Saver Mode (Reduce Image Preloads)", checked = settings.dataSaverMode) { v -> sessionVm.updateSettings { it.copy(dataSaverMode = v) } }
           AndroidSettingSwitch("Auto Cloud Sync on Ride Finish", checked = settings.autoCloudSyncOnFinish) { v -> sessionVm.updateSettings { it.copy(autoCloudSyncOnFinish = v) } }

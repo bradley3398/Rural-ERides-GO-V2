@@ -1104,6 +1104,9 @@ fun CustomVoiceStudioScreen(
                         profile = effectiveProfile,
                         customVoice = activeCustom,
                         volumePct = settings.globalVolume,
+                        speechRateMult = settings.ttsSpeechRate,
+                        pitchMult = settings.ttsPitch,
+                        preferFastLocal = false,
                         bufferDepth = settings.ttsPreloadBufferDepth,
                       )
                       for (frag in testFragments) {

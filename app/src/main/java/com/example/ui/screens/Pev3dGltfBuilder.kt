@@ -2306,7 +2306,7 @@ internal object Pev3dGltfBuilder {
       val isXrayTrans = xrayShell && mk.isShell
       val alpha = if (isXrayTrans) 0.22 else 1.0
       // Calibrate glTF 2.0 factors so embedded 512x512 metallicRoughnessTexture channels
-      // aren't double-crushed by Filament's strict glTF PBR evaluator (final = factor * texel).
+      // aren't double-crushed by strict glTF PBR evaluators (final = factor * texel).
       val calMetallic = when {
         isXrayTrans -> 0.15
         mk.texId == PevPbrMaterialId.TIRE_RUBBER || mk.texId == PevPbrMaterialId.QUILTED_LEATHER -> 0.04
@@ -2408,7 +2408,7 @@ internal object Pev3dGltfBuilder {
     val binBytes = binStream.toByteArray()
 
     val root = JSONObject()
-      .put("asset", JSONObject().put("version", "2.0").put("generator", "VoltTrail-PBR-GLB"))
+      .put("asset", JSONObject().put("version", "2.0").put("generator", "RuralERidesGO-PBR-GLB"))
       .put("extensionsUsed", JSONArray().put("KHR_materials_clearcoat"))
       .put("scene", 0)
       .put("scenes", JSONArray().put(JSONObject().put("nodes", rootNodeIndices)))

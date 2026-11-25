@@ -64,6 +64,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -115,20 +116,20 @@ fun SpecEngineTab(
   val autoFindStores by mechanicVm.autoFindStores.collectAsStateWithLifecycle()
   val compared by mechanicVm.comparedSpecs.collectAsStateWithLifecycle()
 
-  var query by remember { mutableStateOf("") }
-  var category by remember { mutableStateOf("ALL") }
-  var minVoltage by remember { mutableIntStateOf(0) }
-  var maxPriceUsd by remember { mutableIntStateOf(0) }
-  var sortMode by remember { mutableStateOf(PevCatalogData.SpecSortMode.DEFAULT) }
-  var riderLbs by remember { mutableStateOf("175") }
-  var cruiseMph by remember { mutableStateOf("25") }
-  var ruralSurface by remember { mutableStateOf("Paved") }
+  var query by rememberSaveable { mutableStateOf("") }
+  var category by rememberSaveable { mutableStateOf("ALL") }
+  var minVoltage by rememberSaveable { mutableIntStateOf(0) }
+  var maxPriceUsd by rememberSaveable { mutableIntStateOf(0) }
+  var sortMode by rememberSaveable { mutableStateOf(PevCatalogData.SpecSortMode.DEFAULT) }
+  var riderLbs by rememberSaveable { mutableStateOf("175") }
+  var cruiseMph by rememberSaveable { mutableStateOf("25") }
+  var ruralSurface by rememberSaveable { mutableStateOf("Paved") }
   var sharePayload by remember { mutableStateOf<SocialSharePayload?>(null) }
   var expandedSpec by remember { mutableStateOf<PevSpecRecord?>(null) }
   var expandSpecFocusVideos by remember { mutableStateOf(false) }
-  var savedSpecKeys by remember { mutableStateOf(setOf<String>()) }
-  var savedOnly by remember { mutableStateOf(false) }
-  var chargerAmps by remember { mutableIntStateOf(5) }
+  val savedSpecKeys by mechanicVm.savedSpecKeys.collectAsStateWithLifecycle()
+  var savedOnly by rememberSaveable { mutableStateOf(false) }
+  var chargerAmps by rememberSaveable { mutableIntStateOf(5) }
   val activeUid = sessionVm?.activeUser?.collectAsStateWithLifecycle()?.value?.uid.orEmpty()
 
   val csvExporter =
@@ -603,7 +604,7 @@ fun SpecEngineTab(
                 }
                 IconButton(
                   onClick = {
-                    savedSpecKeys = if (isSaved) savedSpecKeys - specKey else savedSpecKeys + specKey
+                    mechanicVm.toggleSavedSpec(specKey)
                   },
                   modifier = Modifier.testTag("bookmark_spec_${spec.name.lowercase().replace(" ", "_")}"),
                 ) {
@@ -848,7 +849,7 @@ fun SpecEngineTab(
       isSaved = isSaved,
       onToggleCompare = { mechanicVm.toggleCompareSpec(spec) },
       onToggleSave = {
-        savedSpecKeys = if (isSaved) savedSpecKeys - specKey else savedSpecKeys + specKey
+        mechanicVm.toggleSavedSpec(specKey)
       },
       onAddToGarage =
         cockpitVm?.let { vm ->
@@ -917,23 +918,23 @@ fun PartsFinderTab(
   val vehicles = cockpitVm?.vehicles?.collectAsStateWithLifecycle()?.value.orEmpty()
   val activeVehicle = vehicles.firstOrNull()
 
-  var query by remember { mutableStateOf("") }
-  var make by remember { mutableStateOf("") }
-  var model by remember { mutableStateOf("") }
-  var tireSize by remember { mutableStateOf("") }
-  var vehicleType by remember { mutableStateOf("ALL") }
-  var category by remember { mutableStateOf("ALL") }
-  var maxPartPriceUsd by remember { mutableIntStateOf(0) }
-  var region by remember { mutableStateOf("US") }
-  var taxPct by remember { mutableStateOf("8.0") }
-  var markupPct by remember { mutableStateOf("0") }
+  var query by rememberSaveable { mutableStateOf("") }
+  var make by rememberSaveable { mutableStateOf("") }
+  var model by rememberSaveable { mutableStateOf("") }
+  var tireSize by rememberSaveable { mutableStateOf("") }
+  var vehicleType by rememberSaveable { mutableStateOf("ALL") }
+  var category by rememberSaveable { mutableStateOf("ALL") }
+  var maxPartPriceUsd by rememberSaveable { mutableIntStateOf(0) }
+  var region by rememberSaveable { mutableStateOf("US") }
+  var taxPct by rememberSaveable { mutableStateOf("8.0") }
+  var markupPct by rememberSaveable { mutableStateOf("0") }
   var sharePayload by remember { mutableStateOf<SocialSharePayload?>(null) }
   var expandedPart by remember { mutableStateOf<PevPartItem?>(null) }
-  var difficultyFilter by remember { mutableStateOf("ALL") }
-  var partTypeFilter by remember { mutableStateOf("ALL") }
-  var savedPartKeys by remember { mutableStateOf(setOf<String>()) }
-  var savedPartsOnly by remember { mutableStateOf(false) }
-  var showFitmentGuide by remember { mutableStateOf(false) }
+  var difficultyFilter by rememberSaveable { mutableStateOf("ALL") }
+  var partTypeFilter by rememberSaveable { mutableStateOf("ALL") }
+  val savedPartKeys by mechanicVm.savedPartKeys.collectAsStateWithLifecycle()
+  var savedPartsOnly by rememberSaveable { mutableStateOf(false) }
+  var showFitmentGuide by rememberSaveable { mutableStateOf(false) }
 
   val csvExporter =
     rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
@@ -1425,7 +1426,7 @@ fun PartsFinderTab(
                 }
                 IconButton(
                   onClick = {
-                    savedPartKeys = if (isSaved) savedPartKeys - part.partName else savedPartKeys + part.partName
+                    mechanicVm.toggleSavedPart(part.partName)
                   },
                 ) {
                   Icon(
@@ -1601,7 +1602,7 @@ fun PartsFinderTab(
       isSaved = isSaved,
       onToggleBom = { mechanicVm.toggleBomItem(part) },
       onToggleSave = {
-        savedPartKeys = if (isSaved) savedPartKeys - part.partName else savedPartKeys + part.partName
+        mechanicVm.toggleSavedPart(part.partName)
       },
       onShare = {
         sharePayload =

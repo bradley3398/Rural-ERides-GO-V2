@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.ElectricMoped
 import androidx.compose.material.icons.filled.ElectricScooter
 import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Skateboarding
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonColors
@@ -1756,8 +1757,10 @@ fun RoadSpeedSignWidget(
   schoolStrict: Boolean,
   legalComplianceMode: Boolean = false,
   pevLegalClass: PevLegalClass = PevLegalClass.CLASS_2_20,
+  roadLimitSource: String = "",
+  onRefresh: (() -> Unit)? = null,
 ) {
-  val validRoadLimit = speedLimitMph?.takeIf { it in 5..85 } ?: 25
+  val validRoadLimit = speedLimitMph?.takeIf { it in 5..85 }
   val classCap =
     if (legalComplianceMode && pevLegalClass != PevLegalClass.OFFROAD_UNLIMITED) {
       pevLegalClass.maxMph
@@ -1767,13 +1770,13 @@ fun RoadSpeedSignWidget(
   val roadOrSchool =
     if (inSchoolZone && schoolStrict) minOf(validRoadLimit ?: 20, 20)
     else validRoadLimit
-  val effectiveLimit =
+  val effectiveLimitMph =
     when {
       roadOrSchool != null && classCap != null -> minOf(roadOrSchool, classCap)
       roadOrSchool != null -> roadOrSchool
       else -> classCap
     }
-  val speeding = effectiveLimit != null && currentSpeedMph > (effectiveLimit + toleranceOffset)
+  val speeding = effectiveLimitMph != null && currentSpeedMph > (effectiveLimitMph + toleranceOffset)
   val borderCol by
     animateColorAsState(
       if (speeding) MaterialTheme.colorScheme.error
@@ -1785,6 +1788,20 @@ fun RoadSpeedSignWidget(
   val chrome = LocalTacticalChrome.current
   val isClassic = isWindowsClassicActive(settings)
   val badgeShape = if (isClassic) RectangleShape else chrome.smallShape
+  val isMetric = settings.distanceUnit == "km"
+  val displayedLimitText =
+    effectiveLimitMph?.let { limMph ->
+      if (isMetric) (limMph * 1.60934).roundToInt().toString() else limMph.toString()
+    } ?: "--"
+  val unitLbl = if (isMetric) "KM/H" else "MPH"
+  val sourceLabel =
+    when {
+      roadOrSchool != null && roadLimitSource.isNotBlank() -> roadLimitSource
+      roadOrSchool != null -> "LIVE SIGN"
+      classCap != null -> "CLASS CAP"
+      else -> "SEEKING"
+    }
+
   Surface(
     shape = if (isClassic) RectangleShape else chrome.cardShape,
     color =
@@ -1808,8 +1825,8 @@ fun RoadSpeedSignWidget(
           Text(
             text =
               when {
-                speeding -> "OVERSPEED GOVERNOR ALERT"
-                inSchoolZone -> "SCHOOL ZONE ACTIVE (20 MPH)"
+                speeding -> "OVERSPEED ALERT"
+                inSchoolZone -> "SCHOOL ZONE ACTIVE (${if (isMetric) "32 KM/H" else "20 MPH"})"
                 legalComplianceMode -> "GOV ACTIVE • ${pevLegalClass.label}"
                 else -> "LIVE ROAD SECTOR"
               },
@@ -1819,27 +1836,56 @@ fun RoadSpeedSignWidget(
               else if (inSchoolZone) MaterialTheme.colorScheme.tertiary
               else MaterialTheme.colorScheme.primary,
           )
+          Surface(
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+            shape = chrome.smallShape,
+          ) {
+            Text(
+              text = sourceLabel,
+              fontSize = 8.sp,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+              maxLines = 1,
+              softWrap = false,
+            )
+          }
           if (legalComplianceMode) {
             Icon(Icons.Default.Gavel, contentDescription = "Legal Governor", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(13.dp))
           }
         }
         Text(
-          text = roadName,
+          text = roadName.ifBlank { "Acquiring GPS road name..." },
           style = MaterialTheme.typography.titleMedium,
           color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis,
         )
+      }
+      if (onRefresh != null) {
+        IconButton(
+          onClick = onRefresh,
+          modifier = Modifier.size(48.dp).testTag("speed_limit_refresh_button"),
+        ) {
+          Icon(
+            imageVector = Icons.Default.Refresh,
+            contentDescription = "Sync Speed Limit",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+          )
+        }
       }
       Box(
         contentAlignment = Alignment.Center,
         modifier =
           Modifier
-            .size(56.dp)
+            .size(width = 60.dp, height = 62.dp)
             .background(Color.White, badgeShape)
             .border(2.dp, if (speeding) Color.Red else Color.Black, badgeShape),
       ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
           Text(
-            if (legalComplianceMode && classCap != null) "CAP" else "LIMIT",
+            if (legalComplianceMode && classCap != null && roadOrSchool == null) "CAP" else "LIMIT",
             fontSize = 8.sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black,
@@ -1847,10 +1893,18 @@ fun RoadSpeedSignWidget(
             softWrap = false,
           )
           Text(
-            text = effectiveLimit?.toString() ?: "--",
+            text = displayedLimitText,
             fontSize = 20.sp,
             fontWeight = FontWeight.Black,
             color = if (speeding) Color.Red else Color.Black,
+            maxLines = 1,
+            softWrap = false,
+          )
+          Text(
+            text = unitLbl,
+            fontSize = 7.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF334155),
             maxLines = 1,
             softWrap = false,
           )
@@ -2124,6 +2178,27 @@ fun SpeedometerHudGauge(
         }
         HudStyle.EUC_LEAN -> {
           EucLeanCarvingHud(dispSpeed, unitLbl, progress, telemetry, settings, accent, secondary, surfaceBg)
+        }
+        HudStyle.S866_LCD -> {
+          S866LcdHud(dispSpeed, unitLbl, telemetry, settings)
+        }
+        HudStyle.TF11_LCD -> {
+          Tf11LcdHud(dispSpeed, unitLbl, progress, telemetry, settings)
+        }
+        HudStyle.BAFANG_DPC18 -> {
+          BafangDpc18Hud(dispSpeed, unitLbl, progress, telemetry, settings)
+        }
+        HudStyle.ISINWHEEL_TFT -> {
+          IsinwheelTftHud(dispSpeed, unitLbl, progress, telemetry, settings)
+        }
+        HudStyle.NINEBOT_MATRIX -> {
+          NinebotMatrixHud(dispSpeed, unitLbl, telemetry, settings)
+        }
+        HudStyle.SW900_LCD -> {
+          Sw900LcdHud(dispSpeed, unitLbl, telemetry, settings)
+        }
+        HudStyle.VSETT_EY3 -> {
+          VsettEy3Hud(dispSpeed, unitLbl, progress, telemetry, settings)
         }
         else -> {
           val sweep = settings.dialSweepDeg.toFloat().coerceIn(180f, 300f)

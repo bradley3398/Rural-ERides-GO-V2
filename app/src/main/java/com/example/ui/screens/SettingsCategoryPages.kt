@@ -1532,10 +1532,10 @@ fun AiCoreChatSettingsContent(
       LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items(AiVoiceProfile.entries) { vp ->
           TacticalFilterChip(
-            selected = settings.aiVoiceProfile == vp,
+            selected = settings.getActiveCustomVoice() == null && settings.aiVoiceProfile == vp,
             onClick = {
-              sessionVm.updateSettings { it.copy(aiVoiceProfile = vp) }
-              sessionVm.voiceAudio.previewVoiceProfile(vp, settings.globalVolume)
+              sessionVm.updateSettings { it.copy(aiVoiceProfile = vp, activeCustomVoiceId = "") }
+              sessionVm.voiceAudio.previewVoiceProfile(vp, settings.globalVolume, settings.ttsSpeechRate, settings.ttsPitch)
             },
             label = vp.label,
             modifier = Modifier.testTag("settings_ai_voice_${vp.id}"),
@@ -1546,12 +1546,10 @@ fun AiCoreChatSettingsContent(
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TacticalOutlinedButton(
           onClick = {
-            sessionVm.voiceAudio.speakWithVoiceProfile(
+            sessionVm.voiceAudio.speakWithActiveSettings(
               text = "Rural E Rides Go spoken voice and directions are ready.",
-              profile = settings.aiVoiceProfile,
-              volumePct = settings.globalVolume,
-              speechRateMult = settings.ttsSpeechRate,
-              pitchMult = settings.ttsPitch,
+              settings = settings,
+              volumePct = settings.globalVolume.coerceAtLeast(45),
             )
           },
           modifier = Modifier.weight(1f).testTag("test_tts_voice_button"),

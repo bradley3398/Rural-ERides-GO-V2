@@ -703,12 +703,11 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
         if (settings.navVoiceGuidance && !settings.autoMuteAlertsWhileRiding) {
           audio.playAlertTonePreset(settings.navTurnTone, settings.globalVolume)
           val firstInstr = route.steps.firstOrNull()?.instruction ?: "Proceed to $destName"
-          audio.speakWithVoiceProfile(
+          audio.speakWithActiveSettings(
             text = "Navigation started to $destName. $firstInstr",
-            profile = settings.aiVoiceProfile,
+            settings = settings,
             volumePct = settings.globalVolume,
-            speechRateMult = settings.ttsSpeechRate,
-            pitchMult = settings.ttsPitch,
+            preferFastLocal = false,
           )
           lastSpokenStepIdx = 0
         }
@@ -737,12 +736,11 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
     if (distToDestKm < 0.045) {
       if (settings.navVoiceGuidance && lastSpokenStepIdx != 9999) {
         audio.playAlertTonePreset(settings.navTurnTone, settings.globalVolume)
-        audio.speakWithVoiceProfile(
+        audio.speakWithActiveSettings(
           text = "You have arrived at ${route.destinationName}.",
-          profile = settings.aiVoiceProfile,
+          settings = settings,
           volumePct = settings.globalVolume,
-          speechRateMult = settings.ttsSpeechRate,
-          pitchMult = settings.ttsPitch,
+          preferFastLocal = false,
         )
         lastSpokenStepIdx = 9999
       }
@@ -770,12 +768,10 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
         lastSpokenStepIdx = nextIdx
         audio.playAlertTonePreset(settings.navTurnTone, settings.globalVolume)
         val distSpeak = if (settings.distanceUnit == "mi") "${(distNextM * 3.28084).toInt()} feet" else "${distNextM.toInt()} meters"
-        audio.speakWithVoiceProfile(
+        audio.speakWithActiveSettings(
           text = "In $distSpeak, ${steps[nextIdx].instruction}",
-          profile = settings.aiVoiceProfile,
+          settings = settings,
           volumePct = settings.globalVolume,
-          speechRateMult = settings.ttsSpeechRate,
-          pitchMult = settings.ttsPitch,
           preferFastLocal = true,
         )
       }

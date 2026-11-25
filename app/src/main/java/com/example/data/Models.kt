@@ -113,6 +113,13 @@ enum class HudStyle(val id: String, val label: String) {
   DUAL_TWIN("dual_twin", "Dual Twin Cluster"),
   RETRO_SYNTH("retro_synth", "Retro Synth"),
   EUC_LEAN("euc_lean", "EUC Lean Carver"),
+  S866_LCD("s866_lcd", "S866 LCD"),
+  TF11_LCD("tf11_lcd", "TF-100 / TF11"),
+  BAFANG_DPC18("bafang_dpc18", "Bafang DPC18"),
+  ISINWHEEL_TFT("isinwheel_tft", "iSinwheel TFT"),
+  NINEBOT_MATRIX("ninebot_matrix", "Ninebot Matrix"),
+  SW900_LCD("sw900_lcd", "SW900 Display"),
+  VSETT_EY3("vsett_ey3", "Vsett / EY3"),
 }
 
 enum class FontPreset(val id: String, val label: String, val familyName: String = label) {
@@ -1367,5 +1374,6 @@ data class LiveTelemetrySnapshot(
   val roadName: String = "",
   val speedLimitMph: Int? = null,
   val inSchoolZone: Boolean = false,
+  val roadLimitSource: String = "",
   val trailPoints: List<Pair<Double, Double>> = emptyList(),
 )

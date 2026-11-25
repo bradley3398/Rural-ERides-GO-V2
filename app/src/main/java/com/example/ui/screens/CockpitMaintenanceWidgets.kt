@@ -675,12 +675,9 @@ fun MissionLogsCard(
                 OutlinedButton(
                   onClick = {
                     playCue()
-                    voiceAudio?.speakWithVoiceProfile(
+                    voiceAudio?.speakWithActiveSettings(
                       text = fleetDebrief,
-                      profile = settings.aiVoiceProfile,
-                      volumePct = settings.globalVolume,
-                      speechRateMult = settings.ttsSpeechRate,
-                      pitchMult = settings.ttsPitch,
+                      settings = settings,
                     )
                   },
                   contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
@@ -879,12 +876,9 @@ fun MissionLogsCard(
                       OutlinedButton(
                         onClick = {
                           playCue()
-                          voiceAudio?.speakWithVoiceProfile(
+                          voiceAudio?.speakWithActiveSettings(
                             text = ride.aiDebrief,
-                            profile = settings.aiVoiceProfile,
-                            volumePct = settings.globalVolume,
-                            speechRateMult = settings.ttsSpeechRate,
-                            pitchMult = settings.ttsPitch,
+                            settings = settings,
                           )
                         },
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),

@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +63,8 @@ fun EngineeringLabTab(
   mechanicVm: MechanicViewModel,
   aiModelId: String = com.example.ai.GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
   activeRigSummary: String = "72V 40Ah Performance PEV",
+  currentOdomKm: Double = 0.0,
+  distanceUnit: String = "mi",
 ) {
   val bayEntries =
     remember {
@@ -88,8 +91,8 @@ fun EngineeringLabTab(
       )
     }
   val categories = remember { listOf("All", "Diagnostics & AI", "Battery & Power", "Drivetrain & Speed", "Chassis & Aero", "Wiring & Legal") }
-  var selectedCategory by remember { mutableStateOf("All") }
-  var selectedBay by remember { mutableIntStateOf(0) }
+  var selectedCategory by rememberSaveable { mutableStateOf("All") }
+  var selectedBay by rememberSaveable { mutableIntStateOf(0) }
   val visibleBays = remember(selectedCategory) {
     if (selectedCategory == "All") bayEntries.sortedBy { it.id } else bayEntries.filter { it.category == selectedCategory }
   }
@@ -152,7 +155,7 @@ fun EngineeringLabTab(
         15 -> item { ChargeCostAndDualChargerBay() }
         16 -> item { RegenDownhillRecoveryBay() }
         17 -> item { UpgradeCompatibilityAdvisorCard(mechanicVm, activeRigSummary, aiModelId) }
-        18 -> item { MaintenanceScheduleBay(mechanicVm) }
+        18 -> item { MaintenanceScheduleBay(mechanicVm, currentOdomKm = currentOdomKm, distanceUnit = distanceUnit) }
       }
     }
   }
@@ -165,8 +168,8 @@ private fun ErrorCodeLiveDecoderCard(
 ) {
   val ctx = LocalContext.current
   val errorState by mechanicVm.errorCodeState.collectAsStateWithLifecycle()
-  var code by remember { mutableStateOf("") }
-  var brand by remember { mutableStateOf("Dualtron / Minimotors EY3") }
+  var code by rememberSaveable { mutableStateOf("") }
+  var brand by rememberSaveable { mutableStateOf("Dualtron / Minimotors EY3") }
   val quickCodes =
     remember {
       listOf(
@@ -865,24 +868,33 @@ private fun UpgradeCompatibilityAdvisorCard(
 }
 
 @Composable
-private fun MaintenanceScheduleBay(mechanicVm: MechanicViewModel) {
+private fun MaintenanceScheduleBay(
+  mechanicVm: MechanicViewModel,
+  currentOdomKm: Double,
+  distanceUnit: String,
+) {
   val ctx = LocalContext.current
   val maintenanceItems by mechanicVm.maintenanceItems.collectAsStateWithLifecycle()
   val chrome = LocalTacticalChrome.current
+  val useMiles = distanceUnit != "km"
+  val odomDisplay = if (useMiles) currentOdomKm * 0.621371 else currentOdomKm
+  val unitLbl = if (useMiles) "mi" else "km"
 
   TacticalCard(highlight = true, title = "PROACTIVE PEV MAINTENANCE SCHEDULE & ALERTS") {
     Text(
-      "Track component wear intervals based on cumulative odometer mileage. Keep your 72V hyper-rig safe and dialed in.",
+      "Live odometer: ${"%.1f".format(odomDisplay)} $unitLbl • Track wear intervals against your active rig mileage.",
       style = MaterialTheme.typography.bodySmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(10.dp))
 
     maintenanceItems.forEach { item ->
-      val currentOdomKm = 124.5
-      val kmSinceService = currentOdomKm - item.lastServicedKm
+      val kmSinceService = (currentOdomKm - item.lastServicedKm).coerceAtLeast(0.0)
       val progress = (kmSinceService / item.intervalKm).coerceIn(0.0, 1.0).toFloat()
       val isDue = kmSinceService >= item.intervalKm
+      val sinceDisplay = if (useMiles) kmSinceService * 0.621371 else kmSinceService
+      val intervalDisplay = if (useMiles) item.intervalKm * 0.621371 else item.intervalKm
+      val remainingDisplay = ((item.intervalKm - kmSinceService).coerceAtLeast(0.0)) * (if (useMiles) 0.621371 else 1.0)
 
       Surface(
         color = if (isDue) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -891,7 +903,7 @@ private fun MaintenanceScheduleBay(mechanicVm: MechanicViewModel) {
       ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(item.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+            Text(item.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
             AssistChip(
               onClick = {
                 mechanicVm.markMaintenanceServiced(item.key, currentOdomKm)
@@ -907,8 +919,8 @@ private fun MaintenanceScheduleBay(mechanicVm: MechanicViewModel) {
             modifier = Modifier.fillMaxWidth().height(6.dp),
           )
           Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Logged: ${"%.1f".format(kmSinceService)} / ${item.intervalKm.toInt()} km", style = MaterialTheme.typography.labelSmall)
-            Text(if (isDue) "OVERDUE" else "${(item.intervalKm - kmSinceService).toInt()} km remaining", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = if (isDue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+            Text("Logged: ${"%.1f".format(sinceDisplay)} / ${intervalDisplay.toInt()} $unitLbl", style = MaterialTheme.typography.labelSmall)
+            Text(if (isDue) "OVERDUE" else "${remainingDisplay.toInt()} $unitLbl remaining", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = if (isDue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
           }
         }
       }

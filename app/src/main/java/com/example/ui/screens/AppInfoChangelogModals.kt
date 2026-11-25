@@ -102,7 +102,7 @@ fun AppInfoAndChangelogScreen(
           "• Non-Overlapping Screen Layout Overhaul: Added safe-area status and navigation bar padding across all 6 primary tabs, redesigned Porch Talk header without truncation or overlapping FABs, and added roomy spacing.\n" +
           "• Restored Google Sign-In Default + Browser Backup: Restored Google + Firebase as the default login tab with Activity-scoped Credential Manager sign-in and a built-in Google Browser Sign-In fallback.",
         "v47.0 Studio 3D PBR Lab, Crash-Proof Ride Inspector & Holiday Ornaments" to
-          "• Zero-Crash Studio 3D PBR Rig Lab: Replaced Filament/Vulkan native crashes with an in-window Studio 3D PBR engine (3-point studio lighting, ACES Filmic tone mapping, softbox specular sheen) plus hardened OpenGL ES PBR and WebGL 2.0 GLB viewports with automatic safe fallback.\n" +
+          "• Zero-Crash Studio 3D PBR Rig Lab: Powered by an in-window Studio 3D PBR engine (3-point studio lighting, ACES Filmic tone mapping, softbox specular sheen) plus hardened OpenGL ES PBR and WebGL 2.0 GLB viewports with automatic safe fallback.\n" +
           "• Upgraded Telemetry Studio & Crash-Proof Ride Inspector: Replaced the legacy stacked Per-Ride Deep Dive with a focused 5-module Ride Inspector (Speed Curve, Climb Profile, Energy & Pack, GPS Route, Replay & AI), added a 1-tap Personal Records Ribbon, live KPI subtitles on all 11 Fleet Graph Windows, and NaN/zero-width Canvas crash guards.\n" +
           "• Holiday Themes Ornaments & Decorations: Unlocked all 11 Holiday themes year-round with DP-scaled top-canopy garlands, twinkling string lights, hanging ornaments, foreground card corner emblems, and festive nav bar trim.\n" +
           "• Duplicate Button Cleanup & Official GitHub Links: Removed redundant UI buttons across 3D Lab, Ride Logbook, and Graph modals, updated all links to github.com/bradley3398/Rural-Erides-GO, and restored GitHub Pages & Release Workflows.",
@@ -127,9 +127,9 @@ fun AppInfoAndChangelogScreen(
         "v21.0 Optical Morse Transceiver & Telemetry Studio Pro" to
           "• Torch Morse Code TX & CameraX Y-plane luminance Morse RX inside Trail Power Toolkit.\n" +
           "• 10 interactive Neon ride graphs with synchronized timeline playback scrubber.",
-        "v18.0–v20.0 Zero-Trust Firestore Cloud Sync, 14 HUD Skins & PEV Physics" to
+        "v18.0–v20.0 Zero-Trust Firestore Cloud Sync, Multi-HUD Skins & PEV Physics" to
           "• Google Credential Manager sign-in with zero-trust Firestore security rules, multiplayer Rider Radar, and offline Room vault.\n" +
-          "• 14 switchable Cockpit HUD skins, RainViewer Doppler storm radar, and LiFePO4/NMC battery physics engine.",
+          "• Switchable Cockpit & OEM PEV HUD skins (${com.example.data.HudStyle.entries.size} total), RainViewer Doppler storm radar, and LiFePO4/NMC battery physics engine.",
         "v14.0 Rural Heritage, Live Bench Vision, Brand Logos & Ride Analytics" to
           "• Original Rural ERides GO Launcher Icon Restored: Authentic olive-hill pine & electric scooter adaptive icon across all Android densities.\n" +
           "• Live Maintenance Bench Camera ('Bench Eyes') in AI Mechanic: Embedded live CameraX workbench viewer with optical reticle and 1-tap 'Inspect What I'm Working On' Gemini Vision AI diagnosis, plus 6 new rural/roadside workshop presets.\n" +

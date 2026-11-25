@@ -155,7 +155,7 @@ fun CockpitRuralLiveCommandDeck(
       }
     }
 
-  TacticalCard(highlight = expanded, title = "BACKROAD_OPS_DECK.SYS") {
+  TacticalCard(highlight = expanded, title = "Backroad Trail Ops") {
     Row(
       modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.testTag("cockpit_rural_deck_toggle"),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -369,7 +369,7 @@ fun RadarRuralTrailIntelDeck(
   val groups = listOf("Farm & Road", "Water & Surface", "Wildlife & Dusk")
   val filtered = remember(selectedGroup) { RuralPevMasterSuite250.RURAL_HAZARD_PRESETS.filter { it.group == selectedGroup } }
 
-  TacticalCard(highlight = expanded, title = "RURAL_TRAIL_DISPATCH.SYS") {
+  TacticalCard(highlight = expanded, title = "Trail Dispatch & Check-In") {
     Row(
       modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.testTag("radar_rural_intel_toggle"),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -456,7 +456,7 @@ fun MechanicBarnDiagnosticSuite(
   var mode by remember { mutableIntStateOf(0) }
   var search by remember { mutableStateOf("") }
 
-  TacticalCard(highlight = expanded, title = "BARN_WORKBENCH_135.SYS") {
+  TacticalCard(highlight = expanded, title = "Workshop Quick Tools") {
     Row(
       modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.testTag("mechanic_barn_suite_toggle"),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -591,7 +591,7 @@ fun ChannelRuralDiscoveryDeck(
   val groups = listOf("Riding Radio", "Barn Repair", "VESC & Tech", "Trail Rides")
   val sessions = remember(selectedGroup) { RuralPevMasterSuite250.CHANNEL_SESSIONS.filter { it.group == selectedGroup } }
 
-  TacticalCard(title = "RURAL_CHANNEL_DISCOVERY.SYS") {
+  TacticalCard(title = "Featured Ride Channels") {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       Icon(Icons.Default.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
       Column {
