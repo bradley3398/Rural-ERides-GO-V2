@@ -75,7 +75,7 @@
 | **Cloud & Auth** | Firebase Authentication (Google Sign-In via Jetpack `CredentialManager`), Cloud Firestore, Firebase App Check |
 | **Generative AI** | Firebase AI Logic (`Firebase.ai` — Gemini multimodal text, vision, voice, and fleet debriefs) |
 | **Maps & Live Data** | OSMDroid, FusedLocationProvider, Open-Meteo, RainViewer, Nominatim, Overpass OSM, OSRM, Open-Elevation |
-| **Local Storage** | Room Database (offline cache & vault), Jetpack DataStore (preferences) |
+| **Local Storage** | Native SQLite Vault (offline cache), Jetpack DataStore (preferences) |
 | **Camera & Media** | CameraX, Android Photo Picker (`PickVisualMedia`), Media3 / ExoPlayer, Coil |
 
 ---
@@ -83,22 +83,22 @@
 ## 🛠️ Building from Source
 
 ### Prerequisites
-- **JDK 17**, **Gradle 9.3.1**, and **Android SDK** (`compileSdk 36`, `targetSdk 36`, `minSdk 24`)
+- **JDK 21**, **Gradle 9.3.1**, and **Android SDK** (`compileSdk 36`, `targetSdk 36`, `minSdk 24`)
 - Firebase project configured with `app/google-services.json` (Authentication + Firestore + AI Logic + App Check)
 - Optional API keys configured in `.env` (see `.env.example` — never hardcode keys in source files)
 
 ### Commands
 ```bash
-# Build Debug & Release APKs
-gradle :app:assembleDebug :app:assembleRelease
+# Build Release AAB & APK
+gradle :app:bundleRelease :app:assembleRelease
 
 # Run Local JVM & Robolectric Unit Tests
 gradle :app:testDebugUnitTest
 ```
 
 ### Automated GitHub Actions Releases & GitHub Pages
-- **Publish a New Release (`.github/workflows/android-release.yml`)**: Open **Actions → Rural ERides GO — Build, Test & Publish Release → Run workflow** (or push a tag like `git tag v47.0 && git push origin v47.0`) to automatically run unit tests, build versioned Release & Debug APKs, and publish a GitHub Release with attached APKs.
-- **Deploy User Website (`.github/workflows/github-pages.yml`)**: Automatically deploys `/docs` to `https://bradley3398.github.io/Rural-Erides-GO/` on pushes to `main` or manual dispatch.
+- **Publish a New Release (`.github/workflows/android-release-sign.yml`)**: Open **Actions → Build, Sign & Publish Release → Run workflow** (or push a tag like `git tag v47.0 && git push origin v47.0`) to build, sign, and verify the Release AAB & APK and publish a GitHub Release with SHA-256 checksums.
+- **Deploy User Website (`.github/workflows/deploy-github-pages.yml`)**: Automatically deploys `./public` to `https://bradley3398.github.io/Rural-Erides-GO/` on pushes to `main` or manual dispatch.
 
 > **Note:** Configure optional CI signing & cloud secrets (`KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_PASSWORD`, `GOOGLE_SERVICES_JSON_BASE64`, `ENV_FILE_BASE64`) in GitHub **Settings → Secrets and variables → Actions**. Never commit credentials or modify keystore files.
 
