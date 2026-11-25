@@ -722,6 +722,14 @@ data class MasterSettings(
   val activeCustomVoiceId: String = "",
   val ttsPreloadBufferEnabled: Boolean = true,
   val ttsPreloadBufferDepth: Int = 2,
+  val autoCheckAppUpdates: Boolean = true,
+  val appUpdateNotifsEnabled: Boolean = true,
+  val includePrereleaseBuilds: Boolean = false,
+  val preferredUpdateSource: String = "GOOGLE_PLAY",
+  val updateCheckIntervalHours: Int = 12,
+  val lastNotifiedUpdateTag: String = "",
+  val skippedUpdateTag: String = "",
+  val lastUpdateCheckMs: Long = 0L,
 ) {
   val cardCornerRadiusDp: Int
     get() =

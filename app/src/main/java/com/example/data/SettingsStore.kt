@@ -237,6 +237,14 @@ class SettingsStore(private val context: Context) {
     val ACTIVE_CUSTOM_VOICE_ID = stringPreferencesKey("active_custom_voice_id")
     val TTS_PRELOAD_BUFFER_ENABLED = booleanPreferencesKey("tts_preload_buffer_enabled")
     val TTS_PRELOAD_BUFFER_DEPTH = intPreferencesKey("tts_preload_buffer_depth")
+    val AUTO_CHECK_APP_UPDATES = booleanPreferencesKey("auto_check_app_updates")
+    val APP_UPDATE_NOTIFS_ENABLED = booleanPreferencesKey("app_update_notifs_enabled")
+    val INCLUDE_PRERELEASE_BUILDS = booleanPreferencesKey("include_prerelease_builds")
+    val PREFERRED_UPDATE_SOURCE = stringPreferencesKey("preferred_update_source")
+    val UPDATE_CHECK_INTERVAL_HOURS = intPreferencesKey("update_check_interval_hours")
+    val LAST_NOTIFIED_UPDATE_TAG = stringPreferencesKey("last_notified_update_tag")
+    val SKIPPED_UPDATE_TAG = stringPreferencesKey("skipped_update_tag")
+    val LAST_UPDATE_CHECK_MS = longPreferencesKey("last_update_check_ms")
   }
 
   val settingsFlow: Flow<MasterSettings> =
@@ -496,6 +504,14 @@ class SettingsStore(private val context: Context) {
         activeCustomVoiceId = prefs[Keys.ACTIVE_CUSTOM_VOICE_ID] ?: "",
         ttsPreloadBufferEnabled = prefs[Keys.TTS_PRELOAD_BUFFER_ENABLED] ?: true,
         ttsPreloadBufferDepth = (prefs[Keys.TTS_PRELOAD_BUFFER_DEPTH] ?: 2).coerceIn(1, 5),
+        autoCheckAppUpdates = prefs[Keys.AUTO_CHECK_APP_UPDATES] ?: true,
+        appUpdateNotifsEnabled = prefs[Keys.APP_UPDATE_NOTIFS_ENABLED] ?: true,
+        includePrereleaseBuilds = prefs[Keys.INCLUDE_PRERELEASE_BUILDS] ?: false,
+        preferredUpdateSource = prefs[Keys.PREFERRED_UPDATE_SOURCE] ?: "GOOGLE_PLAY",
+        updateCheckIntervalHours = (prefs[Keys.UPDATE_CHECK_INTERVAL_HOURS] ?: 12).coerceIn(6, 48),
+        lastNotifiedUpdateTag = prefs[Keys.LAST_NOTIFIED_UPDATE_TAG] ?: "",
+        skippedUpdateTag = prefs[Keys.SKIPPED_UPDATE_TAG] ?: "",
+        lastUpdateCheckMs = prefs[Keys.LAST_UPDATE_CHECK_MS] ?: 0L,
       )
     }
 
@@ -730,6 +746,11 @@ class SettingsStore(private val context: Context) {
         put("activeCustomVoiceId", s.activeCustomVoiceId)
         put("ttsPreloadBufferEnabled", s.ttsPreloadBufferEnabled)
         put("ttsPreloadBufferDepth", s.ttsPreloadBufferDepth)
+        put("autoCheckAppUpdates", s.autoCheckAppUpdates)
+        put("appUpdateNotifsEnabled", s.appUpdateNotifsEnabled)
+        put("includePrereleaseBuilds", s.includePrereleaseBuilds)
+        put("preferredUpdateSource", s.preferredUpdateSource)
+        put("updateCheckIntervalHours", s.updateCheckIntervalHours)
       }
       .toString(2)
   }
@@ -991,6 +1012,11 @@ class SettingsStore(private val context: Context) {
           activeCustomVoiceId = obj.optString("activeCustomVoiceId", current.activeCustomVoiceId),
           ttsPreloadBufferEnabled = obj.optBoolean("ttsPreloadBufferEnabled", current.ttsPreloadBufferEnabled),
           ttsPreloadBufferDepth = obj.optInt("ttsPreloadBufferDepth", current.ttsPreloadBufferDepth),
+          autoCheckAppUpdates = obj.optBoolean("autoCheckAppUpdates", current.autoCheckAppUpdates),
+          appUpdateNotifsEnabled = obj.optBoolean("appUpdateNotifsEnabled", current.appUpdateNotifsEnabled),
+          includePrereleaseBuilds = obj.optBoolean("includePrereleaseBuilds", current.includePrereleaseBuilds),
+          preferredUpdateSource = obj.optString("preferredUpdateSource", current.preferredUpdateSource),
+          updateCheckIntervalHours = obj.optInt("updateCheckIntervalHours", current.updateCheckIntervalHours).coerceIn(6, 48),
         )
       writeAll(restored)
     }
@@ -1214,6 +1240,14 @@ class SettingsStore(private val context: Context) {
       prefs[Keys.ACTIVE_CUSTOM_VOICE_ID] = updated.activeCustomVoiceId
       prefs[Keys.TTS_PRELOAD_BUFFER_ENABLED] = updated.ttsPreloadBufferEnabled
       prefs[Keys.TTS_PRELOAD_BUFFER_DEPTH] = updated.ttsPreloadBufferDepth.coerceIn(1, 5)
+      prefs[Keys.AUTO_CHECK_APP_UPDATES] = updated.autoCheckAppUpdates
+      prefs[Keys.APP_UPDATE_NOTIFS_ENABLED] = updated.appUpdateNotifsEnabled
+      prefs[Keys.INCLUDE_PRERELEASE_BUILDS] = updated.includePrereleaseBuilds
+      prefs[Keys.PREFERRED_UPDATE_SOURCE] = updated.preferredUpdateSource
+      prefs[Keys.UPDATE_CHECK_INTERVAL_HOURS] = updated.updateCheckIntervalHours.coerceIn(6, 48)
+      prefs[Keys.LAST_NOTIFIED_UPDATE_TAG] = updated.lastNotifiedUpdateTag
+      prefs[Keys.SKIPPED_UPDATE_TAG] = updated.skippedUpdateTag
+      prefs[Keys.LAST_UPDATE_CHECK_MS] = updated.lastUpdateCheckMs
     }
   }
 }

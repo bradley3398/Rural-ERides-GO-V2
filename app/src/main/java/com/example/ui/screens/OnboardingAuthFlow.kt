@@ -97,6 +97,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import com.example.BuildConfig
 import com.example.R
 import com.example.ai.DailyPrayerResult
 import com.example.data.PrayerJournalEntry
@@ -697,7 +698,7 @@ fun AuthLoginScreen(
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           Text(
-            "GPS • Maps • AI Logic • Cloud Live",
+            "v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) • GPS • Maps • Cloud Live",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )

@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -27,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.core.AppUpdateCheckState
+import com.example.core.ReminderScheduler
 import com.example.core.configureAppCheck
 import com.example.data.VisualStyleMode
 import com.example.hardware.VoiceAudioManager
@@ -54,6 +57,8 @@ import com.example.ui.components.isWindows11Active
 import com.example.ui.components.isWindows7Active
 import com.example.ui.components.isWindowsXpActive
 import com.example.ui.components.navBarMiniPlayerBottomOffset
+import com.example.ui.screens.AppUpdateAvailableBanner
+import com.example.ui.screens.AppUpdateAvailableDialog
 import com.example.ui.screens.DirectMessagesSheet
 import com.example.ui.screens.LiveCallOverlayHost
 import com.example.ui.screens.RidersPrayerModal
@@ -69,12 +74,29 @@ import com.example.viewmodel.RadarViewModel
 import com.example.viewmodel.SessionViewModel
 
 class MainActivity : FragmentActivity() {
+  private val openUpdatesFromNotif = mutableStateOf(false)
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     configureAppCheck(this, intent)
+    if (intent?.getBooleanExtra(ReminderScheduler.EXTRA_OPEN_UPDATES, false) == true) {
+      openUpdatesFromNotif.value = true
+    }
     enableEdgeToEdge()
     setContent {
-      VoltTrailRootApp(activity = this)
+      VoltTrailRootApp(
+        activity = this,
+        openUpdatesFromNotification = openUpdatesFromNotif.value,
+        onConsumedOpenUpdatesNotification = { openUpdatesFromNotif.value = false },
+      )
+    }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    if (intent.getBooleanExtra(ReminderScheduler.EXTRA_OPEN_UPDATES, false)) {
+      openUpdatesFromNotif.value = true
     }
   }
 }
@@ -82,6 +104,8 @@ class MainActivity : FragmentActivity() {
 @Composable
 fun VoltTrailRootApp(
   activity: FragmentActivity,
+  openUpdatesFromNotification: Boolean = false,
+  onConsumedOpenUpdatesNotification: () -> Unit = {},
   sessionVm: SessionViewModel = viewModel(),
   cockpitVm: CockpitViewModel = viewModel(),
   radarVm: RadarViewModel = viewModel(),
@@ -97,6 +121,9 @@ fun VoltTrailRootApp(
   val prayerOverlayOpen by sessionVm.prayerOverlayOpen.collectAsStateWithLifecycle()
   val dailyPrayerState by sessionVm.dailyPrayerState.collectAsStateWithLifecycle()
   val prayers by sessionVm.prayers.collectAsStateWithLifecycle()
+  val appUpdateState by sessionVm.appUpdateState.collectAsStateWithLifecycle()
+  val updateModalOpen by sessionVm.updateModalOpen.collectAsStateWithLifecycle()
+  val updateBannerDismissed by sessionVm.updateBannerDismissed.collectAsStateWithLifecycle()
 
   val telemetry by cockpitVm.telemetry.collectAsStateWithLifecycle()
   val vehicles by cockpitVm.vehicles.collectAsStateWithLifecycle()
@@ -105,6 +132,17 @@ fun VoltTrailRootApp(
     remember(vehicles, profile?.activeVehicleId) {
       vehicles.firstOrNull { it.id == profile?.activeVehicleId } ?: vehicles.firstOrNull()
     }
+
+  LaunchedEffect(Unit) {
+    sessionVm.checkForAppUpdatesIfNeededOnStartup()
+  }
+
+  LaunchedEffect(openUpdatesFromNotification) {
+    if (openUpdatesFromNotification) {
+      sessionVm.openUpdateModal(true)
+      onConsumedOpenUpdatesNotification()
+    }
+  }
 
   LaunchedEffect(activeUser?.uid, activeUser?.firebaseAuthenticated) {
     cockpitVm.bindUser(activeUser?.uid, activeUser?.firebaseAuthenticated == true)
@@ -339,6 +377,19 @@ fun VoltTrailRootApp(
                         )
                       }
 
+                      val availableRelease = (appUpdateState as? AppUpdateCheckState.UpdateAvailable)?.release
+                      if (
+                        availableRelease != null &&
+                        !updateBannerDismissed &&
+                        availableRelease.tagName != settings.skippedUpdateTag
+                      ) {
+                        AppUpdateAvailableBanner(
+                          release = availableRelease,
+                          onOpenUpdateSheet = { sessionVm.openUpdateModal(true) },
+                          onDismiss = { sessionVm.dismissUpdateBanner() },
+                        )
+                      }
+
                       Row(
                         modifier =
                           Modifier
@@ -469,6 +520,16 @@ fun VoltTrailRootApp(
                   sessionVm.deletePrayer(entryId)
                 },
                 onDismiss = { sessionVm.openPrayerOverlay(false) },
+              )
+            }
+
+            if (updateModalOpen) {
+              AppUpdateAvailableDialog(
+                updateState = appUpdateState,
+                settings = settings,
+                onCheckNow = { sessionVm.checkForAppUpdates(manual = true) },
+                onSkipBuild = { tag -> sessionVm.skipUpdateTag(tag) },
+                onDismiss = { sessionVm.openUpdateModal(false) },
               )
             }
 

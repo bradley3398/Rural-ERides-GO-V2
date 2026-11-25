@@ -6,7 +6,7 @@
 
   <p>
     <a href="https://bradley3398.github.io/Rural-Erides-GO/"><img src="https://img.shields.io/badge/GitHub%20Pages-Live%20Site-10B981?style=for-the-badge&logo=githubpages&logoColor=white" alt="GitHub Pages" /></a>
-    <a href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest"><img src="https://img.shields.io/badge/Release-v47.0%20(Build%2047)-6366F1?style=for-the-badge&logo=android&logoColor=white" alt="Release v47.0" /></a>
+    <a href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest"><img src="https://img.shields.io/badge/Release-v50.0%20(Build%2050)-6366F1?style=for-the-badge&logo=android&logoColor=white" alt="Release v50.0" /></a>
     <img src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose%20M3-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin & Jetpack Compose" />
     <img src="https://img.shields.io/badge/3D%20Engine-Studio%203D%20PBR%20%2B%20OpenGL%20ES-06B6D4?style=for-the-badge" alt="Studio 3D PBR and OpenGL ES" />
     <img src="https://img.shields.io/badge/Backend-Firebase%20%26%20Gemini%20AI-F59E0B?style=for-the-badge&logo=firebase&logoColor=white" alt="Firebase & Gemini AI" />
@@ -97,7 +97,7 @@ gradle :app:testDebugUnitTest
 ```
 
 ### Automated GitHub Actions Releases & GitHub Pages
-- **Publish a New Release (`.github/workflows/android-release-sign.yml`)**: Open **Actions → Build, Sign & Publish Release → Run workflow** (or push a tag like `git tag v47.0 && git push origin v47.0`) to build, sign, and verify the Release AAB & APK and publish a GitHub Release with SHA-256 checksums.
+- **Publish a New Release (`.github/workflows/android-release-sign.yml`)**: Open **Actions → Build, Sign & Publish Release → Run workflow** (or push a tag like `git tag v50.0 && git push origin v50.0`) to build, sign, and verify the Release AAB & APK and publish a GitHub Release with SHA-256 checksums.
 - **Deploy User Website (`.github/workflows/deploy-github-pages.yml`)**: Automatically deploys `./public` to `https://bradley3398.github.io/Rural-Erides-GO/` on pushes to `main` or manual dispatch.
 
 > **Note:** Configure optional CI signing & cloud secrets (`KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_PASSWORD`, `GOOGLE_SERVICES_JSON_BASE64`, `ENV_FILE_BASE64`) in GitHub **Settings → Secrets and variables → Actions**. Never commit credentials or modify keystore files.
@@ -106,7 +106,8 @@ gradle :app:testDebugUnitTest
 
 ## 📜 Release History
 
-- **v47.0 (Latest — Build 47)**: Zero-crash Studio 3D PBR Rig Lab (with OpenGL ES 3.0 and WebGL 2.0 automatic fallback), restored Google Sign-In default with Credential Manager + Firebase Google Browser Sign-In backup, global safe-area inset & non-overlapping screen layout overhaul, crash-proof 5-module Ride Inspector + Personal Records Ribbon + live KPI Graph Window Matrix, all 11 Holiday themes upgraded with visible garlands & hanging ornaments, updated GitHub links, restored GitHub Pages user website, and automated GitHub Actions release & Pages workflows.
+- **v50.0 (Latest — Build 50)**: Live new-build update checker (on launch & background WorkManager schedule), dedicated **App Updates & New Builds** Android notification channel + in-app update banner & release-notes sheet, and full Settings update controls (Check Now, Auto-Check, Notifications, Beta/Pre-Release opt-in, and Google Play / GitHub Releases delivery).
+- **v49.0 (Build 49)**: Visible live build stamp on the login screen, zero-crash Studio 3D PBR Rig Lab (with OpenGL ES 3.0 and WebGL 2.0 automatic fallback), restored Google Sign-In default with Credential Manager + Firebase Google Browser Sign-In backup, global safe-area inset & non-overlapping screen layout overhaul, crash-proof 5-module Ride Inspector + Personal Records Ribbon + live KPI Graph Window Matrix, all 11 Holiday themes upgraded with visible garlands & hanging ornaments, updated GitHub links, restored GitHub Pages user website, and automated GitHub Actions release & Pages workflows.
 - **v44.0**: 50-module Interactive Command Directory, Live 24h Rider Stories, and live HTTP endpoint probes.
 - **v39.0–v43.0**: Compartmentalized architecture, Creator Arcade Hub & Gravel Volt 3D Runner, keyless App Check Firebase AI Logic.
 - **v36.0–v38.0**: Custom Synthesized AI Voice Studio, zero-latency streaming TTS buffer, tri-channel deep-linked notifications, reactive Telemetry Studio.

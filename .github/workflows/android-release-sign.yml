@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Public GitHub Release tag (e.g. v47.0)'
+        description: 'Public GitHub Release tag (leave blank to auto-use app/build.gradle.kts versionName, e.g. v49.0)'
         type: string
-        default: 'v47.0'
+        default: ''
       publish_github_release:
         description: 'Publish public GitHub Release with signed APK & AAB'
         type: boolean
@@ -279,12 +279,29 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Resolve release tag from app/build.gradle.kts
+        id: release_meta
+        run: |
+          APP_VER=$(grep -E 'versionName\s*=' app/build.gradle.kts | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
+          APP_CODE=$(grep -E 'versionCode\s*=' app/build.gradle.kts | head -n 1 | sed -E 's/[^0-9]*([0-9]+).*/\1/')
+          AUTO_TAG="v${APP_VER:-49.0}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            RESOLVED_TAG="${GITHUB_REF_NAME}"
+          elif [ -n "${{ inputs.release_tag }}" ]; then
+            RESOLVED_TAG="${{ inputs.release_tag }}"
+          else
+            RESOLVED_TAG="$AUTO_TAG"
+          fi
+          echo "tag=$RESOLVED_TAG" >> "$GITHUB_OUTPUT"
+          echo "code=${APP_CODE:-49}" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: $RESOLVED_TAG (Build ${APP_CODE:-49})"
+
       - name: Publish public GitHub Release with signed APK, AAB & SHA-256 Checksums
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_github_release == true)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag || 'v47.0' }}
-          name: Rural Erides GO ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag || 'v47.0' }}
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: Rural Erides GO ${{ steps.release_meta.outputs.tag }} (Build ${{ steps.release_meta.outputs.code }})
           generate_release_notes: true
           draft: false
           prerelease: false

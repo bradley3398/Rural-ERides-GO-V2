@@ -11,6 +11,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai.DailyPrayerResult
 import com.example.ai.GeminiAiRepository
+import com.example.core.AppUpdateCheckState
+import com.example.core.AppUpdateChecker
 import com.example.core.DiagnosticCheckResult
 import com.example.core.LiveCloudServices
 import com.example.core.ReminderScheduler
@@ -162,11 +164,21 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
   private val _cloudBackupMessage = MutableStateFlow("")
   val cloudBackupMessage: StateFlow<String> = _cloudBackupMessage.asStateFlow()
 
+  private val _appUpdateState = MutableStateFlow<AppUpdateCheckState>(AppUpdateCheckState.Idle)
+  val appUpdateState: StateFlow<AppUpdateCheckState> = _appUpdateState.asStateFlow()
+
+  private val _updateModalOpen = MutableStateFlow(false)
+  val updateModalOpen: StateFlow<Boolean> = _updateModalOpen.asStateFlow()
+
+  private val _updateBannerDismissed = MutableStateFlow(false)
+  val updateBannerDismissed: StateFlow<Boolean> = _updateBannerDismissed.asStateFlow()
+
   private var userListenersJob: Job? = null
   private var publicListenersJob: Job? = null
   private var lastWeatherCoords: Pair<Double, Double>? = null
   private var lastRoadLookupMs = 0L
   private var silentGoogleAttempted = false
+  private var startupUpdateChecked = false
 
   init {
     viewModelScope.launch {
@@ -760,7 +772,90 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
   }
 
   fun updateSettings(transform: (MasterSettings) -> MasterSettings) {
-    viewModelScope.launch { settingsStore.update(transform) }
+    viewModelScope.launch {
+      settingsStore.update(transform)
+      AppUpdateChecker.syncSchedule(ctx, settings.value)
+    }
+  }
+
+  fun syncAppUpdateSchedule() {
+    AppUpdateChecker.syncSchedule(ctx, settings.value)
+  }
+
+  fun openUpdateModal(open: Boolean) {
+    _updateModalOpen.value = open
+    if (open && _appUpdateState.value is AppUpdateCheckState.Idle) {
+      checkForAppUpdates(manual = true)
+    }
+  }
+
+  fun dismissUpdateBanner() {
+    _updateBannerDismissed.value = true
+  }
+
+  fun skipUpdateTag(tag: String) {
+    _updateBannerDismissed.value = true
+    _updateModalOpen.value = false
+    updateSettings { it.copy(skippedUpdateTag = tag) }
+  }
+
+  fun checkForAppUpdatesIfNeededOnStartup() {
+    if (startupUpdateChecked) return
+    startupUpdateChecked = true
+    val current = settings.value
+    AppUpdateChecker.syncSchedule(ctx, current)
+    if (current.autoCheckAppUpdates) {
+      checkForAppUpdates(manual = false)
+    }
+  }
+
+  fun checkForAppUpdates(manual: Boolean = false, forceNotify: Boolean = false) {
+    if (_appUpdateState.value is AppUpdateCheckState.Checking) return
+    viewModelScope.launch {
+      _appUpdateState.value = AppUpdateCheckState.Checking
+      val currentSettings = settings.value
+      val res = AppUpdateChecker.fetchLatestPublishedRelease(currentSettings.includePrereleaseBuilds)
+      val now = System.currentTimeMillis()
+      settingsStore.update { it.copy(lastUpdateCheckMs = now) }
+
+      res.fold(
+        onSuccess = { release ->
+          if (release != null && release.isNewerThanCurrent) {
+            _appUpdateState.value = AppUpdateCheckState.UpdateAvailable(release, now)
+            if (manual || release.tagName != currentSettings.skippedUpdateTag) {
+              _updateBannerDismissed.value = false
+            }
+            val shouldNotify =
+              forceNotify ||
+                (currentSettings.appUpdateNotifsEnabled &&
+                  release.tagName != currentSettings.lastNotifiedUpdateTag &&
+                  release.tagName != currentSettings.skippedUpdateTag)
+            if (shouldNotify) {
+              val posted =
+                ReminderScheduler.postAppUpdateNotification(
+                  context = ctx,
+                  versionLabel = release.versionLabel,
+                  releaseTitle = release.releaseTitle,
+                  releaseNotes = release.releaseNotes,
+                  releaseTag = release.tagName,
+                )
+              if (posted) {
+                settingsStore.update { it.copy(lastNotifiedUpdateTag = release.tagName) }
+              }
+            }
+          } else {
+            _appUpdateState.value = AppUpdateCheckState.UpToDate(release, now)
+          }
+        },
+        onFailure = { err ->
+          _appUpdateState.value =
+            AppUpdateCheckState.Error(
+              message = err.message ?: "Unable to reach GitHub Releases right now.",
+              checkedAtMs = now,
+            )
+        },
+      )
+    }
   }
 
   fun resetSettings() {

@@ -86,6 +86,15 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
+        "v50.0 (Build 50) — Live New-Build Notifications & In-App Update Center" to
+          "• Automatic New-Build Notifications: Checks live GitHub Releases on launch and in the background via WorkManager, sending a high-priority Android notification whenever a new build is published.\n" +
+          "• Settings -> App Updates & New Builds: Dedicated update center with 1-tap Check Now, Auto-Check toggle, New Build Alert toggle, Test Notification button, check cadence (6h/12h/24h), Beta/Pre-Release opt-in, and preferred update source (Google Play or GitHub Releases).\n" +
+          "• In-App New-Build Banner & Update Dialog: Tapping a build notification or banner shows full release notes and jumps directly to Google Play or the official GitHub Release in your browser.",
+        "v49.0 (Build 49) — Zero-Crash Studio 3D Lab, Non-Overlapping Layouts & Google Sign-In Recovery" to
+          "• Visible Build Stamp on Launch: Displays live v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) directly on the login screen and in About & Diagnostics so every new build is easy to verify.\n" +
+          "• Zero-Crash Studio 3D PBR Rig Lab: Runs smoothly in-window with 3-point studio lighting, ACES Filmic tone mapping, and hardened OpenGL ES PBR & WebGL 2.0 automatic fallbacks.\n" +
+          "• Non-Overlapping Screen Layout Overhaul: Added safe-area status and navigation bar padding across all 6 primary tabs, redesigned Porch Talk header without truncation or overlapping FABs, and added roomy spacing.\n" +
+          "• Restored Google Sign-In Default + Browser Backup: Restored Google + Firebase as the default login tab with Activity-scoped Credential Manager sign-in and a built-in Google Browser Sign-In fallback.",
         "v47.0 Studio 3D PBR Lab, Crash-Proof Ride Inspector & Holiday Ornaments" to
           "• Zero-Crash Studio 3D PBR Rig Lab: Replaced Filament/Vulkan native crashes with an in-window Studio 3D PBR engine (3-point studio lighting, ACES Filmic tone mapping, softbox specular sheen) plus hardened OpenGL ES PBR and WebGL 2.0 GLB viewports with automatic safe fallback.\n" +
           "• Upgraded Telemetry Studio & Crash-Proof Ride Inspector: Replaced the legacy stacked Per-Ride Deep Dive with a focused 5-module Ride Inspector (Speed Curve, Climb Profile, Energy & Pack, GPS Route, Replay & AI), added a 1-tap Personal Records Ribbon, live KPI subtitles on all 11 Fleet Graph Windows, and NaN/zero-width Canvas crash guards.\n" +

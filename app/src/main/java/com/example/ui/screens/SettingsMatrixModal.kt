@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
@@ -79,6 +80,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
+import com.example.core.AppUpdateCheckState
 import com.example.core.ReminderScheduler
 import com.example.data.AuthProviderType
 import com.example.data.LiveTelemetrySnapshot
@@ -148,6 +150,12 @@ private enum class AndroidSettingsCategory(
     icon = RuralPevIcons.ActionHealthPulse,
     accentColor = Color(0xFFEC4899),
   ),
+  APP_UPDATES(
+    title = "App Updates & New Builds",
+    keywords = "update updates new build release version download github play store notify notification beta prerelease auto check",
+    icon = Icons.Default.SystemUpdate,
+    accentColor = Color(0xFF10B981),
+  ),
   ABOUT_DEV(
     title = "About Rural ERides GO",
     keywords = "about developer lord bradley callison version build package credits info",
@@ -178,6 +186,7 @@ fun SettingsMatrixScreen(
   val diagBusy by sessionVm.diagnosticsBusy.collectAsStateWithLifecycle()
   val cloudBackupBusy by sessionVm.cloudBackupBusy.collectAsStateWithLifecycle()
   val cloudBackupMessage by sessionVm.cloudBackupMessage.collectAsStateWithLifecycle()
+  val appUpdateState by sessionVm.appUpdateState.collectAsStateWithLifecycle()
 
   var statusMsg by remember { mutableStateOf("") }
   var activeCategory by remember { mutableStateOf<AndroidSettingsCategory?>(null) }
@@ -291,6 +300,14 @@ fun SettingsMatrixScreen(
       AndroidSettingsCategory.DIAGNOSTICS -> {
         val satPart = if ((telemetry?.satellitesVisible ?: 0) > 0) "${telemetry?.satellitesUsed}/${telemetry?.satellitesVisible} Satellites • " else ""
         "${satPart}Live Sensors, Haptic & Speaker Tests, Battery & Cache"
+      }
+      AndroidSettingsCategory.APP_UPDATES -> {
+        val avail = (appUpdateState as? AppUpdateCheckState.UpdateAvailable)?.release
+        if (avail != null) {
+          "New Build Ready: ${avail.tagName} • Tap to update"
+        } else {
+          "v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) • ${if (settings.autoCheckAppUpdates) "Auto-Check On" else "Manual Check"}"
+        }
       }
       AndroidSettingsCategory.ABOUT_DEV ->
         "v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) • Created by Lord Bradley Callison"
@@ -484,6 +501,14 @@ fun SettingsMatrixScreen(
           onStatusMessage = { statusMsg = it },
           telemetry = telemetry,
           voiceAudio = sessionVm.voiceAudio,
+        )
+      }
+      AndroidSettingsCategory.APP_UPDATES -> {
+        AppUpdatesSettingsContent(
+          settings = settings,
+          sessionVm = sessionVm,
+          onRequestNotifPermission = { notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+          onStatusMessage = { statusMsg = it },
         )
       }
       AndroidSettingsCategory.ABOUT_DEV -> AboutDeveloperSettingsContent(onOpenChangelogAndDiagnostics = onOpenInfo)

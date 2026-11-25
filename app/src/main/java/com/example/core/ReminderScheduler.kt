@@ -62,12 +62,15 @@ object ReminderScheduler {
   const val CHANNEL_AI = "volttrail_ai_insights"
   const val CHANNEL_SOCIAL = "volttrail_social"
   const val CHANNEL_DM = "volttrail_direct_messages"
+  const val CHANNEL_UPDATES = "volttrail_app_updates"
 
   const val EXTRA_TARGET_TAB = "extra_target_tab"
   const val EXTRA_OPEN_DM = "extra_open_dm"
   const val EXTRA_DM_THREAD_ID = "extra_dm_thread_id"
+  const val EXTRA_OPEN_UPDATES = "extra_open_updates"
 
   private const val NOTIF_ID_REMINDER = 1041
+  private const val NOTIF_ID_APP_UPDATE = 1050
   private const val NOTIF_ID_AI_BASE = 2000
   private const val NOTIF_ID_SOCIAL_BASE = 3000
   private const val NOTIF_ID_DM_BASE = 4000
@@ -121,7 +124,20 @@ object ReminderScheduler {
         enableVibration(true)
       }
 
-      manager.createNotificationChannels(listOf(remindersChannel, aiChannel, socialChannel, dmChannel))
+      val updatesChannel = NotificationChannel(
+        CHANNEL_UPDATES,
+        "Rural ERides GO App Updates",
+        NotificationManager.IMPORTANCE_HIGH,
+      ).apply {
+        description = "Alerts when a new Rural ERides GO build or release is published"
+        enableLights(true)
+        lightColor = Color.GREEN
+        enableVibration(true)
+      }
+
+      manager.createNotificationChannels(
+        listOf(remindersChannel, aiChannel, socialChannel, dmChannel, updatesChannel),
+      )
     }
   }
 
@@ -328,6 +344,61 @@ object ReminderScheduler {
     return runCatching {
       NotificationManagerCompat.from(context).notify(NOTIF_ID_REMINDER, notification)
       Log.d(TAG, "Posted reminder notification: $title")
+      true
+    }.getOrDefault(false)
+  }
+
+  /**
+   * Posts a high-visibility notification when a new Rural ERides GO build is published.
+   * Tapping opens MainActivity directly into the in-app Update Sheet.
+   */
+  fun postAppUpdateNotification(
+    context: Context,
+    versionLabel: String,
+    releaseTitle: String,
+    releaseNotes: String,
+    releaseTag: String = "",
+  ): Boolean {
+    ensureChannels(context)
+    if (!hasNotificationPermission(context)) return false
+
+    val intent = Intent(context, MainActivity::class.java).apply {
+      flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+      putExtra(EXTRA_OPEN_UPDATES, true)
+    }
+    val pending = PendingIntent.getActivity(
+      context,
+      NOTIF_ID_APP_UPDATE,
+      intent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    val title = "New Build Published: v$versionLabel"
+    val summary =
+      releaseNotes.lineSequence().firstOrNull { it.isNotBlank() }?.take(140)
+        ?: "$releaseTitle is ready. Tap to view release notes and update."
+    val expanded =
+      buildString {
+        append(releaseTitle.ifBlank { "Rural ERides GO v$versionLabel" })
+        if (releaseTag.isNotBlank()) append(" ($releaseTag)")
+        append("\n")
+        append(releaseNotes.take(400).ifBlank { "Tap to review what's new and get the latest build." })
+      }
+
+    val notification = NotificationCompat.Builder(context, CHANNEL_UPDATES)
+      .setSmallIcon(R.mipmap.ic_launcher)
+      .setContentTitle(title)
+      .setContentText(summary)
+      .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
+      .setPriority(NotificationCompat.PRIORITY_HIGH)
+      .setCategory(NotificationCompat.CATEGORY_STATUS)
+      .setContentIntent(pending)
+      .setAutoCancel(true)
+      .build()
+
+    return runCatching {
+      NotificationManagerCompat.from(context).notify(NOTIF_ID_APP_UPDATE, notification)
+      Log.d(TAG, "Posted App Update notification for $versionLabel")
       true
     }.getOrDefault(false)
   }
