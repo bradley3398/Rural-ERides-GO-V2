@@ -49,18 +49,6 @@ internal fun ChangelogScreen(
   val builds = remember {
     listOf(
       BuildChangelogEntry(
-        versionCode = 45,
-        versionName = "45.0",
-        date = "November 2026",
-        title = "Universal Seasonal Holiday Themes, 3D CAD Blueprint Lab & Live Speedometer GPS HUD Lock",
-        highlights = listOf(
-          "Universal Seasonal Holiday Theme Engine: Automatically injects festive decorations, ornaments, and unique background art across all screens for Christmas, Halloween, Thanksgiving, 4th of July, Memorial Day, Veterans Day, New Year's, Valentine's, St. Patrick's, Easter, and Labor Day.",
-          "Advanced 3D CAD Blueprint & OpenGL ES PBR Lab: Real-time 3D garage viewer with realistic chassis blueprints, enhanced engine upgrades, and high-performance OpenGL ES 3.0 PBR rendering with zero memory leaks.",
-          "Locked GPS Speedometer & Speed Limit HUD: Dedicated ride mission HUD locking mechanism preventing accidental scrolling during active ride telemetry recording while keeping YouTube Music and essential metrics instantly accessible.",
-          "Live Data Integration & Easter Eggs: Fully operational live GPS speed limit signs, sensor telemetry, and multiple hidden easter eggs in the About App screen.",
-        ),
-      ),
-      BuildChangelogEntry(
         versionCode = 38,
         versionName = "38.0",
         date = "November 2026",

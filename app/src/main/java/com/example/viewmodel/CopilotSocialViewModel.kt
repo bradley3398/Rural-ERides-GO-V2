@@ -44,8 +44,6 @@ import kotlinx.coroutines.launch
 
 import com.example.core.ReminderScheduler
 import com.example.data.SettingsStore
-import com.example.data.getActiveCustomVoice
-import com.example.data.resolveEffectiveBase
 import kotlinx.coroutines.flow.first
 
 private const val TAG = "CopilotSocialViewModel"

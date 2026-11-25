@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -86,13 +85,6 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
-        "v46.0 Direct Signed GitHub Releases, Seasonal Holiday Engine & Live Update Check" to
-          "• Live GitHub Release Update Checker: Built-in release status check in About App comparing your installed build against the latest signed public GitHub Release with 1-tap access to the official download hub.\n" +
-          "• Universal Seasonal Holiday Theme Engine: Automatic ornaments, badges & seasonal banners across all screens for 11 holidays (New Year's, Valentine's, St. Patrick's, Easter, Memorial Day, 4th of July, Labor Day, Halloween, Veterans Day, Thanksgiving & Christmas).\n" +
-          "• Mission-Locked GPS HUD & YouTube Music Deck: Speedometer and live speed-limit telemetry stay locked during active ride missions without accidental scrolling.\n" +
-          "• Multi-Engine 3D Rig Lab & Barn Spec Engine (50 Rigs): OpenGL ES 3.0 PBR, WebGL 2.0 GLB, Blueprint CAD, 100% Compose Vector ride maps & verified in-stock tire/parts store links.\n" +
-          "• Porch Talk Community & Zero-Bot Rider Comms: 35 rural post templates, live trail condition tags, Active Trail Crew & verified Zero-Bot DMs/WebRTC calls.\n" +
-          "• Automated GitHub Actions Signed Release Pipeline: Cryptographically signed APK/AAB artifacts with SHA-256 verification checksums and public GitHub Pages showcase.",
         "v14.0 Rural Heritage, Live Bench Vision, Brand Logos & Ride Analytics" to
           "• Original Rural ERides GO Launcher Icon Restored: Authentic olive-hill pine & electric scooter adaptive icon across all Android densities.\n" +
           "• Live Maintenance Bench Camera ('Bench Eyes') in AI Mechanic: Embedded live CameraX workbench viewer with optical reticle and 1-tap 'Inspect What I'm Working On' Gemini Vision AI diagnosis, plus 6 new rural/roadside workshop presets.\n" +
@@ -201,7 +193,7 @@ fun AppInfoAndChangelogScreen(
           }
           Spacer(Modifier.height(8.dp))
           Text(
-            "Package: ${BuildConfig.APPLICATION_ID}\nGitHub: https://github.com/bradley3398/Rural-ERides-GO-V2\nWeb: https://bradley3398.github.io/Rural-ERides-GO-V2/\nArchitecture: Kotlin • Jetpack Compose Material 3 • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • Supabase GoTrue • CameraX • OSMDroid",
+            "Package: ${BuildConfig.APPLICATION_ID}\nArchitecture: Kotlin • Jetpack Compose Material 3 • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • Supabase GoTrue • CameraX • OSMDroid",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -209,34 +201,9 @@ fun AppInfoAndChangelogScreen(
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             TacticalOutlinedButton(
               onClick = {
-                val repoIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bradley3398/Rural-ERides-GO-V2"))
-                runCatching { ctx.startActivity(repoIntent) }
-              },
-              modifier = Modifier.weight(1f).testTag("open_github_repo_button"),
-            ) {
-              Icon(Icons.Default.Code, null, Modifier.size(16.dp))
-              Spacer(Modifier.width(6.dp))
-              Text("GitHub Repo", maxLines = 1)
-            }
-            TacticalOutlinedButton(
-              onClick = {
-                val pagesIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://bradley3398.github.io/Rural-ERides-GO-V2/"))
-                runCatching { ctx.startActivity(pagesIntent) }
-              },
-              modifier = Modifier.weight(1f).testTag("open_download_page_button"),
-            ) {
-              Icon(Icons.Default.NewReleases, null, Modifier.size(16.dp))
-              Spacer(Modifier.width(6.dp))
-              Text("Download Page", maxLines = 1)
-            }
-          }
-          Spacer(Modifier.height(8.dp))
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            TacticalOutlinedButton(
-              onClick = {
                 clipboard.setText(
                   AnnotatedString(
-                    "Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison (${BuildConfig.APPLICATION_ID}) • https://github.com/bradley3398/Rural-ERides-GO-V2"
+                    "Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison (${BuildConfig.APPLICATION_ID})"
                   )
                 )
                 Toast.makeText(ctx, "Copied developer & build info", Toast.LENGTH_SHORT).show()
@@ -255,7 +222,7 @@ fun AppInfoAndChangelogScreen(
                     putExtra(Intent.EXTRA_SUBJECT, "Rural ERides GO v${BuildConfig.VERSION_NAME}")
                     putExtra(
                       Intent.EXTRA_TEXT,
-                      "Rural ERides GO v${BuildConfig.VERSION_NAME} — Tactical PEV Telemetry, 9-DOF AHRS, Radar, Vision AR Mechanic & AI Co-Pilot. Created by Lord Bradley Callison.\nDownload: https://bradley3398.github.io/Rural-ERides-GO-V2/\nGitHub: https://github.com/bradley3398/Rural-ERides-GO-V2",
+                      "Rural ERides GO v${BuildConfig.VERSION_NAME} — Tactical PEV Telemetry, 9-DOF AHRS, Radar, Vision AR Mechanic & AI Co-Pilot. Created by Lord Bradley Callison.",
                     )
                   }
                 runCatching { ctx.startActivity(Intent.createChooser(shareIntent, "Share Rural ERides GO")) }
@@ -274,11 +241,6 @@ fun AppInfoAndChangelogScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
         }
-      }
-
-      // 1B. LIVE GITHUB RELEASE UPDATE CHECK (PLAY-COMPLIANT BROWSER REDIRECT)
-      item(key = "live_release_update_card") {
-        ReleaseUpdateStatusCard(onStatusNotice = { notice = it })
       }
 
       // 2. LIVE 9-DOF AHRS & TELEMETRY PROBE

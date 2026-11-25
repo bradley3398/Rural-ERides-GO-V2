@@ -385,9 +385,7 @@ class SettingsStore(private val context: Context) {
         ttsSpeechRate = prefs[Keys.TTS_SPEECH_RATE] ?: 1.03f,
         ttsPitch = prefs[Keys.TTS_PITCH] ?: 1.0f,
         autoMuteAlertsWhileRiding = prefs[Keys.AUTO_MUTE_RIDING] ?: false,
-        navDefaultProfile =
-          NavRouteProfile.entries.firstOrNull { it.id == prefs[Keys.NAV_DEFAULT_PROFILE] }
-            ?: NavRouteProfile.FAST_STREET,
+        navDefaultProfile = NavRouteProfile.entries.firstOrNull { it.id == prefs[Keys.NAV_DEFAULT_PROFILE] } ?: NavRouteProfile.PEV_BIKE_LANE,
         navVoiceGuidance = prefs[Keys.NAV_VOICE_GUIDANCE] ?: true,
         navAutoReroute = prefs[Keys.NAV_AUTO_REROUTE] ?: true,
         navAvoidHighways = prefs[Keys.NAV_AVOID_HIGHWAYS] ?: true,

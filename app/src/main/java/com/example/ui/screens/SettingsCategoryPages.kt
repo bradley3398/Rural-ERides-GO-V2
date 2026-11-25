@@ -4,7 +4,6 @@ import com.example.core.PevBatteryPhysics
 
 import android.content.Intent
 import android.media.RingtoneManager
-import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -100,7 +99,6 @@ import com.example.data.PevWallpaper
 import com.example.data.RingtonePreset
 import com.example.data.VibrationPatternPreset
 import com.example.data.VisualStyleMode
-import com.example.data.getActiveCustomVoice
 import com.example.hardware.VoiceAudioManager
 import com.example.ui.components.RuralPevIcons
 import com.example.ui.components.TacticalButton
@@ -1787,8 +1785,6 @@ fun AboutDeveloperSettingsContent() {
     ) {
       Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text("Package ID: ${BuildConfig.APPLICATION_ID}", style = MaterialTheme.typography.labelSmall)
-        Text("GitHub: https://github.com/bradley3398/Rural-ERides-GO-V2", style = MaterialTheme.typography.labelSmall)
-        Text("Download Page: https://bradley3398.github.io/Rural-ERides-GO-V2/", style = MaterialTheme.typography.labelSmall)
         Text("Device: ${Build.MANUFACTURER.uppercase()} ${Build.MODEL}", style = MaterialTheme.typography.labelSmall)
         Text("System: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})", style = MaterialTheme.typography.labelSmall)
         Text("Powered by: Kotlin • Jetpack Compose • Live GPS & GNSS Satellites • 9-DOF Sensors • Live AR Camera • Firebase AI & Cloud Sync", style = MaterialTheme.typography.labelSmall)
@@ -1798,33 +1794,8 @@ fun AboutDeveloperSettingsContent() {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
       TacticalOutlinedButton(
         onClick = {
-          val repoIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bradley3398/Rural-ERides-GO-V2"))
-          runCatching { ctx.startActivity(repoIntent) }
-        },
-        modifier = Modifier.weight(1f).testTag("settings_open_github_button"),
-      ) {
-        Icon(Icons.Default.Code, null, Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text("GitHub")
-      }
-      TacticalOutlinedButton(
-        onClick = {
-          val pagesIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://bradley3398.github.io/Rural-ERides-GO-V2/"))
-          runCatching { ctx.startActivity(pagesIntent) }
-        },
-        modifier = Modifier.weight(1f).testTag("settings_open_pages_button"),
-      ) {
-        Icon(Icons.Default.Explore, null, Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text("Downloads")
-      }
-    }
-    Spacer(Modifier.height(10.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-      TacticalOutlinedButton(
-        onClick = {
           clipboard.setText(
-            AnnotatedString("Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison (${BuildConfig.APPLICATION_ID}) • https://github.com/bradley3398/Rural-ERides-GO-V2")
+            AnnotatedString("Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison (${BuildConfig.APPLICATION_ID})")
           )
           Toast.makeText(ctx, "Copied developer info", Toast.LENGTH_SHORT).show()
         },
@@ -1842,7 +1813,7 @@ fun AboutDeveloperSettingsContent() {
               putExtra(Intent.EXTRA_SUBJECT, "Rural ERides GO v${BuildConfig.VERSION_NAME}")
               putExtra(
                 Intent.EXTRA_TEXT,
-                "Rural ERides GO v${BuildConfig.VERSION_NAME} — Built by Lord Bradley Callison. Electric Ride Dashboard, Live GPS Satellites, AR Camera, Repair Shop & AI Helper.\nDownload: https://bradley3398.github.io/Rural-ERides-GO-V2/\nGitHub: https://github.com/bradley3398/Rural-ERides-GO-V2",
+                "Rural ERides GO v${BuildConfig.VERSION_NAME} — Built by Lord Bradley Callison. Electric Ride Dashboard, Live GPS Satellites, AR Camera, Repair Shop & AI Helper.",
               )
             }
           runCatching { ctx.startActivity(Intent.createChooser(intent, "Share App Info")) }

@@ -147,7 +147,7 @@ class GeminiStudioEngine {
   ): Result<AudioTranscriptionResult> =
     try {
       if (wavBytes.size < 256) {
-        throw IllegalArgumentException("Audio clip is too short to transcribe.")
+        return Result.failure(IllegalArgumentException("Audio clip is too short to transcribe."))
       }
       val schema =
         Schema.obj(
@@ -424,13 +424,12 @@ class GeminiStudioEngine {
         )
       )
     } catch (e: TimeoutCancellationException) {
-      Log.e(STUDIO_TAG, "Soundtrack composition timed out", e)
-      Result.failure(Exception("Music composition timed out after 45 seconds."))
+      Log.e(STUDIO_TAG, "Music composition timed out", e)
+      Result.failure(Exception("Music composer timed out. Please retry."))
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {
-      Log.e(STUDIO_TAG, "Soundtrack composition failed", e)
+      Log.e(STUDIO_TAG, "Music composition failed", e)
       Result.failure(e)
     }
 }
-

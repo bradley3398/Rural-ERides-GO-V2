@@ -63,20 +63,68 @@ fun isVisualStyleAvailable(
     mode: VisualStyleMode,
     today: LocalDate = LocalDate.now()
 ): Boolean {
-    // Always allow all holiday themes to be selectable and viewable at any time of year per user request
-    return true
+    if (!mode.isHolidayTheme()) return true
+    val year = today.year
+    return when (mode) {
+        VisualStyleMode.HOLIDAY_NEW_YEARS ->
+            (today.month == Month.DECEMBER && today.dayOfMonth >= 28) ||
+                (today.month == Month.JANUARY && today.dayOfMonth <= 3)
+
+        VisualStyleMode.HOLIDAY_VALENTINES ->
+            today.month == Month.FEBRUARY && today.dayOfMonth in 7..16
+
+        VisualStyleMode.HOLIDAY_ST_PATRICKS ->
+            today.month == Month.MARCH && today.dayOfMonth in 10..19
+
+        VisualStyleMode.HOLIDAY_EASTER -> {
+            val easter = computeEasterSunday(year)
+            !today.isBefore(easter.minusDays(5)) && !today.isAfter(easter.plusDays(4))
+        }
+
+        VisualStyleMode.HOLIDAY_MEMORIAL_DAY -> {
+            val memorial = memorialDay(year)
+            !today.isBefore(memorial.minusDays(5)) && !today.isAfter(memorial.plusDays(1))
+        }
+
+        VisualStyleMode.HOLIDAY_FOURTH_JULY ->
+            (today.month == Month.JUNE && today.dayOfMonth >= 28) ||
+                (today.month == Month.JULY && today.dayOfMonth <= 7)
+
+        VisualStyleMode.HOLIDAY_LABOR_DAY -> {
+            val labor = laborDay(year)
+            !today.isBefore(labor.minusDays(4)) && !today.isAfter(labor.plusDays(1))
+        }
+
+        VisualStyleMode.HOLIDAY_HALLOWEEN ->
+            (today.month == Month.OCTOBER && today.dayOfMonth >= 18) ||
+                (today.month == Month.NOVEMBER && today.dayOfMonth <= 1)
+
+        VisualStyleMode.HOLIDAY_VETERANS_DAY ->
+            today.month == Month.NOVEMBER && today.dayOfMonth in 5..12
+
+        VisualStyleMode.HOLIDAY_THANKSGIVING -> {
+            val thanksgiving = thanksgivingDay(year)
+            !today.isBefore(thanksgiving.minusDays(7)) && !today.isAfter(thanksgiving.plusDays(3))
+        }
+
+        VisualStyleMode.HOLIDAY_CHRISTMAS ->
+            today.month == Month.DECEMBER && today.dayOfMonth in 1..27
+
+        else -> true
+    }
 }
 
 fun availableVisualStyles(today: LocalDate = LocalDate.now()): List<VisualStyleMode> =
-    VisualStyleMode.entries
+    VisualStyleMode.entries.filter { isVisualStyleAvailable(it, today) }
 
 fun activeHolidayStyles(today: LocalDate = LocalDate.now()): List<VisualStyleMode> =
-    VisualStyleMode.entries.filter { it.isHolidayTheme() }
+    VisualStyleMode.entries.filter { it.isHolidayTheme() && isVisualStyleAvailable(it, today) }
 
 fun sanitizeVisualStyleForSeason(
     mode: VisualStyleMode,
     today: LocalDate = LocalDate.now()
-): VisualStyleMode = mode
+): VisualStyleMode =
+    if (isVisualStyleAvailable(mode, today)) mode else VisualStyleMode.DARK_STUDIO
 
 fun holidayBadgeInfo(mode: VisualStyleMode): SeasonalHolidayWindow? = when (mode) {
     VisualStyleMode.HOLIDAY_NEW_YEARS -> SeasonalHolidayWindow(
