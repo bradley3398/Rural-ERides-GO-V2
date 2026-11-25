@@ -86,6 +86,9 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
+        "v51.0 (Build 51) — Direct GitHub Repo Build Notifications (Play Creator Compliant)" to
+          "• 1-Tap Notification to GitHub Repo Page: Tapping a new-build Android notification opens the official GitHub repository release page directly in your browser—no restricted install permissions, 100% Google Play Creator Program compliant.\n" +
+          "• GitHub Repo Default Update Channel: Settings -> App Updates & New Builds defaults to opening the GitHub Repo Page (with Google Play also available anytime).",
         "v50.0 (Build 50) — Live New-Build Notifications & In-App Update Center" to
           "• Automatic New-Build Notifications: Checks live GitHub Releases on launch and in the background via WorkManager, sending a high-priority Android notification whenever a new build is published.\n" +
           "• Settings -> App Updates & New Builds: Dedicated update center with 1-tap Check Now, Auto-Check toggle, New Build Alert toggle, Test Notification button, check cadence (6h/12h/24h), Beta/Pre-Release opt-in, and preferred update source (Google Play or GitHub Releases).\n" +

@@ -838,6 +838,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                   releaseTitle = release.releaseTitle,
                   releaseNotes = release.releaseNotes,
                   releaseTag = release.tagName,
+                  releasePageUrl = release.releasePageUrl,
                 )
               if (posted) {
                 settingsStore.update { it.copy(lastNotifiedUpdateTag = release.tagName) }

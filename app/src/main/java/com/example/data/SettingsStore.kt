@@ -507,7 +507,7 @@ class SettingsStore(private val context: Context) {
         autoCheckAppUpdates = prefs[Keys.AUTO_CHECK_APP_UPDATES] ?: true,
         appUpdateNotifsEnabled = prefs[Keys.APP_UPDATE_NOTIFS_ENABLED] ?: true,
         includePrereleaseBuilds = prefs[Keys.INCLUDE_PRERELEASE_BUILDS] ?: false,
-        preferredUpdateSource = prefs[Keys.PREFERRED_UPDATE_SOURCE] ?: "GOOGLE_PLAY",
+        preferredUpdateSource = prefs[Keys.PREFERRED_UPDATE_SOURCE] ?: "GITHUB_RELEASES",
         updateCheckIntervalHours = (prefs[Keys.UPDATE_CHECK_INTERVAL_HOURS] ?: 12).coerceIn(6, 48),
         lastNotifiedUpdateTag = prefs[Keys.LAST_NOTIFIED_UPDATE_TAG] ?: "",
         skippedUpdateTag = prefs[Keys.SKIPPED_UPDATE_TAG] ?: "",

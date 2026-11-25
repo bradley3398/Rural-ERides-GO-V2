@@ -725,7 +725,7 @@ data class MasterSettings(
   val autoCheckAppUpdates: Boolean = true,
   val appUpdateNotifsEnabled: Boolean = true,
   val includePrereleaseBuilds: Boolean = false,
-  val preferredUpdateSource: String = "GOOGLE_PLAY",
+  val preferredUpdateSource: String = "GITHUB_RELEASES",
   val updateCheckIntervalHours: Int = 12,
   val lastNotifiedUpdateTag: String = "",
   val skippedUpdateTag: String = "",

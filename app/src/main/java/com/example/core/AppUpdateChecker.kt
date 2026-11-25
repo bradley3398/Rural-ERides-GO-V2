@@ -30,6 +30,8 @@ const val GITHUB_RELEASES_API_LATEST =
   "https://api.github.com/repos/bradley3398/Rural-Erides-GO/releases/latest"
 const val GITHUB_RELEASES_API_ALL =
   "https://api.github.com/repos/bradley3398/Rural-Erides-GO/releases?per_page=10"
+const val GITHUB_REPO_URL =
+  "https://github.com/bradley3398/Rural-Erides-GO"
 const val GITHUB_RELEASES_WEB_URL =
   "https://github.com/bradley3398/Rural-Erides-GO/releases"
 
@@ -107,6 +109,7 @@ class AppUpdateCheckWorker(
           releaseTitle = release.releaseTitle,
           releaseNotes = release.releaseNotes,
           releaseTag = release.tagName,
+          releasePageUrl = release.releasePageUrl,
         )
       if (posted) {
         store.update { it.copy(lastNotifiedUpdateTag = release.tagName) }

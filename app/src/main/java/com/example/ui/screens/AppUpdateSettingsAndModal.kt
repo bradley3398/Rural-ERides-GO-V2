@@ -52,6 +52,7 @@ import com.example.core.AppReleaseInfo
 import com.example.core.AppUpdateCheckState
 import com.example.core.AppUpdateChecker
 import com.example.core.GITHUB_RELEASES_WEB_URL
+import com.example.core.GITHUB_REPO_URL
 import com.example.core.ReminderScheduler
 import com.example.data.MasterSettings
 import com.example.ui.components.TacticalCard
@@ -185,20 +186,20 @@ fun AppUpdatesSettingsContent(
               Spacer(Modifier.height(4.dp))
               Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
+                  onClick = { AppUpdateChecker.openGitHubReleaseInBrowser(ctx, rel.releasePageUrl) },
+                  modifier = Modifier.weight(1f).testTag("settings_update_github_release_button"),
+                ) {
+                  Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(16.dp))
+                  Spacer(Modifier.width(4.dp))
+                  Text("Open Repo Page", maxLines = 1, softWrap = false)
+                }
+                OutlinedButton(
                   onClick = { AppUpdateChecker.openGooglePlayUpdate(ctx) },
                   modifier = Modifier.weight(1f).testTag("settings_update_google_play_button"),
                 ) {
                   Icon(Icons.Default.Shop, null, modifier = Modifier.size(16.dp))
                   Spacer(Modifier.width(4.dp))
                   Text("Google Play", maxLines = 1, softWrap = false)
-                }
-                OutlinedButton(
-                  onClick = { AppUpdateChecker.openGitHubReleaseInBrowser(ctx, rel.releasePageUrl) },
-                  modifier = Modifier.weight(1f).testTag("settings_update_github_release_button"),
-                ) {
-                  Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(16.dp))
-                  Spacer(Modifier.width(4.dp))
-                  Text("GitHub Release", maxLines = 1, softWrap = false)
                 }
               }
             }
@@ -232,12 +233,12 @@ fun AppUpdatesSettingsContent(
           )
         }
         OutlinedButton(
-          onClick = { AppUpdateChecker.openGooglePlayUpdate(ctx) },
-          modifier = Modifier.weight(1f).testTag("open_play_store_updates_button"),
+          onClick = { AppUpdateChecker.openGitHubReleaseInBrowser(ctx, GITHUB_REPO_URL) },
+          modifier = Modifier.weight(1f).testTag("open_repo_page_updates_button"),
         ) {
-          Icon(Icons.Default.Shop, null, modifier = Modifier.size(18.dp))
+          Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(6.dp))
-          Text("Play Store", maxLines = 1, softWrap = false)
+          Text("Repo Page", maxLines = 1, softWrap = false)
         }
       }
     }
@@ -318,24 +319,24 @@ fun AppUpdatesSettingsContent(
       Spacer(Modifier.height(6.dp))
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
         FilterChip(
+          selected = settings.preferredUpdateSource == "GITHUB_RELEASES",
+          onClick = {
+            sessionVm.updateSettings { it.copy(preferredUpdateSource = "GITHUB_RELEASES") }
+            onStatusMessage("Preferred update link: GitHub Repo Page.")
+          },
+          label = { Text("GitHub Repo", maxLines = 1, softWrap = false) },
+          leadingIcon = { Icon(Icons.Default.CloudDownload, null, modifier = Modifier.size(16.dp)) },
+          modifier = Modifier.weight(1f).testTag("update_source_github_chip"),
+        )
+        FilterChip(
           selected = settings.preferredUpdateSource != "GITHUB_RELEASES",
           onClick = {
             sessionVm.updateSettings { it.copy(preferredUpdateSource = "GOOGLE_PLAY") }
-            onStatusMessage("Preferred update channel: Google Play Store.")
+            onStatusMessage("Preferred update link: Google Play Store.")
           },
           label = { Text("Google Play", maxLines = 1, softWrap = false) },
           leadingIcon = { Icon(Icons.Default.Shop, null, modifier = Modifier.size(16.dp)) },
           modifier = Modifier.weight(1f).testTag("update_source_play_chip"),
-        )
-        FilterChip(
-          selected = settings.preferredUpdateSource == "GITHUB_RELEASES",
-          onClick = {
-            sessionVm.updateSettings { it.copy(preferredUpdateSource = "GITHUB_RELEASES") }
-            onStatusMessage("Preferred update channel: GitHub Releases (Browser).")
-          },
-          label = { Text("GitHub Releases", maxLines = 1, softWrap = false) },
-          leadingIcon = { Icon(Icons.Default.CloudDownload, null, modifier = Modifier.size(16.dp)) },
-          modifier = Modifier.weight(1f).testTag("update_source_github_chip"),
         )
       }
 
@@ -352,11 +353,13 @@ fun AppUpdatesSettingsContent(
                   context = ctx,
                   versionLabel = BuildConfig.VERSION_NAME,
                   releaseTitle = "Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
-                  releaseNotes = "Build update alerts are active! You will be notified automatically whenever a new build is published.",
+                  releaseNotes = "Tap this notification to open the GitHub repository releases page.",
                   releaseTag = "v${BuildConfig.VERSION_NAME}",
+                  releasePageUrl = GITHUB_RELEASES_WEB_URL,
                 )
               onStatusMessage(
-                if (posted) "Test new-build notification sent!" else "Enable notifications in Android Settings to receive build alerts.",
+                if (posted) "Test notification sent! Tap it to open the GitHub repo page."
+                else "Enable notifications in Android Settings to receive build alerts.",
               )
             }
           },
@@ -516,7 +519,7 @@ fun AppUpdateAvailableDialog(
               )
             }
             Text(
-              text = "Choose Google Play (recommended) or open the official GitHub Release page in your browser to get this build.",
+              text = "Tap below to open the GitHub repository release page in your browser or check Google Play.",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -553,7 +556,7 @@ fun AppUpdateAvailableDialog(
           modifier = Modifier.testTag("update_dialog_primary_button"),
         ) {
           Text(
-            if (settings.preferredUpdateSource == "GITHUB_RELEASES") "Open GitHub Release"
+            if (settings.preferredUpdateSource == "GITHUB_RELEASES") "Open Repo Page"
             else "Update on Play",
           )
         }

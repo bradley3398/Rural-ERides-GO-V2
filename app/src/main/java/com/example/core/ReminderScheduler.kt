@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -350,7 +351,8 @@ object ReminderScheduler {
 
   /**
    * Posts a high-visibility notification when a new Rural ERides GO build is published.
-   * Tapping opens MainActivity directly into the in-app Update Sheet.
+   * Tapping opens the GitHub repository / release page directly in the system browser
+   * (zero restricted permissions, 100% Google Play Creator Program compliant).
    */
   fun postAppUpdateNotification(
     context: Context,
@@ -358,13 +360,17 @@ object ReminderScheduler {
     releaseTitle: String,
     releaseNotes: String,
     releaseTag: String = "",
+    releasePageUrl: String = GITHUB_RELEASES_WEB_URL,
   ): Boolean {
     ensureChannels(context)
     if (!hasNotificationPermission(context)) return false
 
-    val intent = Intent(context, MainActivity::class.java).apply {
-      flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-      putExtra(EXTRA_OPEN_UPDATES, true)
+    val safeRepoUrl =
+      releasePageUrl.takeIf { it.startsWith("https://github.com/bradley3398/Rural-Erides-GO") }
+        ?: GITHUB_RELEASES_WEB_URL
+
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(safeRepoUrl)).apply {
+      flags = Intent.FLAG_ACTIVITY_NEW_TASK
     }
     val pending = PendingIntent.getActivity(
       context,
@@ -376,13 +382,13 @@ object ReminderScheduler {
     val title = "New Build Published: v$versionLabel"
     val summary =
       releaseNotes.lineSequence().firstOrNull { it.isNotBlank() }?.take(140)
-        ?: "$releaseTitle is ready. Tap to view release notes and update."
+        ?: "$releaseTitle is ready. Tap to open the GitHub repo page."
     val expanded =
       buildString {
         append(releaseTitle.ifBlank { "Rural ERides GO v$versionLabel" })
         if (releaseTag.isNotBlank()) append(" ($releaseTag)")
         append("\n")
-        append(releaseNotes.take(400).ifBlank { "Tap to review what's new and get the latest build." })
+        append(releaseNotes.take(400).ifBlank { "Tap to open the GitHub repository release page." })
       }
 
     val notification = NotificationCompat.Builder(context, CHANNEL_UPDATES)
@@ -398,7 +404,7 @@ object ReminderScheduler {
 
     return runCatching {
       NotificationManagerCompat.from(context).notify(NOTIF_ID_APP_UPDATE, notification)
-      Log.d(TAG, "Posted App Update notification for $versionLabel")
+      Log.d(TAG, "Posted App Update notification for $versionLabel -> $safeRepoUrl")
       true
     }.getOrDefault(false)
   }
