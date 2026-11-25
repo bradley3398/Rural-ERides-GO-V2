@@ -175,6 +175,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
   private var userListenersJob: Job? = null
   private var publicListenersJob: Job? = null
+  private var silentGoogleJob: Job? = null
   private var lastWeatherCoords: Pair<Double, Double>? = null
   private var lastRoadLookupMs = 0L
   private var silentGoogleAttempted = false
@@ -186,6 +187,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         _currentUser.value = fbUser
       }
     }
+    consumePendingGoogleAuth()
 
     viewModelScope.launch {
       combine(activeUser, supabaseSession) { active, sb ->
@@ -310,26 +312,115 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     _authStatusMessage.value = ""
   }
 
-  fun attemptSilentGoogleSignIn(activity: Activity) {
-    if (silentGoogleAttempted || auth.currentUser != null) return
-    silentGoogleAttempted = true
+  fun consumePendingGoogleAuth() {
+    if (auth.currentUser != null) return
     viewModelScope.launch {
-      authRepo.trySilentGoogleSignIn(activity)
+      if (authRepo.consumePendingWebAuthResult() is SignInResult.Success) {
+        _authStatusMessage.value = ""
+        _authBusy.value = false
+      }
     }
   }
 
-  fun signInWithGoogle(activity: Activity) {
+  fun attemptSilentGoogleSignIn(activity: Activity) {
+    if (silentGoogleAttempted || auth.currentUser != null) return
+    silentGoogleAttempted = true
+    silentGoogleJob =
+      viewModelScope.launch {
+        authRepo.trySilentGoogleSignIn(activity)
+      }
+  }
+
+  fun signInWithGoogle(
+    activity: Activity,
+    onLaunchLegacyPicker: (Intent) -> Unit,
+  ) {
     viewModelScope.launch {
+      silentGoogleJob?.cancel()
+      runCatching { silentGoogleJob?.join() }
       _authBusy.value = true
       _authStatusMessage.value = "Requesting Google Identity..."
       when (val res = authRepo.signInWithGoogleInteractive(activity)) {
+        is SignInResult.Success -> {
+          _authStatusMessage.value = ""
+          _authBusy.value = false
+        }
+        is SignInResult.Cancelled -> {
+          _authStatusMessage.value =
+            "Google Sign-In dismissed. Try 'Google Account Picker' or 'Google Browser Sign-In' below."
+          _authBusy.value = false
+        }
+        is SignInResult.NoSavedCredential,
+        is SignInResult.FallbackToLegacyPicker -> {
+          val pickerIntent = authRepo.buildGoogleSignInIntent(activity)
+          if (pickerIntent != null) {
+            _authStatusMessage.value = "Opening Google Account Picker..."
+            runCatching { onLaunchLegacyPicker(pickerIntent) }
+              .onFailure { err ->
+                _authStatusMessage.value =
+                  "Could not open Google Account Picker (${err.localizedMessage}). Trying Browser Sign-In..."
+                val webRes = authRepo.signInWithGoogleWebOAuth(activity)
+                _authStatusMessage.value =
+                  when (webRes) {
+                    is SignInResult.Success -> ""
+                    is SignInResult.Cancelled -> "Google Browser Sign-In dismissed."
+                    is SignInResult.Error -> webRes.message
+                    else -> "Could not retrieve Google account."
+                  }
+                _authBusy.value = false
+              }
+          } else {
+            val webRes = authRepo.signInWithGoogleWebOAuth(activity)
+            _authStatusMessage.value =
+              when (webRes) {
+                is SignInResult.Success -> ""
+                is SignInResult.Cancelled -> "Google Browser Sign-In dismissed."
+                is SignInResult.Error -> webRes.message
+                else -> "Could not retrieve Google account."
+              }
+            _authBusy.value = false
+          }
+        }
+        is SignInResult.Error -> {
+          _authStatusMessage.value = res.message
+          _authBusy.value = false
+        }
+      }
+    }
+  }
+
+  fun launchLegacyGooglePicker(
+    activity: Activity,
+    onLaunchLegacyPicker: (Intent) -> Unit,
+  ) {
+    viewModelScope.launch {
+      silentGoogleJob?.cancel()
+      runCatching { silentGoogleJob?.join() }
+      val pickerIntent = authRepo.buildGoogleSignInIntent(activity)
+      if (pickerIntent != null) {
+        _authBusy.value = true
+        _authStatusMessage.value = "Opening Google Account Picker..."
+        runCatching { onLaunchLegacyPicker(pickerIntent) }
+          .onFailure { err ->
+            _authStatusMessage.value = "Google Account Picker unavailable: ${err.localizedMessage.orEmpty()}"
+            _authBusy.value = false
+          }
+      } else {
+        _authStatusMessage.value = "OAuth Web Client ID missing; try Google Browser Sign-In below."
+      }
+    }
+  }
+
+  fun handleLegacyGoogleSignInResult(resultCode: Int, data: Intent?) {
+    viewModelScope.launch {
+      _authBusy.value = true
+      when (val res = authRepo.handleGoogleSignInActivityResult(resultCode, data)) {
         is SignInResult.Success -> _authStatusMessage.value = ""
         is SignInResult.Cancelled ->
           _authStatusMessage.value =
-            "Google Sign-In dismissed. Tap Continue with Google again or use Google Browser Sign-In below."
-        is SignInResult.NoSavedCredential ->
-          _authStatusMessage.value = "No Google account found on device. Try Google Browser Sign-In below."
+            "Google Account Picker dismissed. Try again or use Google Browser Sign-In below."
         is SignInResult.Error -> _authStatusMessage.value = res.message
+        else -> _authStatusMessage.value = ""
       }
       _authBusy.value = false
     }
@@ -337,12 +428,18 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
   fun signInWithGoogleBrowser(activity: Activity) {
     viewModelScope.launch {
+      silentGoogleJob?.cancel()
+      runCatching { silentGoogleJob?.join() }
       _authBusy.value = true
-      _authStatusMessage.value = "Opening secure Google Sign-In..."
+      _authStatusMessage.value = "Opening secure Google Browser Sign-In..."
       when (val res = authRepo.signInWithGoogleWebOAuth(activity)) {
         is SignInResult.Success -> _authStatusMessage.value = ""
-        is SignInResult.Cancelled -> _authStatusMessage.value = "Google Browser Sign-In dismissed."
-        is SignInResult.NoSavedCredential -> _authStatusMessage.value = "Could not retrieve Google account."
+        is SignInResult.Cancelled ->
+          _authStatusMessage.value =
+            "Google Browser Sign-In dismissed. Try Google Account Picker above."
+        is SignInResult.NoSavedCredential,
+        is SignInResult.FallbackToLegacyPicker ->
+          _authStatusMessage.value = "Could not retrieve Google account."
         is SignInResult.Error -> _authStatusMessage.value = res.message
       }
       _authBusy.value = false

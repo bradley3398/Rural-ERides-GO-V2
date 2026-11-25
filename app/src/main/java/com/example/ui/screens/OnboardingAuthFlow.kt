@@ -116,6 +116,7 @@ fun AuthLoginScreen(
   statusMessage: String,
   supabaseConfigured: Boolean,
   onSignInGoogle: () -> Unit,
+  onSignInGooglePicker: () -> Unit = {},
   onSignInGoogleBrowser: () -> Unit = {},
   onSupabaseSignIn: (email: String, password: String) -> Unit,
   onSupabaseSignUp: (email: String, password: String, callsign: String) -> Unit,
@@ -612,6 +613,16 @@ fun AuthLoginScreen(
               Spacer(Modifier.width(8.dp))
               Text("Sign in with Google")
             }
+          }
+          Spacer(Modifier.height(8.dp))
+          OutlinedButton(
+            onClick = onSignInGooglePicker,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("google_picker_sign_in_button"),
+          ) {
+            Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Google Account Picker (Android 14 / Tablet)")
           }
           Spacer(Modifier.height(8.dp))
           OutlinedButton(

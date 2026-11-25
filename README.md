@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/assets/aistudio/icon_75e30694.png" alt="Rural ERides GO Logo" width="112" height="112" />
+  <img src="public/assets/icon.png" alt="Rural ERides GO Logo" width="112" height="112" />
   <h1>Rural ERides GO</h1>
   <p><strong>Universal Avionics, Telemetry Studio, 3D PBR Rig Lab &amp; Rider Radar for Personal Electric Vehicles</strong></p>
   <p><em>"KEEP IT RURAL YALL" — Created &amp; Architected by Lord Bradley Callison</em></p>

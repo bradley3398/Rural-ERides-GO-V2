@@ -1,14 +1,20 @@
 package com.example.ui.compartments
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.data.ActiveSessionUser
 import com.example.data.LiveTelemetrySnapshot
 import com.example.data.PevVehicle
@@ -86,14 +92,42 @@ fun AuthAndOnboardingCompartmentHost(
 ) {
   when {
     activeUser == null -> {
+      val lifecycleOwner = LocalLifecycleOwner.current
+      val legacyGoogleLauncher =
+        rememberLauncherForActivityResult(
+          contract = ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+          sessionVm.handleLegacyGoogleSignInResult(result.resultCode, result.data)
+        }
+
+      DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+          if (event == Lifecycle.Event.ON_RESUME) {
+            sessionVm.consumePendingGoogleAuth()
+          }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+      }
+
       LaunchedEffect(Unit) {
+        sessionVm.consumePendingGoogleAuth()
         sessionVm.attemptSilentGoogleSignIn(activity)
       }
       AuthLoginScreen(
         busy = authBusy,
         statusMessage = authStatusMessage,
         supabaseConfigured = remember { sessionVm.supabaseService.isConfigured() },
-        onSignInGoogle = { sessionVm.signInWithGoogle(activity) },
+        onSignInGoogle = {
+          sessionVm.signInWithGoogle(activity) { pickerIntent ->
+            legacyGoogleLauncher.launch(pickerIntent)
+          }
+        },
+        onSignInGooglePicker = {
+          sessionVm.launchLegacyGooglePicker(activity) { pickerIntent ->
+            legacyGoogleLauncher.launch(pickerIntent)
+          }
+        },
         onSignInGoogleBrowser = { sessionVm.signInWithGoogleBrowser(activity) },
         onSupabaseSignIn = { email, pass -> sessionVm.signInWithSupabase(email, pass) },
         onSupabaseSignUp = { email, pass, cs -> sessionVm.signUpWithSupabase(email, pass, cs) },

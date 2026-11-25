@@ -86,6 +86,9 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
+        "v52.0 (Build 52) — Android 14 Tablet Multi-Layer Google Sign-In Fix" to
+          "• Android 14 Tablet Google Sign-In Recovery: Fixed silent-vs-interactive Credential Manager race conditions, upgraded androidx.credentials to 1.5.0, preserved MainActivity across tablet config/orientation changes, and added automatic fallback to the native Play Services Google Account Picker.\n" +
+          "• Dedicated Google Account Picker Button: Added direct Play Services account picker login alongside hardened Google Browser Sign-In (Custom Tabs <queries> + ON_RESUME pending OAuth recovery).",
         "v51.0 (Build 51) — Direct GitHub Repo Build Notifications (Play Creator Compliant)" to
           "• 1-Tap Notification to GitHub Repo Page: Tapping a new-build Android notification opens the official GitHub repository release page directly in your browser—no restricted install permissions, 100% Google Play Creator Program compliant.\n" +
           "• GitHub Repo Default Update Channel: Settings -> App Updates & New Builds defaults to opening the GitHub Repo Page (with Google Play also available anytime).",

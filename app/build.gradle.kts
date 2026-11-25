@@ -15,8 +15,8 @@ android {
     applicationId = "com.aistudio.volttrail.kqrmvx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 51
-    versionName = "51.0"
+    versionCode = 52
+    versionName = "52.0"
 
     buildConfigField("Boolean", "LEGAL_COMPLIANCE_MODE", "true")
 
@@ -133,6 +133,8 @@ dependencies {
   implementation(libs.firebase.auth)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
+  implementation(libs.androidx.browser)
+  implementation(libs.play.services.auth)
   implementation(libs.googleid)
   implementation(libs.firebase.appcheck.recaptcha)
   implementation(libs.firebase.appcheck.debug)

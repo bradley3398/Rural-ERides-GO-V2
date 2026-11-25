@@ -315,6 +315,12 @@ fun SettingsMatrixScreen(
 
   @Composable
   fun RenderCategoryDetail(cat: AndroidSettingsCategory) {
+    val legacyGoogleLauncher =
+      rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+      ) { result ->
+        sessionVm.handleLegacyGoogleSignInResult(result.resultCode, result.data)
+      }
     when (cat) {
       AndroidSettingsCategory.DISPLAY_THEMES ->
         DisplayThemesSettingsContent(
@@ -366,7 +372,13 @@ fun SettingsMatrixScreen(
       AndroidSettingsCategory.CLOUD_VAULT -> {
         SettingsAccountAndSecurityCard(
           activeUser = activeUser,
-          onLinkGoogleAccount = { if (activity != null) sessionVm.signInWithGoogle(activity) },
+          onLinkGoogleAccount = {
+            if (activity != null) {
+              sessionVm.signInWithGoogle(activity) { pickerIntent ->
+                legacyGoogleLauncher.launch(pickerIntent)
+              }
+            }
+          },
           onRefreshSupabaseSession = { sessionVm.refreshSupabaseSessionNow() },
         )
         Spacer(Modifier.height(10.dp))
@@ -406,7 +418,14 @@ fun SettingsMatrixScreen(
           }
           if (activeUser?.firebaseAuthenticated != true && activity != null) {
             Spacer(Modifier.height(8.dp))
-            Button(onClick = { sessionVm.signInWithGoogle(activity) }, modifier = Modifier.fillMaxWidth().testTag("vault_link_google_button")) {
+            Button(
+              onClick = {
+                sessionVm.signInWithGoogle(activity) { pickerIntent ->
+                  legacyGoogleLauncher.launch(pickerIntent)
+                }
+              },
+              modifier = Modifier.fillMaxWidth().testTag("vault_link_google_button"),
+            ) {
               Icon(Icons.AutoMirrored.Filled.Login, null)
               Spacer(Modifier.width(6.dp))
               Text("Sign In / Link Google (Firestore Board & Vault)")

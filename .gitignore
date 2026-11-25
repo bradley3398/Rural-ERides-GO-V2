@@ -15,5 +15,9 @@
 .cxx
 local.properties
 .env
+.aistudio/
+public/assets/aistudio/
 debug.keystore
+*.apk
+*.aab
 *-debug.log
