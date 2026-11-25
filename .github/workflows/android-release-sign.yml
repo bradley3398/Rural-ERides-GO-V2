@@ -54,8 +54,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate required signing & Google Play secrets
-        id: validate_secrets
+      - name: Resolve signing mode & validate secrets
+        id: signing
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -65,35 +65,46 @@ jobs:
           IS_TAG_PUSH: ${{ startsWith(github.ref, 'refs/tags/v') }}
           MANUAL_PLAY_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_to_play == true }}
         run: |
+          present=0
           missing=0
           for var in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
-            if [ -z "${!var}" ]; then
-              echo "::error::Missing required GitHub Actions secret: $var"
-              missing=1
+            if [ -n "${!var}" ]; then
+              present=$((present + 1))
+            else
+              missing=$((missing + 1))
             fi
           done
 
+          if [ "$present" -eq 4 ]; then
+            signing_mode="custom"
+          elif [ "$present" -gt 0 ]; then
+            for var in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+              if [ -z "${!var}" ]; then
+                echo "::error::Incomplete custom signing configuration. Missing secret: $var"
+              fi
+            done
+            exit 1
+          else
+            signing_mode="fallback"
+            echo "::notice::No custom keystore secrets configured; using repository keystore (debug.keystore.base64) for GitHub Release APK."
+          fi
+
           should_deploy_play="false"
           if [ "$MANUAL_PLAY_DEPLOY" = "true" ]; then
+            if [ "$signing_mode" != "custom" ]; then
+              echo "::error::Google Play upload requires KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD secrets."
+              exit 1
+            fi
             if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
               echo "::error::Missing required GitHub Actions secret: PLAY_SERVICE_ACCOUNT_JSON because deploy_to_play was enabled."
-              missing=1
-            else
-              should_deploy_play="true"
+              exit 1
             fi
-          elif [ "$IS_TAG_PUSH" = "true" ]; then
-            if [ -n "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
-              should_deploy_play="true"
-            else
-              echo "::notice::PLAY_SERVICE_ACCOUNT_JSON is not set; skipping Google Play upload and publishing public GitHub Release only."
-            fi
+            should_deploy_play="true"
+          elif [ "$IS_TAG_PUSH" = "true" ] && [ "$signing_mode" = "custom" ] && [ -n "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
+            should_deploy_play="true"
           fi
 
-          if [ "$missing" -ne 0 ]; then
-            echo "Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD in Settings -> Secrets and variables -> Actions."
-            exit 1
-          fi
-
+          echo "signing_mode=$signing_mode" >> "$GITHUB_OUTPUT"
           echo "should_deploy_play=$should_deploy_play" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
@@ -110,32 +121,31 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Decode and validate release keystore from GitHub Secrets
+      - name: Prepare signing keystore
         env:
+          SIGNING_MODE: ${{ steps.signing.outputs.signing_mode }}
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          KEYSTORE_PATH="${RUNNER_TEMP}/release-upload.jks"
-          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > "$KEYSTORE_PATH"
-          chmod 600 "$KEYSTORE_PATH"
-          echo "RELEASE_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
-
-          # Validate keystore readability and alias before invoking Gradle
-          keytool -list \
-            -keystore "$KEYSTORE_PATH" \
-            -storepass:env KEYSTORE_PASSWORD \
-            -alias "$KEY_ALIAS" > /dev/null
-
-          # Materialize debug.keystore if present for Gradle configuration consistency
+          # Materialize repository keystore (matches Firebase SHA-1 in app/google-services.json)
           if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
-            base64 --decode debug.keystore.base64 > debug.keystore
+            tr -d '\r\n ' < debug.keystore.base64 | base64 --decode > debug.keystore
           fi
 
-      - name: Create Gradle release signing init script
-        run: |
-          INIT_SCRIPT="${RUNNER_TEMP}/release-signing.init.gradle"
-          cat << 'EOF' > "$INIT_SCRIPT"
+          if [ "$SIGNING_MODE" = "custom" ]; then
+            KEYSTORE_PATH="${RUNNER_TEMP}/release-upload.jks"
+            printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > "$KEYSTORE_PATH"
+            chmod 600 "$KEYSTORE_PATH"
+            echo "RELEASE_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+            keytool -list \
+              -keystore "$KEYSTORE_PATH" \
+              -storepass:env KEYSTORE_PASSWORD \
+              -alias "$KEY_ALIAS" > /dev/null
+
+            INIT_SCRIPT="${RUNNER_TEMP}/release-signing.init.gradle"
+            cat << 'EOF' > "$INIT_SCRIPT"
           allprojects {
               plugins.withId("com.android.application") {
                   def androidComponents = extensions.findByName("androidComponents")
@@ -165,7 +175,19 @@ jobs:
               }
           }
           EOF
-          echo "SIGNING_INIT_SCRIPT=$INIT_SCRIPT" >> "$GITHUB_ENV"
+            echo "SIGNING_INIT_SCRIPT=$INIT_SCRIPT" >> "$GITHUB_ENV"
+          elif [ ! -f debug.keystore ]; then
+            echo "::notice::debug.keystore.base64 not found; generating a fallback signing keystore."
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
 
       - name: Build signed Release AAB and APK
         env:
@@ -173,13 +195,23 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          gradle --init-script "$SIGNING_INIT_SCRIPT" \
-            :app:bundleRelease \
-            :app:assembleRelease \
-            --no-daemon \
-            --stacktrace
+          if [ -n "${SIGNING_INIT_SCRIPT:-}" ]; then
+            gradle --init-script "$SIGNING_INIT_SCRIPT" \
+              :app:bundleRelease \
+              :app:assembleRelease \
+              --no-daemon \
+              --stacktrace
+          else
+            gradle \
+              :app:bundleRelease \
+              :app:assembleRelease \
+              --no-daemon \
+              --stacktrace
+          fi
 
-      - name: Verify AAB and APK signatures for Google Play
+      - name: Verify AAB and APK signatures & generate SHA-256 checksums
+        env:
+          SIGNING_MODE: ${{ steps.signing.outputs.signing_mode }}
         run: |
           AAB_FILE=$(find app/build/outputs/bundle/release -maxdepth 1 -name '*.aab' | head -n 1)
           APK_FILE=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
@@ -193,7 +225,7 @@ jobs:
           VERIFY_OUTPUT=$(jarsigner -verify -verbose -certs "$AAB_FILE")
           echo "$VERIFY_OUTPUT" | tail -n 20
 
-          if echo "$VERIFY_OUTPUT" | grep -q "CN=Android Debug"; then
+          if [ "$SIGNING_MODE" = "custom" ] && echo "$VERIFY_OUTPUT" | grep -q "CN=Android Debug"; then
             echo "::error::Bundle is signed with the Android Debug certificate instead of the release upload key."
             exit 1
           fi
@@ -242,7 +274,7 @@ jobs:
             app/build/outputs/SHA256SUMS.txt
 
       - name: Deploy signed AAB to Google Play Console (When Enabled)
-        if: steps.validate_secrets.outputs.should_deploy_play == 'true'
+        if: steps.signing.outputs.should_deploy_play == 'true'
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
