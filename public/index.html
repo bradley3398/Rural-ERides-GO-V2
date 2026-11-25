@@ -376,12 +376,14 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      object-position: top center;
       display: block;
+      cursor: zoom-in;
     }
 
     .screen-tabs {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 8px;
       margin-bottom: 18px;
     }
@@ -695,6 +697,299 @@
         padding: 48px 0 84px;
       }
     }
+
+    /* App Tour Screenshot Gallery */
+    .gallery-filters {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 34px;
+    }
+
+    .gallery-filter-btn {
+      background: rgba(20, 29, 22, 0.88);
+      border: 1px solid var(--pine-border);
+      color: var(--parchment-muted);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 10px 18px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .gallery-filter-btn:hover,
+    .gallery-filter-btn.active {
+      background: rgba(224, 162, 59, 0.18);
+      border-color: var(--harvest-gold);
+      color: var(--cream);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .gallery-card {
+      background: linear-gradient(170deg, rgba(33, 26, 20, 0.94) 0%, rgba(20, 30, 22, 0.95) 100%);
+      border: 1px solid rgba(224, 162, 59, 0.22);
+      border-radius: 20px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+      transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+      text-align: left;
+      padding: 0;
+      color: inherit;
+    }
+
+    .gallery-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--harvest-gold);
+      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45);
+    }
+
+    .gallery-card.hidden-card {
+      display: none;
+    }
+
+    .gallery-thumb-wrap {
+      position: relative;
+      aspect-ratio: 9 / 16;
+      background: #0c120e;
+      overflow: hidden;
+      border-bottom: 1px solid rgba(224, 162, 59, 0.18);
+    }
+
+    .gallery-thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      display: block;
+      transition: transform 0.3s ease;
+    }
+
+    .gallery-card:hover .gallery-thumb {
+      transform: scale(1.03);
+    }
+
+    .gallery-zoom-pill {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      background: rgba(12, 18, 14, 0.84);
+      border: 1px solid rgba(224, 162, 59, 0.42);
+      color: var(--harvest-gold);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      letter-spacing: 0.04em;
+      backdrop-filter: blur(6px);
+    }
+
+    .gallery-body {
+      padding: 15px 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .gallery-tag {
+      display: inline-block;
+      align-self: flex-start;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--pasture-bright);
+      background: rgba(130, 165, 39, 0.14);
+      border: 1px solid rgba(163, 204, 56, 0.28);
+      padding: 3px 9px;
+      border-radius: 999px;
+    }
+
+    .gallery-body h3 {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--cream);
+      line-height: 1.28;
+      margin: 2px 0 0;
+    }
+
+    .gallery-body p {
+      font-size: 12.5px;
+      line-height: 1.48;
+      color: var(--parchment-muted);
+      margin: 0;
+    }
+
+    /* Fullscreen Lightbox Modal */
+    .lightbox-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(9, 14, 10, 0.92);
+      backdrop-filter: blur(10px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .lightbox-backdrop.open {
+      display: flex;
+    }
+
+    .lightbox-dialog {
+      width: 100%;
+      max-width: 900px;
+      max-height: 92vh;
+      background: linear-gradient(165deg, rgba(35, 27, 21, 0.98) 0%, rgba(19, 29, 21, 0.98) 100%);
+      border: 1px solid rgba(224, 162, 59, 0.36);
+      border-radius: 24px;
+      padding: 20px;
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.72);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+      gap: 22px;
+      align-items: center;
+      position: relative;
+    }
+
+    .lightbox-media {
+      background: #090e0a;
+      border-radius: 16px;
+      border: 1px solid rgba(244, 237, 224, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      max-height: 78vh;
+    }
+
+    .lightbox-media img {
+      max-width: 100%;
+      max-height: 78vh;
+      width: auto;
+      height: auto;
+      display: block;
+      object-fit: contain;
+    }
+
+    .lightbox-info {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-right: 6px;
+    }
+
+    .lightbox-counter {
+      font-size: 12px;
+      color: var(--harvest-gold);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .lightbox-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--cream);
+      line-height: 1.2;
+      margin: 0;
+    }
+
+    .lightbox-desc {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--parchment-muted);
+      margin: 0;
+    }
+
+    .lightbox-controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .lightbox-btn {
+      flex: 1;
+      background: rgba(20, 29, 22, 0.95);
+      border: 1px solid var(--pine-border);
+      color: var(--cream);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 11px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .lightbox-btn:hover {
+      border-color: var(--harvest-gold);
+      background: rgba(224, 162, 59, 0.16);
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      border: 1px solid rgba(224, 162, 59, 0.4);
+      background: rgba(15, 22, 16, 0.92);
+      color: var(--cream);
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lightbox-close:hover {
+      background: rgba(196, 75, 51, 0.85);
+      border-color: var(--cream);
+    }
+
+    @media (max-width: 1100px) {
+      .gallery-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 820px) {
+      .gallery-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .lightbox-dialog {
+        grid-template-columns: 1fr;
+        max-height: 94vh;
+        overflow-y: auto;
+      }
+
+      .lightbox-media {
+        max-height: 55vh;
+      }
+
+      .lightbox-media img {
+        max-height: 55vh;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .gallery-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body class="topo-surface">
@@ -722,6 +1017,7 @@
 
       <nav class="nav-links" aria-label="Primary">
         <a href="#features">Trail Features</a>
+        <a href="#gallery">App Tour</a>
         <a href="#install">How to Install</a>
         <a href="#changelog">What's New</a>
         <a href="#download">Download APK</a>
@@ -794,8 +1090,10 @@
           <div class="phone-frame">
             <img
               id="showcase-image"
-              src="assets/aistudio/Screenshot_20261123_161057_Rural_ERides_GO_8ac33728.jpg"
-              alt="Rural Erides GO live cockpit preview"
+              src="assets/aistudio/Screenshot_20261124_180705_Rural_ERides_GO_b2c51cae.jpg"
+              alt="Rural Erides GO Golden Trail welcome and pilot sign-in gateway"
+              data-gallery-index="0"
+              title="Click to zoom full screenshot"
             />
           </div>
 
@@ -803,26 +1101,38 @@
             <button
               type="button"
               class="screen-tab active"
-              data-src="assets/aistudio/Screenshot_20261123_161057_Rural_ERides_GO_8ac33728.jpg"
-              data-alt="Rural Erides GO locked GPS cockpit HUD"
+              data-src="assets/aistudio/Screenshot_20261124_180705_Rural_ERides_GO_b2c51cae.jpg"
+              data-alt="Rural Erides GO Golden Trail welcome and pilot sign-in gateway"
+              data-gallery-index="0"
             >
-              Mission HUD
+              Golden Trail
             </button>
             <button
               type="button"
               class="screen-tab"
-              data-src="assets/aistudio/Screenshot_20261122_175123_Rural_ERides_GO_79366b54.jpg"
-              data-alt="Rural Erides GO 3D Rig Lab and diagnostics"
+              data-src="assets/aistudio/Screenshot_20261124_175645_Rural_ERides_GO_2add819f.jpg"
+              data-alt="Rural Erides GO Backroad Co-Pilot and Trail Chaplain AI"
+              data-gallery-index="1"
             >
-              3D Rig Lab
+              AI Co-Pilot
             </button>
             <button
               type="button"
               class="screen-tab"
-              data-src="assets/aistudio/Screenshot_20261122_175216_Rural_ERides_GO_9018ac10.jpg"
-              data-alt="Rural Erides GO Rider Radar and community board"
+              data-src="assets/aistudio/Screenshot_20261124_175606_Rural_ERides_GO_d4111fee.jpg"
+              data-alt="Rural Erides GO Barn and Bench AR Mechanic AI diagnostics"
+              data-gallery-index="2"
             >
-              Rider Radar
+              Barn Mechanic
+            </button>
+            <button
+              type="button"
+              class="screen-tab"
+              data-src="assets/aistudio/Screenshot_20261124_175654_Rural_ERides_GO_7e0e290e.jpg"
+              data-alt="Rural Erides GO Porch Talk templates and rural trail reports"
+              data-gallery-index="7"
+            >
+              Porch Talk
             </button>
           </div>
 
@@ -954,8 +1264,291 @@
       </div>
     </section>
 
+    <!-- Inside the App: Full 10-Screen Visual Tour -->
+    <section id="gallery" class="band">
+      <div class="container">
+        <div class="section-head">
+          <span class="section-kicker">Inside Rural Erides GO</span>
+          <h2>Explore Every Corner of the Cockpit</h2>
+          <p>
+            Real screenshots straight from Rural Erides GO on Android—tap any screen to inspect the
+            full-resolution interface, live AI diagnostics, Barn Shop rig specs, and Porch Talk community tools.
+          </p>
+        </div>
+
+        <div class="gallery-filters" role="tablist" aria-label="Filter app screenshots by category">
+          <button type="button" class="gallery-filter-btn active" data-filter="all">All Screens (10)</button>
+          <button type="button" class="gallery-filter-btn" data-filter="copilot">Welcome &amp; AI Co-Pilot (3)</button>
+          <button type="button" class="gallery-filter-btn" data-filter="barn">Barn Shop &amp; Specs (4)</button>
+          <button type="button" class="gallery-filter-btn" data-filter="porch">Porch Talk &amp; Comms (3)</button>
+        </div>
+
+        <div class="gallery-grid" id="app-gallery-grid">
+          <button
+            type="button"
+            class="gallery-card"
+            data-category="copilot"
+            data-index="0"
+            data-src="assets/aistudio/Screenshot_20261124_180705_Rural_ERides_GO_b2c51cae.jpg"
+            data-tag="Welcome Gateway"
+            data-title="Golden Trail Welcome &amp; Pilot Sign-In"
+            data-desc="Step onto the backroads with dual cloud authentication (Google Firebase &amp; Supabase GoTrue), 14 Live HUDs + Compass, Turn-by-Turn GPS navigation, and the Rider's Safety Blessing."
+          >
+            <div class="gallery-thumb-wrap">
+              <img
+                class="gallery-thumb"
+                src="assets/aistudio/Screenshot_20261124_180705_Rural_ERides_GO_b2c51cae.jpg"
+                alt="Golden Trail Welcome and Pilot Sign-In screen"
+                loading="lazy"
+              />
+              <span class="gallery-zoom-pill">Inspect</span>
+            </div>
+            <div class="gallery-body">
+              <span class="gallery-tag">Welcome Gateway</span>
+              <h3>Golden Trail Welcome &amp; Sign-In</h3>
+              <p>Dual cloud pilot login, 14 Live HUDs, GPS nav, and the Rider's Prayer gateway.</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="gallery-card"
+            data-category="copilot"
+            data-index="1"
+            data-src="assets/aistudio/Screenshot_20261124_175645_Rural_ERides_GO_2add819f.jpg"
+            data-tag="AI Co-Pilot"
+            data-title="Backroad Co-Pilot &amp; Trail Chaplain"
+            data-desc="Live AI Pre-Ride Flight Check powered by Gemini with Live Web Grounding ON—evaluates your live battery percentage, local temperature, wind speed, tire PSI, brakes, and route range before roll-out."
+          >
+            <div class="gallery-thumb-wrap">
+              <img
+                class="gallery-thumb"
+                src="assets/aistudio/Screenshot_20261124_175645_Rural_ERides_GO_2add819f.jpg"
+                alt="Backroad Co-Pilot and Trail Chaplain AI Pre-Ride Flight Check"
+                loading="lazy"
+              />
+              <span class="gallery-zoom-pill">Inspect</span>
+            </div>
+            <div class="gallery-body">
+              <span class="gallery-tag">AI Co-Pilot</span>
+              <h3>Backroad Co-Pilot &amp; Flight Check</h3>
+              <p>6-point PEV pre-ride check with live battery, weather telemetry, and AR Eye tools.</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="gallery-card"
+            data-category="copilot"
+            data-index="2"
+            data-src="assets/aistudio/Screenshot_20261124_175606_Rural_ERides_GO_d4111fee.jpg"
+            data-tag="AR Mechanic"
+            data-title="Barn &amp; Bench AR Mechanic AI"
+            data-desc="Point your camera or describe controller cutouts to get instant step-by-step Action Checklists for MOSFET &amp; phase wire thermal load, XT60/Anderson connectors, and BMS voltage sag diagnostics."
+          >
+            <div class="gallery-thumb-wrap">
+              <img
+                class="gallery-thumb"
+                src="assets/aistudio/Screenshot_20261124_175606_Rural_ERides_GO_d4111fee.jpg"
+                alt="Barn and Bench AR Mechanic AI diagnostic checklist"
+                loading="lazy"
+              />
+              <span class="gallery-zoom-pill">Inspect</span>
+            </div>
+            <div class="gallery-body">
+              <span class="gallery-tag">AR Mechanic</span>
+              <h3>Barn &amp; Bench AR Mechanic AI</h3>
+              <p>Live thermal &amp; MOSFET troubleshooting with Bench Cam, Voltmeter, and 6-step checklists.</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="gallery-card"
+            data-category="barn"
+            data-index="3"
+            data-src="assets/aistudio/Screenshot_20261124_175615_Rural_ERides_GO_139680c7.jpg"
+            data-tag="Barn Spec Engine"
+            data-title="Barn Spec Engine (50 Live Rigs)"
+            data-desc="Search and compare 50 verified electric bikes, e-scooters, EUCs, Onewheels, and e-motos with instant Auto-Find Stores, real-world range numbers, peak power, and trail weight."
+          >
+            <div class="gallery-thumb-wrap">
+              <img
+                class="gallery-thumb"
+                src="assets/aistudio/Screenshot_20261124_175615_Rural_ERides_GO_139680c7.jpg"
+                alt="Barn Spec Engine showing 50 rigs and Aventon Aventure.2"
+                loading="lazy"
+              />
+              <span class="gallery-zoom-pill">Inspect</span>
+            </div>
+            <div class="gallery-body">
+              <span class="gallery-tag">Barn Spec Engine</span>
+              <h3>50-Rig Spec Engine &amp; Store Finder</h3>
+              <p>Filter eBikes, eScooters, EUCs, Onewheels, and eMotos with live store lookups.</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="gallery-card"
+            data-category="barn"
+            data-index="4"
+            data-src="assets/aistudio/Screenshot_20261124_175620_Rural_ERides_GO_8551f4c2.jpg"
+            data-tag="Rig Specs &amp; Stock"
+            data-title="Detailed Rig Specs &amp; Verified Stores"
+            data-desc="Drill down into any rig—like the Lectric XP 3.0 Long Range—to browse multi-angle photos, full pack chemistry (13S NMC, 54.6V full / 41.6V cutoff), motor torque, and verified in-stock store links."
+          >
+            <div class="gallery-thumb-wrap">
+              <img
+                class="gallery-thumb"
+                src="assets/aistudio/Screenshot_20261124_175620_Rural_ERides_GO_8551f4c2.jpg"
+                alt="Lectric XP 3.0 Long Range voltage specs and verified in-stock stores"
+                loading="lazy"
+              />
+              <span class="gallery-zoom-pill">Inspect</span>
+            </div>
+            <div class="gallery-body">
+              <span class="gallery-tag">Rig Specs &amp; Stock</span>
+              <h3>Battery Chemistry &amp; Live Stock</h3>
+              <p>Cell series, full/cutoff voltages, multi-photo galleries, and verified dealer stock.</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="gallery-card"
+            data-category="barn"
+            data-index="5"
+            data-src="assets/aistudio/Screenshot_20261124_175630_Rural_ERides_GO_8d6e02bd.jpg"
+            data-tag="Barn Shop Parts"
+            data-title="Barn Shop Tire &amp; Parts Finder"
+            data-desc="Find exact replacement street and fat-tire upgrades—including PMT 10x3.0 Stradale Italian rubber and HEB Allscape 20x4.0&quot; puncture-resistant fat tires—with direct stock links."
+          >
+            <div class="gallery-thumb-wrap">
+              <img
+                class="gallery-thumb"
+                src="assets/aistudio/Screenshot_20261124_175630_Rural_ERides_GO_8d6e02bd.jpg"
+                alt="Barn Shop tire finder featuring PMT Stradale and HEB Allscape tires"
+                loading="lazy"
+              />
+              <span class="gallery-zoom-pill">Inspect</span>
+            </div>
+            <div class="gallery-body">
+              <span class="gallery-tag">Barn Shop Parts</span>
+              <h3>Street &amp; Fat-Tire Parts Finder</h3>
+              <p>Verified PMT, HEB Allscape, and backcountry tire upgrades with dealer pricing.</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="gallery-card"
+            data-category="barn"
+            data-index="6"
+            data-src="assets/aistudio/Screenshot_20261124_175634_Rural_ERides_GO_946daaf2.jpg"
+            data-tag="EUC &amp; eBike Rubber"
+            data-title="Heavy eBike &amp; EUC Tire Catalog"
+            data-desc="Browse puncture-proof Schwalbe Marathon E-Plus tires and Michelin City Grip 2 EUC street tires complete with wet-traction compounds, load ratings, and compatible wheel sizes."
+          >
+            <div class="gallery-thumb-wrap">
+              <img
+                class="gallery-thumb"
+                src="assets/aistudio/Screenshot_20261124_175634_Rural_ERides_GO_946daaf2.jpg"
+                alt="Schwalbe Marathon E-Plus and Michelin City Grip 2 EUC tire catalog"
+                loading="lazy"
+              />
+              <span class="gallery-zoom-pill">Inspect</span>
+            </div>
+            <div class="gallery-body">
+              <span class="gallery-tag">EUC &amp; eBike Rubber</span>
+              <h3>EUC &amp; Heavy Commuter Tires</h3>
+              <p>Schwalbe Marathon E-Plus and Michelin City Grip 2 specs for 14&quot;–20&quot; wheels.</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="gallery-card"
+            data-category="porch"
+            data-index="7"
+            data-src="assets/aistudio/Screenshot_20261124_175654_Rural_ERides_GO_7e0e290e.jpg"
+            data-tag="Porch Talk"
+            data-title="Porch Talk Post Templates &amp; Alerts"
+            data-desc="Post rural trail conditions in seconds using 35 ready-made Rural Porch Post Templates—County Gravel Convoy, Sunset Backroad Cruise, Muddy Trail, Fresh Gravel, and Creek High alerts."
+          >
+            <div class="gallery-thumb-wrap">
+              <img
+                class="gallery-thumb"
+                src="assets/aistudio/Screenshot_20261124_175654_Rural_ERides_GO_7e0e290e.jpg"
+                alt="Porch Talk post composer with 35 rural trail templates"
+                loading="lazy"
+              />
+              <span class="gallery-zoom-pill">Inspect</span>
+            </div>
+            <div class="gallery-body">
+              <span class="gallery-tag">Porch Talk</span>
+              <h3>35 Rural Porch Post Templates</h3>
+              <p>One-tap convoy invites, muddy trail warnings, fresh gravel, and creek-high reports.</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="gallery-card"
+            data-category="porch"
+            data-index="8"
+            data-src="assets/aistudio/Screenshot_20261124_175732_Rural_ERides_GO_6233df3d.jpg"
+            data-tag="Trail Crew Feed"
+            data-title="Porch Feed &amp; Active Trail Crew"
+            data-desc="Follow live community transmissions across Ride Reports, Builds, Chargers, and Group Rides while tracking trending tags and active local Trail Crew riders."
+          >
+            <div class="gallery-thumb-wrap">
+              <img
+                class="gallery-thumb"
+                src="assets/aistudio/Screenshot_20261124_175732_Rural_ERides_GO_6233df3d.jpg"
+                alt="Porch Feed and Active Trail Crew community screen"
+                loading="lazy"
+              />
+              <span class="gallery-zoom-pill">Inspect</span>
+            </div>
+            <div class="gallery-body">
+              <span class="gallery-tag">Trail Crew Feed</span>
+              <h3>Porch Feed &amp; Active Trail Crew</h3>
+              <p>Live hashtags, rider ride counts, build showcases, chargers, and group ride filters.</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="gallery-card"
+            data-category="porch"
+            data-index="9"
+            data-src="assets/aistudio/Screenshot_20261124_175701_Rural_ERides_GO_552e49f0.jpg"
+            data-tag="Zero-Bot Comms"
+            data-title="Porch DMs &amp; Live Rider Calls"
+            data-desc="Message or voice-call verified active riders directly with Zero Bots—search real callsigns, rigs, pinned trail messages, and live call logs in one distraction-free drawer."
+          >
+            <div class="gallery-thumb-wrap">
+              <img
+                class="gallery-thumb"
+                src="assets/aistudio/Screenshot_20261124_175701_Rural_ERides_GO_552e49f0.jpg"
+                alt="Porch DMs and Live Calls screen for verified riders"
+                loading="lazy"
+              />
+              <span class="gallery-zoom-pill">Inspect</span>
+            </div>
+            <div class="gallery-body">
+              <span class="gallery-tag">Zero-Bot Comms</span>
+              <h3>Porch DMs &amp; Live Rider Calls</h3>
+              <p>Zero-bot direct chats, pinned trail notes, verified rider directory, and live calls.</p>
+            </div>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- How to Install Section -->
-    <section id="install" class="band">
+    <section id="install" class="band band-barnwood">
       <div class="container">
         <div class="section-head">
           <span class="section-kicker">Quick Trail Setup</span>
@@ -1069,6 +1662,32 @@
     </section>
   </main>
 
+  <!-- Lightbox Modal for Full-Resolution Screenshot Inspection -->
+  <div
+    class="lightbox-backdrop"
+    id="screenshot-lightbox"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="lightbox-title"
+  >
+    <div class="lightbox-dialog">
+      <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Close screenshot preview">&times;</button>
+      <div class="lightbox-media">
+        <img id="lightbox-img" src="" alt="" />
+      </div>
+      <div class="lightbox-info">
+        <span class="lightbox-counter font-mono-tech" id="lightbox-counter">Screen 1 of 10</span>
+        <span class="gallery-tag" id="lightbox-tag">App Tour</span>
+        <h3 class="lightbox-title" id="lightbox-title">Rural Erides GO</h3>
+        <p class="lightbox-desc" id="lightbox-desc"></p>
+        <div class="lightbox-controls">
+          <button type="button" class="lightbox-btn" id="lightbox-prev">&larr; Previous</button>
+          <button type="button" class="lightbox-btn" id="lightbox-next">Next &rarr;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer>
     <div class="container footer-inner">
@@ -1078,6 +1697,7 @@
       </div>
       <div class="footer-links">
         <a href="#features">Features</a>
+        <a href="#gallery">App Tour</a>
         <a href="#install">Install Guide</a>
         <a href="#download">Download</a>
         <a href="https://github.com/bradley3398/Rural-ERides-GO-V2" target="_blank" rel="noopener noreferrer" id="footer-repo-link">GitHub Repo</a>
@@ -1127,9 +1747,47 @@
         }
       }
 
-      // 2. Interactive Screenshot Switcher
+      // 2. Interactive Hero Screenshot Switcher + App Tour Gallery & Lightbox
       var tabs = document.querySelectorAll('.screen-tab');
       var previewImg = document.getElementById('showcase-image');
+      var galleryCards = Array.prototype.slice.call(document.querySelectorAll('.gallery-card'));
+      var filterBtns = document.querySelectorAll('.gallery-filter-btn');
+      var lightbox = document.getElementById('screenshot-lightbox');
+      var lightboxImg = document.getElementById('lightbox-img');
+      var lightboxTitle = document.getElementById('lightbox-title');
+      var lightboxDesc = document.getElementById('lightbox-desc');
+      var lightboxTag = document.getElementById('lightbox-tag');
+      var lightboxCounter = document.getElementById('lightbox-counter');
+      var lightboxClose = document.getElementById('lightbox-close');
+      var lightboxPrev = document.getElementById('lightbox-prev');
+      var lightboxNext = document.getElementById('lightbox-next');
+      var activeLightboxIndex = 0;
+
+      function openLightbox(index) {
+        if (!lightbox || galleryCards.length === 0) return;
+        var safeIdx = ((index % galleryCards.length) + galleryCards.length) % galleryCards.length;
+        activeLightboxIndex = safeIdx;
+        var card = galleryCards[safeIdx];
+        if (lightboxImg) {
+          lightboxImg.src = card.getAttribute('data-src') || '';
+          lightboxImg.alt = card.getAttribute('data-title') || 'Rural Erides GO screenshot';
+        }
+        if (lightboxTitle) lightboxTitle.textContent = card.getAttribute('data-title') || '';
+        if (lightboxDesc) lightboxDesc.textContent = card.getAttribute('data-desc') || '';
+        if (lightboxTag) lightboxTag.textContent = card.getAttribute('data-tag') || 'App Tour';
+        if (lightboxCounter) {
+          lightboxCounter.textContent = 'Screen ' + (safeIdx + 1) + ' of ' + galleryCards.length;
+        }
+        lightbox.classList.add('open');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeLightbox() {
+        if (!lightbox) return;
+        lightbox.classList.remove('open');
+        document.body.style.overflow = '';
+      }
+
       tabs.forEach(function (tab) {
         tab.addEventListener('click', function () {
           tabs.forEach(function (t) { t.classList.remove('active'); });
@@ -1137,8 +1795,61 @@
           if (previewImg) {
             previewImg.src = tab.getAttribute('data-src');
             previewImg.alt = tab.getAttribute('data-alt') || 'Rural Erides GO screenshot';
+            previewImg.setAttribute('data-gallery-index', tab.getAttribute('data-gallery-index') || '0');
           }
         });
+      });
+
+      if (previewImg) {
+        previewImg.addEventListener('click', function () {
+          var idx = parseInt(previewImg.getAttribute('data-gallery-index') || '0', 10);
+          openLightbox(isNaN(idx) ? 0 : idx);
+        });
+      }
+
+      galleryCards.forEach(function (card, idx) {
+        card.addEventListener('click', function () {
+          openLightbox(idx);
+        });
+      });
+
+      filterBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var filter = btn.getAttribute('data-filter') || 'all';
+          filterBtns.forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          galleryCards.forEach(function (card) {
+            var cat = card.getAttribute('data-category');
+            if (filter === 'all' || cat === filter) {
+              card.classList.remove('hidden-card');
+            } else {
+              card.classList.add('hidden-card');
+            }
+          });
+        });
+      });
+
+      if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
+      if (lightboxPrev) {
+        lightboxPrev.addEventListener('click', function () {
+          openLightbox(activeLightboxIndex - 1);
+        });
+      }
+      if (lightboxNext) {
+        lightboxNext.addEventListener('click', function () {
+          openLightbox(activeLightboxIndex + 1);
+        });
+      }
+      if (lightbox) {
+        lightbox.addEventListener('click', function (ev) {
+          if (ev.target === lightbox) closeLightbox();
+        });
+      }
+      document.addEventListener('keydown', function (ev) {
+        if (!lightbox || !lightbox.classList.contains('open')) return;
+        if (ev.key === 'Escape') closeLightbox();
+        else if (ev.key === 'ArrowLeft') openLightbox(activeLightboxIndex - 1);
+        else if (ev.key === 'ArrowRight') openLightbox(activeLightboxIndex + 1);
       });
 
       // 3. Resolve GitHub Repo & Fetch Live Latest Release

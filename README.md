@@ -25,12 +25,33 @@
 
 ## App Previews
 
+### Welcome Gateway, Backroad Co-Pilot & AR Mechanic
 <p align="center">
-  <img src="public/assets/aistudio/Screenshot_20261123_161057_Rural_ERides_GO_8ac33728.jpg" alt="Locked GPS Mission HUD" width="240" />
+  <img src="public/assets/aistudio/Screenshot_20261124_180705_Rural_ERides_GO_b2c51cae.jpg" alt="Golden Trail Welcome and Pilot Sign-In" width="215" />
   &nbsp;&nbsp;
-  <img src="public/assets/aistudio/Screenshot_20261122_175123_Rural_ERides_GO_79366b54.jpg" alt="3D Rig Lab & Diagnostics" width="240" />
+  <img src="public/assets/aistudio/Screenshot_20261124_175645_Rural_ERides_GO_2add819f.jpg" alt="Backroad Co-Pilot Pre-Ride Flight Check" width="215" />
   &nbsp;&nbsp;
-  <img src="public/assets/aistudio/Screenshot_20261122_175216_Rural_ERides_GO_9018ac10.jpg" alt="Rider Radar & Porch Talk" width="240" />
+  <img src="public/assets/aistudio/Screenshot_20261124_175606_Rural_ERides_GO_d4111fee.jpg" alt="Barn and Bench AR Mechanic AI Diagnostics" width="215" />
+</p>
+
+### Barn Spec Engine (50 Rigs) & Tire Parts Finder
+<p align="center">
+  <img src="public/assets/aistudio/Screenshot_20261124_175615_Rural_ERides_GO_139680c7.jpg" alt="Barn Spec Engine 50 Rigs" width="180" />
+  &nbsp;
+  <img src="public/assets/aistudio/Screenshot_20261124_175620_Rural_ERides_GO_8551f4c2.jpg" alt="Live Rig Specs and Verified In-Stock Stores" width="180" />
+  &nbsp;
+  <img src="public/assets/aistudio/Screenshot_20261124_175630_Rural_ERides_GO_8d6e02bd.jpg" alt="Barn Shop Street and Fat Tires" width="180" />
+  &nbsp;
+  <img src="public/assets/aistudio/Screenshot_20261124_175634_Rural_ERides_GO_946daaf2.jpg" alt="Barn Shop EUC and Heavy eBike Tires" width="180" />
+</p>
+
+### Porch Talk Community, Trail Crew & Zero-Bot Rider Comms
+<p align="center">
+  <img src="public/assets/aistudio/Screenshot_20261124_175654_Rural_ERides_GO_7e0e290e.jpg" alt="Porch Talk 35 Rural Post Templates" width="215" />
+  &nbsp;&nbsp;
+  <img src="public/assets/aistudio/Screenshot_20261124_175732_Rural_ERides_GO_6233df3d.jpg" alt="Porch Feed and Active Trail Crew" width="215" />
+  &nbsp;&nbsp;
+  <img src="public/assets/aistudio/Screenshot_20261124_175701_Rural_ERides_GO_552e49f0.jpg" alt="Porch DMs and Live Rider Calls" width="215" />
 </p>
 
 ---
@@ -70,12 +91,12 @@ This repository includes two GitHub Actions workflows:
 ### 1. Signed Android Release & Automatic Google Play Upload
 Workflow: [`.github/workflows/android-release-sign.yml`](.github/workflows/android-release-sign.yml)
 
-Pushing any version tag matching `v*` (for example, `git tag v46.0 && git push origin v46.0`) automatically:
+Trigger a public release to **both GitHub Releases and Google Play Console** either by pushing a version tag (`git tag v46.0 && git push origin v46.0`) or by clicking **Actions → Android Signed Release (Google Play) → Run workflow** (`v46.0`). The workflow automatically:
 1. Decodes your production upload keystore from GitHub Secrets (never committed to the repo).
 2. Builds and signs both the release **App Bundle (`.aab`)** and **APK (`.apk`)**.
 3. Verifies signatures with `jarsigner` and `apksigner` and blocks debug-signed builds.
-4. Publishes a **public GitHub Release** with the signed `.apk` and `.aab` attached.
-5. Uploads the signed `.aab` automatically to **Google Play Console** (`com.aistudio.volttrail.kqrmvx`).
+4. Publishes a **public GitHub Release** with the signed `.apk` and `.aab` attached (automatically updating the GitHub Pages download button).
+5. Uploads the signed `.aab` automatically to **Google Play Console** (`com.aistudio.volttrail.kqrmvx`, `production` track).
 
 #### Required GitHub Actions Secrets
 Configure these under **Settings → Secrets and variables → Actions**:

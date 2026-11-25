@@ -35,6 +35,7 @@ android {
                     rootProject.file("keystore.properties"),
                     rootProject.file("key.properties"),
                     rootProject.file("signing.properties"),
+                    rootProject.file("release.properties"),
                     file("keystore.properties")
                 ).firstOrNull { it.exists() }?.inputStream()?.use { load(it) }
             }
@@ -43,17 +44,38 @@ android {
                 keys.firstNotNullOfOrNull { key ->
                     (
                         project.findProperty(key)?.toString()
+                            ?: System.getProperty(key)
                             ?: System.getenv(key)
                             ?: props.getProperty(key)
                     )?.takeIf { it.isNotBlank() }
                 }
 
+            fun resolvePatternValue(pattern: Regex): String? {
+                val allSources: List<Map<String, String>> = listOf(
+                    project.properties.entries.mapNotNull { (k, v) ->
+                        val s = v?.toString()
+                        if (s.isNullOrBlank()) null else k to s
+                    }.toMap(),
+                    System.getenv().filterValues { it.isNotBlank() }
+                )
+                for (source in allSources) {
+                    val match = source.entries.firstOrNull { (k, _) ->
+                        !k.contains("DEBUG", ignoreCase = true) && pattern.matches(k)
+                    }
+                    if (match != null) return match.value
+                }
+                return null
+            }
+
             val resolvedStoreFile = resolveSigningValue(
                 "KEYSTORE_FILE",
                 "KEYSTORE_PATH",
+                "KEY_STORE_FILE",
+                "KEY_STORE_PATH",
                 "RELEASE_STORE_FILE",
                 "RELEASE_KEYSTORE_PATH",
                 "RELEASE_KEYSTORE_FILE",
+                "RELEASE_KEYSTORE",
                 "ANDROID_KEYSTORE_PATH",
                 "ANDROID_KEYSTORE_FILE",
                 "UPLOAD_KEYSTORE_PATH",
@@ -61,27 +83,42 @@ android {
                 "UPLOAD_STORE_FILE",
                 "SIGNING_STORE_FILE",
                 "SIGNING_KEYSTORE_PATH",
+                "SIGNING_KEYSTORE_FILE",
+                "SIGNING_KEYSTORE",
                 "STORE_FILE",
                 "releaseStoreFile",
                 "keystoreFile",
                 "keystorePath",
                 "storeFile",
                 "android.injected.signing.store.file"
-            )
+            ) ?: resolvePatternValue(Regex("(?i).*(KEY_?STORE|STORE)_(FILE|PATH|LOCATION).*"))
+              ?: listOf(
+                    rootProject.file("release.keystore"),
+                    rootProject.file("upload.keystore"),
+                    rootProject.file("release.jks"),
+                    rootProject.file("upload.jks"),
+                    rootProject.file("keystore.jks"),
+                    file("release.keystore"),
+                    file("upload.keystore")
+                ).firstOrNull { it.exists() }?.absolutePath
+
             val resolvedStorePassword = resolveSigningValue(
                 "KEYSTORE_PASSWORD",
+                "KEY_STORE_PASSWORD",
                 "RELEASE_STORE_PASSWORD",
                 "RELEASE_KEYSTORE_PASSWORD",
                 "ANDROID_KEYSTORE_PASSWORD",
                 "UPLOAD_KEYSTORE_PASSWORD",
                 "UPLOAD_STORE_PASSWORD",
                 "SIGNING_STORE_PASSWORD",
+                "SIGNING_KEYSTORE_PASSWORD",
                 "STORE_PASSWORD",
                 "releaseStorePassword",
                 "keystorePassword",
                 "storePassword",
                 "android.injected.signing.store.password"
-            )
+            ) ?: resolvePatternValue(Regex("(?i).*(KEY_?STORE|STORE)_?PASS(WORD)?.*"))
+
             val resolvedKeyAlias = resolveSigningValue(
                 "KEY_ALIAS",
                 "RELEASE_KEY_ALIAS",
@@ -91,7 +128,8 @@ android {
                 "releaseKeyAlias",
                 "keyAlias",
                 "android.injected.signing.key.alias"
-            )
+            ) ?: resolvePatternValue(Regex("(?i).*KEY_?ALIAS.*"))
+
             val resolvedKeyPassword = resolveSigningValue(
                 "KEY_PASSWORD",
                 "RELEASE_KEY_PASSWORD",
@@ -101,18 +139,34 @@ android {
                 "releaseKeyPassword",
                 "keyPassword",
                 "android.injected.signing.key.password"
-            )
+            ) ?: resolvePatternValue(Regex("(?i).*KEY_?PASS(WORD)?.*"))
 
-            if (resolvedStoreFile != null) {
-                val candidate = File(resolvedStoreFile)
-                storeFile = when {
-                    candidate.isAbsolute -> candidate
-                    rootProject.file(resolvedStoreFile).exists() -> rootProject.file(resolvedStoreFile)
-                    else -> file(resolvedStoreFile)
+            val validExternalKeystore =
+                if (resolvedStoreFile != null) {
+                    val candidate = File(resolvedStoreFile)
+                    val resolvedFile = when {
+                        candidate.isAbsolute -> candidate
+                        rootProject.file(resolvedStoreFile).exists() -> rootProject.file(resolvedStoreFile)
+                        else -> file(resolvedStoreFile)
+                    }
+                    if (resolvedFile.exists() && !resolvedStorePassword.isNullOrBlank() && !resolvedKeyAlias.isNullOrBlank()) {
+                        storeFile = resolvedFile
+                        storePassword = resolvedStorePassword
+                        keyAlias = resolvedKeyAlias
+                        keyPassword = resolvedKeyPassword ?: resolvedStorePassword
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
                 }
-                storePassword = resolvedStorePassword
-                keyAlias = resolvedKeyAlias
-                keyPassword = resolvedKeyPassword
+
+            if (!validExternalKeystore) {
+                storeFile = rootProject.file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
             }
         }
         create("debugConfig") {
