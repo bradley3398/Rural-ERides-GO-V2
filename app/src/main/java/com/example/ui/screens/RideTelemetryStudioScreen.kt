@@ -122,9 +122,12 @@ fun RideTelemetryStudioScreen(
   val fleetDebrief by cockpitVm.fleetDebrief.collectAsStateWithLifecycle()
   val fleetDebriefBusy by cockpitVm.fleetDebriefBusy.collectAsStateWithLifecycle()
 
-  androidx.compose.runtime.LaunchedEffect(rides, settings, initialRideId) {
+  androidx.compose.runtime.LaunchedEffect(rides, settings) {
     telemetryVm.updateRides(rides)
     telemetryVm.updateSettings(settings)
+  }
+
+  androidx.compose.runtime.LaunchedEffect(initialRideId) {
     if (initialRideId != null) {
       telemetryVm.setSelectedRideId(initialRideId)
       telemetryVm.setStudioMode(1)
@@ -191,6 +194,29 @@ fun RideTelemetryStudioScreen(
   val distUnit = distUnitLabel(settings.distanceUnit)
   val spdUnit = speedUnitLabel(settings.distanceUnit)
   val elevUnit = elevationUnitLabel(settings.distanceUnit)
+
+  val liveCardSummaries = remember(filteredRides, totalKm, topSpeedKmh, totalElevM, totalWh, totalMins, avgEff, fleetDebrief, settings.distanceUnit, settings.carMpg, settings.gasPriceUsd, settings.kwhRateUsd) {
+    val milesTotal = totalKm * 0.621371
+    val gasSavedUsd = ((milesTotal / settings.carMpg.coerceAtLeast(8.0)) * settings.gasPriceUsd - (totalWh / 1000.0) * settings.kwhRateUsd).coerceAtLeast(0.0)
+    val avgDurationMin = if (filteredRides.isNotEmpty()) totalMins / filteredRides.size else 0L
+    val avgWatts = if (filteredRides.isNotEmpty()) {
+      filteredRides.map { r -> r.whUsed / (r.durationSec / 3600.0).coerceAtLeast(0.02) }.average().takeIf { it.isFinite() } ?: 0.0
+    } else 0.0
+    val vehicleCount = filteredRides.map { it.vehicleName }.distinct().size
+    listOf(
+      "Peak ${"%.1f".format(formatSpeedValue(topSpeedKmh, settings.distanceUnit))} $spdUnit across ${filteredRides.size} logs",
+      "Total +${formatElevationValue(totalElevM, settings.distanceUnit).toInt()} $elevUnit climbed",
+      "Avg ${"%.1f".format(avgEff)} Wh/$distUnit • Pack drain curve",
+      "${"%.1f".format(formatDistValue(totalKm, settings.distanceUnit))} $distUnit • ${totalWh.toInt()} Wh consumed",
+      "$vehicleCount active rig${if (vehicleCount == 1) "" else "s"} • 5 live pie slices",
+      "Pace vs Wh/$distUnit correlation scatter",
+      "Avg $avgDurationMin min/ride • $totalMins min total",
+      "Avg ${avgWatts.toInt()} W continuous drivetrain load",
+      "5-axis latest ride vs fleet benchmark",
+      "$${"%.2f".format(gasSavedUsd)} net fuel savings • Odometer growth",
+      if (fleetDebrief.isNotBlank()) "Live Gemini debrief ready • Tap to inspect" else "Run live Gemini engineering review",
+    )
+  }
 
   Surface(
     color = MaterialTheme.colorScheme.background,
@@ -303,14 +329,14 @@ fun RideTelemetryStudioScreen(
           selected = studioMode == 0,
           onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); telemetryVm.setStudioMode(0) },
           leadingIcon = { Icon(Icons.AutoMirrored.Filled.ShowChart, null, Modifier.size(16.dp)) },
-          label = { Text("Fleet Graphs (10)", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
+          label = { Text("Fleet Graphs (${studioGraphMeta.size})", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
           modifier = Modifier.weight(1f).testTag("studio_mode_fleet"),
         )
         FilterChip(
           selected = studioMode == 1,
           onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); telemetryVm.setStudioMode(1) },
-          leadingIcon = { Icon(Icons.Default.Map, null, Modifier.size(16.dp)) },
-          label = { Text("Per-Ride Deep Dive", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
+          leadingIcon = { Icon(Icons.Default.Speed, null, Modifier.size(16.dp)) },
+          label = { Text("Ride Inspector", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
           modifier = Modifier.weight(1f).testTag("studio_mode_single"),
         )
       }
@@ -357,20 +383,88 @@ fun RideTelemetryStudioScreen(
             }
           }
 
+          // LIVE PERSONAL RECORDS RIBBON (1-TAP JUMP TO RIDE INSPECTOR)
+          if (filteredRides.isNotEmpty()) {
+            item(key = "fleet_personal_records_ribbon") {
+              val fastestRide = remember(filteredRides) { filteredRides.maxByOrNull { it.maxSpeedKmh.takeIf { v -> v.isFinite() } ?: 0.0 } }
+              val longestRide = remember(filteredRides) { filteredRides.maxByOrNull { it.distanceKm.takeIf { v -> v.isFinite() } ?: 0.0 } }
+              val biggestClimb = remember(filteredRides) { filteredRides.maxByOrNull { it.elevationGainM.takeIf { v -> v.isFinite() } ?: 0.0 } }
+              val bestEffRide = remember(filteredRides) {
+                filteredRides.filter { it.distanceKm > 0.25 && it.whUsed > 0.5 }
+                  .minByOrNull { it.whUsed / it.distanceKm }
+              }
+              val records = remember(fastestRide, longestRide, biggestClimb, bestEffRide, settings.distanceUnit) {
+                buildList {
+                  fastestRide?.let { r ->
+                    add(Triple("FASTEST PEAK", "${"%.1f".format(formatSpeedValue(r.maxSpeedKmh, settings.distanceUnit))} $spdUnit", r))
+                  }
+                  longestRide?.let { r ->
+                    add(Triple("LONGEST TRIP", "${"%.1f".format(formatDistValue(r.distanceKm, settings.distanceUnit))} $distUnit", r))
+                  }
+                  biggestClimb?.let { r ->
+                    add(Triple("BIGGEST CLIMB", "+${formatElevationValue(r.elevationGainM, settings.distanceUnit).toInt()} $elevUnit", r))
+                  }
+                  bestEffRide?.let { r ->
+                    val eff = if (settings.distanceUnit == "km") PevBatteryPhysics.whPerKm(r.whUsed, r.distanceKm)
+                    else PevBatteryPhysics.whPerMile(r.whUsed, r.distanceKm)
+                    add(Triple("BEST EFFICIENCY", "${"%.1f".format(eff)} Wh/$distUnit", r))
+                  }
+                }
+              }
+              if (records.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                  Text(
+                    "PERSONAL RECORDS (TAP TO INSPECT RIDE)",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary,
+                  )
+                  LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    itemsIndexed(records, key = { idx, item -> "pr_${idx}_${item.first}" }) { idx, (label, metricVal, rideObj) ->
+                      val accent = listOf(Color(0xFF6366F1), Color(0xFF10B981), Color(0xFF38BDF8), Color(0xFFEC4899))[idx % 4]
+                      Surface(
+                        onClick = {
+                          playCue(VoiceAudioManager.TouchCue.ACTION_CONFIRM)
+                          telemetryVm.setSelectedRideId(rideObj.id)
+                          telemetryVm.setStudioMode(1)
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, accent.copy(alpha = 0.55f)),
+                        modifier = Modifier.widthIn(min = 144.dp).testTag("studio_pr_card_$idx"),
+                      ) {
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                          Text(label, fontSize = 9.sp, fontWeight = FontWeight.Black, color = accent, maxLines = 1, softWrap = false)
+                          Text(metricVal, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                          Text(
+                            rideObj.title.ifBlank { rideObj.vehicleName }.take(20),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                          )
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
           // INDEPENDENT GRAPH WINDOW MATRIX (EACH GRAPH IN ITS OWN WINDOW)
           item {
             Text(
-              "TELEMETRY WINDOW MATRIX (TAP ANY GRAPH TO OPEN IN DEDICATED WINDOW)",
+              "TELEMETRY WINDOW MATRIX (TAP ANY GRAPH TO OPEN DEDICATED ANALYTICS WINDOW)",
               style = MaterialTheme.typography.labelSmall,
               fontWeight = FontWeight.Bold,
               color = MaterialTheme.colorScheme.primary,
             )
           }
 
-
-
           items(studioGraphMeta.indices.toList()) { idx ->
             val (title, icon, accent) = studioGraphMeta[idx]
+            val subtitle = liveCardSummaries.getOrElse(idx) { "Launch dedicated chart window" }
             Surface(
               onClick = {
                 playCue(VoiceAudioManager.TouchCue.BUTTON_TAP)
@@ -397,14 +491,14 @@ fun RideTelemetryStudioScreen(
                 }
                 Column(Modifier.weight(1f)) {
                   Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
-                  Text("Click to launch independent chart window", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                  Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Surface(
                   shape = RoundedCornerShape(6.dp),
                   color = accent,
                   modifier = Modifier.padding(2.dp),
                 ) {
-                  Text("OPEN WINDOW", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                  Text("OPEN", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                 }
               }
             }
@@ -476,8 +570,8 @@ fun RideTelemetryStudioScreen(
             }
           }
         } else {
-          // MODE 1: PER-RIDE DEEP DIVE (EVERY RIDE HAS ITS OWN SPEED GRAPH, ELEVATION GRAPH, PIE CHARTS & TRACK MAP)
-          item {
+          // MODE 1: CRASH-PROOF FOCUSED RIDE INSPECTOR (REPLACES MONOLITHIC STACKED DEEP DIVE)
+          item(key = "ride_inspector_picker") {
             Text(
               "SELECT A FIRESTORE RIDE LOG (${rides.size})",
               style = MaterialTheme.typography.labelSmall,
@@ -486,10 +580,10 @@ fun RideTelemetryStudioScreen(
             )
             Spacer(Modifier.height(4.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-              itemsIndexed(rides, key = { idx, r -> "pick_${r.id}_$idx" }) { idx, r ->
+              itemsIndexed(rides, key = { idx, r -> "pick_${idx}_${r.id}" }) { idx, r ->
                 val dVal = formatDistValue(r.distanceKm.takeIf { it.isFinite() } ?: 0.0, settings.distanceUnit)
                 FilterChip(
-                  selected = selectedRideId == r.id,
+                  selected = selectedRideId == r.id || (selectedRideId == null && idx == 0),
                   onClick = { playCue(VoiceAudioManager.TouchCue.TAB_SWITCH); telemetryVm.setSelectedRideId(r.id) },
                   label = { Text("${r.title.ifBlank { "Ride ${idx + 1}" }.take(18)} • ${"%.1f".format(dVal)}$distUnit", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
                   modifier = Modifier.testTag("studio_pick_ride_${r.id}"),
@@ -501,54 +595,22 @@ fun RideTelemetryStudioScreen(
           val activeIdx = rides.indexOfFirst { it.id == selectedRideId }.takeIf { it >= 0 } ?: 0
           val activeRide = rides.getOrNull(activeIdx)
           if (activeRide != null) {
-            item(key = "deep_dive_${activeRide.id}_$activeIdx") {
-              val safeWh = activeRide.whUsed.takeIf { it.isFinite() } ?: 0.0
-              val safeDist = activeRide.distanceKm.takeIf { it.isFinite() } ?: 0.0
-              val safeMaxSpd = activeRide.maxSpeedKmh.takeIf { it.isFinite() } ?: 0.0
-              val safeElev = activeRide.elevationGainM.takeIf { it.isFinite() } ?: 0.0
-              val effVal =
-                (if (settings.distanceUnit == "km") PevBatteryPhysics.whPerKm(safeWh, safeDist)
-                else PevBatteryPhysics.whPerMile(safeWh, safeDist)).takeIf { it.isFinite() } ?: 0.0
-
-              Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                TacticalCard(title = "${activeRide.title.ifBlank { "Trail Ride" }} • ${activeRide.vehicleName}") {
-                  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    StudioKpiTile("DISTANCE", "${"%.2f".format(formatDistValue(safeDist, settings.distanceUnit))} $distUnit", MaterialTheme.colorScheme.primary, Modifier.weight(1f))
-                    StudioKpiTile("PEAK", "${"%.1f".format(formatSpeedValue(safeMaxSpd, settings.distanceUnit))} $spdUnit", MaterialTheme.colorScheme.secondary, Modifier.weight(1f))
-                    StudioKpiTile("CLIMB", "+${formatElevationValue(safeElev, settings.distanceUnit).toInt()} $elevUnit", Color(0xFF38BDF8), Modifier.weight(1f))
-                    StudioKpiTile("EFF", "${"%.1f".format(effVal)} Wh/$distUnit", MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
-                  }
-                }
-
-                var deepDivePlaybackProgress by remember(activeRide.id) { mutableFloatStateOf(0f) }
-
-                InteractiveRidePlaybackScrubber(
-                  ride = activeRide,
-                  activeVehicle = activeVehicle,
-                  settings = settings,
-                  externalProgress = deepDivePlaybackProgress,
-                  onProgressChange = { deepDivePlaybackProgress = it },
-                )
-
-                PerRideTelemetryPanel(
-                  ride = activeRide,
-                  activeVehicle = activeVehicle,
-                  settings = settings,
-                  showAllStacked = true,
-                  playbackProgress = deepDivePlaybackProgress,
-                )
-
-                if (activeRide.aiDebrief.isNotBlank()) {
-                  TacticalCard(title = "RIDGE-TO-RIDGE AI DEBRIEF") {
-                    Text(activeRide.aiDebrief, style = MaterialTheme.typography.bodySmall)
-                  }
-                }
-              }
+            item(key = "ride_inspector_body_${activeRide.id}_$activeIdx") {
+              RideInspectorDeck(
+                ride = activeRide,
+                activeVehicle = activeVehicle,
+                settings = settings,
+                distUnit = distUnit,
+                spdUnit = spdUnit,
+                elevUnit = elevUnit,
+                onPlayCue = { cue -> playCue(cue) },
+                onLaunchInspectModal = { data -> fullInspectData = data },
+              )
             }
           } else {
             item {
               TacticalCard(title = "NO RIDE LOGS") {
-                Text("No ride logs available. Record or sync a ride to view Per-Ride Deep Dive telemetry.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text("No ride logs available. Record or sync a ride to inspect live telemetry.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
               }
             }
           }
@@ -1051,31 +1113,23 @@ fun RideTelemetryStudioScreen(
             }
           }
 
-          HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            if (safeTab in 0..9 && filteredRides.isNotEmpty()) {
+          if (safeTab in 0..9 && filteredRides.isNotEmpty()) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+              horizontalArrangement = Arrangement.End,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
               OutlinedButton(
                 onClick = { launchFullInspectForTab(safeTab) },
                 modifier = Modifier.heightIn(min = 48.dp).testTag("studio_window_inspect_btn"),
               ) {
                 Icon(Icons.Default.OpenInFull, contentDescription = "Deep Inspect Graph", modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Inspect & Services")
+                Text("Inspect & Analytics")
               }
-            } else {
-              Spacer(Modifier.width(1.dp))
-            }
-            OutlinedButton(
-              onClick = { activeGraphTab = null },
-              modifier = Modifier.heightIn(min = 48.dp),
-            ) {
-              Text("Close Window", fontWeight = FontWeight.Bold)
             }
           }
         }

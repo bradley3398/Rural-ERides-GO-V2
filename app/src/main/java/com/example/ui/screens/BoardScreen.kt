@@ -98,6 +98,8 @@ import com.example.ui.components.TacticalCard
 import com.example.ui.components.TacticalDialog
 import com.example.ui.components.TacticalOutlinedButton
 import com.example.ui.components.dispatchSocialShare
+import com.example.ui.compartments.OverlayCompartment
+import com.example.ui.compartments.PrimaryTabCompartment
 import com.example.viewmodel.CockpitViewModel
 import com.example.viewmodel.CopilotSocialViewModel
 import com.example.viewmodel.SessionViewModel
@@ -108,6 +110,9 @@ fun BoardScreen(
   sessionVm: SessionViewModel,
   cockpitVm: CockpitViewModel,
   socialVm: CopilotSocialViewModel,
+  onSelectTab: (PrimaryTabCompartment) -> Unit = {},
+  onOpenOverlay: (OverlayCompartment) -> Unit = {},
+  onOpen3dLab: () -> Unit = {},
 ) {
   val ctx = LocalContext.current
   val activeUser by sessionVm.activeUser.collectAsStateWithLifecycle()
@@ -165,6 +170,7 @@ fun BoardScreen(
   var socialSharePayload by remember { mutableStateOf<SocialSharePayload?>(null) }
   var localNotice by remember { mutableStateOf("") }
   var showFiftyFeatures by remember { mutableStateOf(false) }
+  var activeStory by remember { mutableStateOf<TimelineStoryItem?>(null) }
 
   val feedListState = rememberLazyListState()
   val fabExpanded by remember { derivedStateOf { feedListState.firstVisibleItemIndex == 0 } }
@@ -375,7 +381,6 @@ fun BoardScreen(
           IconButton(
             onClick = {
               socialVm.refreshSupabaseBoard()
-              localNotice = "Live board synced (${posts.size} posts, ${pilots.size} pilots)."
             },
             modifier = Modifier.size(48.dp).testTag("refresh_live_board_button"),
           ) {
@@ -697,8 +702,61 @@ fun BoardScreen(
               }
             }
 
-            // INLINE QUICK COMPOSER CARD & 35 RURAL TEMPLATES (ONLY ON MAIN FEED — SCROLLS AWAY SMOOTHLY!)
+            // INLINE LIVE 24H TIMELINE STORIES + QUICK COMPOSER & 35 RURAL TEMPLATES (ONLY ON MAIN FEED)
             if (activeSubTab == 0) {
+              item(key = "board_live_stories_bar") {
+                val liveStories =
+                  remember(posts, pilotsByUid) {
+                    val cutoffSec = (System.currentTimeMillis() / 1000L) - 86_400L
+                    posts
+                      .filter { p ->
+                        val createdSec = p.createdAt?.seconds ?: 0L
+                        val isRecent = createdSec == 0L || createdSec >= cutoffSec
+                        isRecent && (p.body.contains("#TrailStory", ignoreCase = true) || p.imageUrl.isNotBlank() || p.telemetrySummary.isNotBlank())
+                      }
+                      .take(15)
+                      .map { p ->
+                        TimelineStoryItem(
+                          id = p.id,
+                          userId = p.userId,
+                          authorCallsign = p.authorCallsign.ifBlank { "PILOT" },
+                          avatarBase64 = pilotsByUid[p.userId]?.avatarBase64.orEmpty(),
+                          mediaUrl = p.imageUrl,
+                          caption = p.body.replace("#TrailStory", "").trim().ifBlank { p.title },
+                          batteryStatus = p.telemetrySummary,
+                          timestampEpoch = p.createdAt?.seconds ?: (System.currentTimeMillis() / 1000L),
+                        )
+                      }
+                  }
+                TimelineStoriesBar(
+                  myCallsign = callsign,
+                  myAvatar = myAvatar,
+                  stories = liveStories,
+                  cloudSyncReady = cloudSyncReady,
+                  onAddStory = { caption, photoBmp, mediaUrl ->
+                    socialVm.createPost(
+                      callsign = callsign,
+                      badge = settings.pilotRankBadge,
+                      category = "RIDE_REPORTS",
+                      title = "Trail Story • @$callsign",
+                      body = "$caption #TrailStory",
+                      bitmap = photoBmp,
+                      pollQuestion = "",
+                      pollOptions = emptyList(),
+                      priceUsd = 0.0,
+                      location = telemetry.roadName,
+                      telemetrySummary = liveTelemetrySummary,
+                      helpNeeded = false,
+                      speedTrap = false,
+                      stolenAlert = false,
+                      externalImageUrl = mediaUrl,
+                      onDone = { localNotice = "Live 24h Trail Story published to Firestore!" },
+                    )
+                  },
+                  onViewStory = { story -> activeStory = story },
+                  modifier = Modifier.padding(horizontal = 14.dp),
+                )
+              }
               item(key = "board_rural_templates_strip") {
                 BoardRuralTemplatesStrip(
                   onLaunchTemplate = { tpl ->
@@ -1348,8 +1406,55 @@ fun BoardScreen(
     SocialShareDialog(payload = payload, onDismiss = { socialSharePayload = null })
   }
 
+  activeStory?.let { story ->
+    StoryViewerDialog(
+      story = story,
+      onDismiss = { activeStory = null },
+    )
+  }
+
   if (showFiftyFeatures) {
-    BoardFiftyFeaturesScreen(settings = settings, onNavigateBack = { showFiftyFeatures = false })
+    BoardFiftyFeaturesScreen(
+      settings = settings,
+      onExecuteFeatureRoute = { route ->
+        when {
+          route == "TAB:COCKPIT" -> onSelectTab(PrimaryTabCompartment.COCKPIT)
+          route == "TAB:RADAR" -> onSelectTab(PrimaryTabCompartment.RADAR)
+          route == "TAB:MECHANIC" -> onSelectTab(PrimaryTabCompartment.MECHANIC)
+          route == "TAB:COPILOT" -> onSelectTab(PrimaryTabCompartment.COPILOT)
+          route == "TAB:CHANNEL" -> onSelectTab(PrimaryTabCompartment.CHANNEL)
+          route == "OVERLAY:SETTINGS" -> onOpenOverlay(OverlayCompartment.SETTINGS)
+          route == "OVERLAY:INFO" -> onOpenOverlay(OverlayCompartment.INFO)
+          route == "OVERLAY:TELEMETRY_STUDIO" -> onOpenOverlay(OverlayCompartment.TELEMETRY_STUDIO)
+          route == "OVERLAY:CREATOR_HUB" -> onOpenOverlay(OverlayCompartment.CREATOR_HUB)
+          route == "OVERLAY:VOICE_STUDIO" -> onOpenOverlay(OverlayCompartment.VOICE_STUDIO)
+          route == "POPUP:3D_LAB" -> onOpen3dLab()
+          route == "BOARD:COMPOSE_STOLEN" -> launchComposer(cat = "STOLEN", stolen = true)
+          route.startsWith("BOARD:COMPOSE:") -> launchComposer(cat = route.removePrefix("BOARD:COMPOSE:"))
+          route.startsWith("BOARD:CAT:") -> {
+            selectedCategory = route.removePrefix("BOARD:CAT:")
+            urgentOnly = false
+            activeSubTab = 0
+          }
+          route.startsWith("BOARD:SEARCH:") -> {
+            searchQuery = route.removePrefix("BOARD:SEARCH:")
+            showSearchBar = true
+            activeSubTab = 0
+          }
+          route == "BOARD:FILTER:POLLS" -> {
+            hasPollOnly = true
+            activeSubTab = 0
+          }
+          route == "BOARD:TAB:STANDINGS" -> activeSubTab = 4
+          route == "BOARD:SLANG" -> showSlangDecoder = true
+          route == "BOARD:DM_HUB" -> {
+            dmInitialPeer = null
+            showDms = true
+          }
+        }
+      },
+      onNavigateBack = { showFiftyFeatures = false },
+    )
   }
 }
 

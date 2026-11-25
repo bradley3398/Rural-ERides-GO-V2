@@ -103,6 +103,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.core.PevBatteryPhysics
 import com.example.data.AiVoiceProfile
 import com.example.data.UiState
+import com.example.data.getActiveCustomVoice
 import com.example.hardware.VoiceAudioManager
 import com.example.ui.components.RuralPevIcons
 import com.example.ui.components.SocialShareDialog

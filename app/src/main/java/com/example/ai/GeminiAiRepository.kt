@@ -695,7 +695,7 @@ class GeminiAiRepository {
     try {
       val cleanQuery = query.trim()
       if (cleanQuery.length < 2) {
-        return Result.failure(IllegalArgumentException("Enter at least 2 characters to search PEV models."))
+        throw IllegalArgumentException("Enter at least 2 characters to search PEV models.")
       }
       val webCtx =
         LiveCloudServices.webSearchGrounding(
@@ -788,7 +788,7 @@ class GeminiAiRepository {
     try {
       val cleanQuery = makeAndModel.trim()
       if (cleanQuery.length < 3) {
-        return Result.failure(IllegalArgumentException("Enter a PEV make and model first."))
+        throw IllegalArgumentException("Enter a PEV make and model first.")
       }
       val webCtx = LiveCloudServices.webSearchGrounding("$cleanQuery PEV electric scooter ebike EUC battery voltage Ah Wh tire size specs")
       val prompt =
@@ -1332,7 +1332,7 @@ class GeminiAiRepository {
               "verdict" to Schema.string("GO, CAUTION, or HOLD verdict with 1-sentence reason"),
               "weatherRisk" to Schema.string("Wind, precipitation, visibility, and road surface assessment"),
               "batteryStrategy" to Schema.string("Voltage sag reserve, cruise target, and range buffer"),
-              "gearChecklist" to Schema.array(Schema.string("Essential safety gear or tool check"), minItems = 3, maxItems = 5),
+              "gearChecklist" to Schema.array(Schema.string("Essential safety gear or tool check")),
               "routeTip" to Schema.string("Actionable route pacing or rural/road safety tip"),
             )
         )
@@ -1402,8 +1402,8 @@ class GeminiAiRepository {
               "verdict" to Schema.string("DIRECT FIT, NEEDS SUPPORTING MODS, or INCOMPATIBLE summary"),
               "voltageAndAmpsCheck" to Schema.string("Voltage tolerance, BMS discharge amps, MOSFET/phase current analysis"),
               "thermalAndRangeImpact" to Schema.string("Expected range, speed, torque, and stator/controller heat impact"),
-              "requiredSupportingMods" to Schema.array(Schema.string("Required adapter, bracket, BMS, fuse, or tire clearance mod"), minItems = 2, maxItems = 5),
-              "warnings" to Schema.array(Schema.string("Electrical, clearance, or safety hazard warning"), minItems = 1, maxItems = 4),
+              "requiredSupportingMods" to Schema.array(Schema.string("Required adapter, bracket, BMS, fuse, or tire clearance mod")),
+              "warnings" to Schema.array(Schema.string("Electrical, clearance, or safety hazard warning")),
             )
         )
       val prompt =
@@ -1535,3 +1535,4 @@ class GeminiAiRepository {
       Result.failure(e)
     }
 }
+

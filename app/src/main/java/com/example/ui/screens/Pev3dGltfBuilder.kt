@@ -955,9 +955,9 @@ internal object Pev3dGltfBuilder {
       nodeName = "floor",
       partKey = "floor",
       texId = PevPbrMaterialId.DYNO_FLOOR,
-      baseRgb = floatArrayOf(0.96f, 0.96f, 0.97f),
-      metallic = 0.14f,
-      roughness = 0.44f,
+      baseRgb = floatArrayOf(0.88f, 0.90f, 0.93f),
+      metallic = 0.08f,
+      roughness = 0.56f,
     ) {
       addQuad(
         Vec3(-2.4f, -0.78f, 2.4f),
@@ -2305,6 +2305,28 @@ internal object Pev3dGltfBuilder {
       val mk = b.matKey
       val isXrayTrans = xrayShell && mk.isShell
       val alpha = if (isXrayTrans) 0.22 else 1.0
+      // Calibrate glTF 2.0 factors so embedded 512x512 metallicRoughnessTexture channels
+      // aren't double-crushed by Filament's strict glTF PBR evaluator (final = factor * texel).
+      val calMetallic = when {
+        isXrayTrans -> 0.15
+        mk.texId == PevPbrMaterialId.TIRE_RUBBER || mk.texId == PevPbrMaterialId.QUILTED_LEATHER -> 0.04
+        mk.texId == PevPbrMaterialId.DYNO_FLOOR -> 0.18
+        mk.texId == PevPbrMaterialId.BRUSHED_METAL || mk.texId == PevPbrMaterialId.BRAKE_ROTOR -> 1.0
+        mk.texId == PevPbrMaterialId.RACING_LIVERY -> (0.55 + mk.metallic * 0.45).coerceIn(0.45, 0.96)
+        mk.texId == PevPbrMaterialId.CARBON_WEAVE -> 0.55
+        mk.texId == PevPbrMaterialId.BATTERY_PACK -> 0.88
+        else -> mk.metallic.toDouble().coerceIn(0.0, 1.0)
+      }
+      val calRoughness = when {
+        isXrayTrans -> 0.18
+        mk.texId == PevPbrMaterialId.TIRE_RUBBER -> 1.0
+        mk.texId == PevPbrMaterialId.QUILTED_LEATHER -> 0.95
+        mk.texId == PevPbrMaterialId.DYNO_FLOOR -> 0.92
+        mk.texId == PevPbrMaterialId.RACING_LIVERY -> (0.58 + mk.roughness * 0.42).coerceIn(0.48, 0.92)
+        mk.texId == PevPbrMaterialId.BRUSHED_METAL || mk.texId == PevPbrMaterialId.BRAKE_ROTOR -> (0.72 + mk.roughness * 0.45).coerceIn(0.62, 1.0)
+        mk.texId == PevPbrMaterialId.CARBON_WEAVE -> (0.78 + mk.roughness * 0.35).coerceIn(0.65, 1.0)
+        else -> (0.70 + mk.roughness * 0.35).coerceIn(0.35, 1.0)
+      }
       val pbr = JSONObject()
         .put(
           "baseColorFactor",
@@ -2315,16 +2337,16 @@ internal object Pev3dGltfBuilder {
             .put(alpha),
         )
         .put("baseColorTexture", JSONObject().put("index", texSet.albedo))
-        .put("metallicFactor", if (isXrayTrans) 0.15 else mk.metallic.toDouble())
-        .put("roughnessFactor", if (isXrayTrans) 0.18 else mk.roughness.toDouble())
+        .put("metallicFactor", calMetallic)
+        .put("roughnessFactor", calRoughness)
         .put("metallicRoughnessTexture", JSONObject().put("index", texSet.mr))
 
       val mat = JSONObject()
         .put("name", "mat_${mk.partKey}_$bIdx")
         .put("pbrMetallicRoughness", pbr)
-        .put("normalTexture", JSONObject().put("index", texSet.normal).put("scale", 1.15))
-        .put("occlusionTexture", JSONObject().put("index", texSet.occlusion).put("strength", 0.80))
-        .put("doubleSided", isXrayTrans || mk.partKey == "frame")
+        .put("normalTexture", JSONObject().put("index", texSet.normal).put("scale", 1.25))
+        .put("occlusionTexture", JSONObject().put("index", texSet.occlusion).put("strength", 0.88))
+        .put("doubleSided", isXrayTrans || mk.partKey == "frame" || b.nodeName.startsWith("wheel_"))
 
       if (isXrayTrans) {
         mat.put("alphaMode", "BLEND")

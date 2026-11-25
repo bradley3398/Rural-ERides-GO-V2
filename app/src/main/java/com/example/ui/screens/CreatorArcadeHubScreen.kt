@@ -246,7 +246,7 @@ fun CreatorArcadeHubScreen(
         socialVm.createPost(
           callsign = profile?.callsign?.ifBlank { "PILOT" } ?: "PILOT",
           badge = settings.pilotRankBadge,
-          category = "TRAIL_REPORT",
+          category = "RIDE_REPORTS",
           title = "Gravel Volt Runner High Score: $pts PTS!",
           body = "Just ran ${"%.2f".format(mi)} miles on Gravel Volt Runner with ${activeVehicle?.name ?: "my rig"} — beat my score of $pts PTS!",
           bitmap = null,

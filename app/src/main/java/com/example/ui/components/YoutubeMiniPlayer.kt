@@ -231,7 +231,7 @@ fun YoutubeMiniPlayerHost(
           factory = { ctx ->
             val embedOrigin = youtubeEmbedOriginForPackage(ctx.packageName)
             val iFrameOptions =
-              IFramePlayerOptions.Builder(ctx)
+              IFramePlayerOptions.Builder()
                 .controls(0)
                 .rel(0)
                 .ivLoadPolicy(3)
@@ -997,10 +997,9 @@ private fun sanitizeYoutubeVideoId(videoId: String): String =
 
 private fun mapPlaybackRate(speed: Float): PlayerConstants.PlaybackRate =
   when {
-    speed <= 0.6f -> PlayerConstants.PlaybackRate.RATE_0_5
-    speed <= 0.85f -> PlayerConstants.PlaybackRate.RATE_0_75
-    speed <= 1.15f -> PlayerConstants.PlaybackRate.RATE_1
-    speed <= 1.35f -> PlayerConstants.PlaybackRate.RATE_1_25
+    speed <= 0.35f -> PlayerConstants.PlaybackRate.RATE_0_25
+    speed <= 0.75f -> PlayerConstants.PlaybackRate.RATE_0_5
+    speed <= 1.25f -> PlayerConstants.PlaybackRate.RATE_1
     speed <= 1.75f -> PlayerConstants.PlaybackRate.RATE_1_5
     else -> PlayerConstants.PlaybackRate.RATE_2
   }
@@ -1016,13 +1015,13 @@ private fun openInYouTubeApp(context: Context, videoId: String) {
 }
 
 internal fun youtubeEmbedOriginForPackage(packageName: String): String {
-  val cleanPkg = packageName.trim().ifBlank { "com.aistudio.volttrail.kqrmvx" }
+  val cleanPkg = packageName.trim().ifBlank { com.example.BuildConfig.APPLICATION_ID }
   return "https://$cleanPkg"
 }
 
 internal fun buildYoutubeIframeHtml(
   videoId: String,
-  origin: String = youtubeEmbedOriginForPackage("com.aistudio.volttrail.kqrmvx"),
+  origin: String = youtubeEmbedOriginForPackage(com.example.BuildConfig.APPLICATION_ID),
 ): String {
   val safeId = sanitizeYoutubeVideoId(videoId)
   val encodedOrigin = URLEncoder.encode(origin, "UTF-8")

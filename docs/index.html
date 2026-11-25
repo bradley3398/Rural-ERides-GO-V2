@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rural ERides GO v47.0 — PEV Telemetry, Filament 3D Rig Lab &amp; Rider Radar</title>
+  <meta name="description" content="Rural ERides GO v47.0 by Lord Bradley Callison. Native Android PEV companion featuring Google Filament OpenGL PBR 3D Rig Lab, 11-Window Telemetry Studio, Crash-Proof Ride Inspector, 9-DOF AHRS Cockpit, Privacy-First Rider Radar, Gemini AI Mechanic, and 11 Ornamented Holiday Themes." />
+  <meta name="keywords" content="Rural ERides GO, PEV app, electric unicycle, Sur-Ron, Dualtron, hyper-scooter, e-bike telemetry, Google Filament OpenGL PBR, 3D Rig Lab, Ride Inspector, Rider Radar, Firebase Firestore, Gemini AI Mechanic, Lord Bradley Callison" />
+  <meta name="author" content="Lord Bradley Callison" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Rural ERides GO v47.0 — Ultimate PEV Avionics &amp; 3D Rig Lab" />
+  <meta property="og:description" content="Google Filament OpenGL PBR 3D vehicle inspection, 11-window Telemetry Studio, Crash-Proof Ride Inspector, 9-DOF AHRS cockpit, Rider Radar, and Gemini AI Mechanic." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://bradley3398.github.io/Rural-Erides-GO/" />
+  <meta property="og:image" content="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/aistudio/splash_cd16c5c0.png" />
+
+  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/aistudio/icon_75e30694.png" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #070B0E; color: #F1F5F9; }
+    .font-mono-tech { font-family: 'JetBrains Mono', monospace; }
+    .hero-glow { background: radial-gradient(circle at 20% 15%, rgba(16, 185, 129, 0.16), transparent 45%), radial-gradient(circle at 80% 25%, rgba(99, 102, 241, 0.18), transparent 48%); }
+    .card-glass { background: rgba(15, 23, 34, 0.78); backdrop-filter: blur(12px); }
+    .tab-btn-active { background: linear-gradient(135deg, #10B981, #06B6D4); color: #041014; border-color: transparent; box-shadow: 0 0 24px rgba(16, 185, 129, 0.35); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-emerald-500 selection:text-slate-950 hero-glow">
+
+  <!-- Sticky Navigation -->
+  <header class="border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-5 sm:px-6 h-20 flex items-center justify-between gap-4">
+      <a href="#top" class="flex items-center gap-3 group">
+        <img
+          src="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/aistudio/icon_75e30694.png"
+          alt="Rural ERides GO Icon"
+          class="w-11 h-11 rounded-xl border border-emerald-400/40 shadow-lg shadow-emerald-500/20 object-cover group-hover:scale-105 transition"
+        />
+        <div>
+          <span class="text-lg sm:text-xl font-black tracking-wider text-white block leading-none">
+            RURAL ERIDES <span class="text-emerald-400">GO</span>
+          </span>
+          <span class="text-[11px] font-mono-tech text-slate-400 tracking-widest uppercase">v47.0 • Keep It Rural Yall</span>
+        </div>
+      </a>
+
+      <nav class="hidden lg:flex items-center gap-7 text-sm font-semibold text-slate-300">
+        <a href="#explorer" class="hover:text-emerald-400 transition">Feature Lab</a>
+        <a href="#specs" class="hover:text-emerald-400 transition">PEV Physics</a>
+        <a href="#themes" class="hover:text-emerald-400 transition">Holiday &amp; Themes</a>
+        <a href="#changelog" class="hover:text-emerald-400 transition">Changelog</a>
+        <a href="#download" class="hover:text-emerald-400 transition">Get APK</a>
+      </nav>
+
+      <div class="flex items-center gap-2.5">
+        <a
+          href="https://github.com/bradley3398/Rural-Erides-GO"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="hidden sm:inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition"
+        >
+          GitHub
+        </a>
+        <a
+          href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm transition shadow-lg shadow-emerald-500/25"
+        >
+          Download v47
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top" class="flex-grow">
+    <!-- Hero Section -->
+    <section class="max-w-7xl mx-auto px-5 sm:px-6 pt-16 pb-20 lg:py-24 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+      <div class="lg:col-span-7 space-y-7">
+        <div class="inline-flex items-center gap-2.5 bg-emerald-950/80 border border-emerald-500/40 px-4 py-1.5 rounded-full text-emerald-300 text-xs font-bold tracking-wide uppercase">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>v47.0 Release • Filament OpenGL PBR • Android 14/15 Ready</span>
+        </div>
+
+        <h1 class="text-4xl sm:text-6xl font-black tracking-tight text-white leading-[1.05]">
+          Universal Avionics for
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-300 to-indigo-400">
+            Personal Electric Vehicles
+          </span>
+        </h1>
+
+        <p class="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
+          Built for riders on rural backroads, trails, and highways. Rural ERides GO unites a
+          <strong class="text-white">Google Filament OpenGL PBR 3D Rig Lab</strong>, an
+          <strong class="text-white">11-Window Telemetry Studio &amp; Ride Inspector</strong>,
+          <strong class="text-white">9-DOF AHRS Telemetry</strong>,
+          <strong class="text-white">Privacy-First Rider Radar</strong>, and
+          <strong class="text-white">Gemini AI Vision Diagnostics</strong>—powered 100% by live sensors and cloud services.
+        </p>
+
+        <div class="flex flex-wrap gap-3.5 pt-2">
+          <a
+            href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-7 py-4 rounded-2xl transition shadow-xl shadow-emerald-500/25 flex items-center gap-2.5"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Download Latest APK</span>
+          </a>
+          <a
+            href="https://github.com/bradley3398/Rural-Erides-GO"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-bold px-7 py-4 rounded-2xl transition flex items-center gap-2.5"
+          >
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            <span>Source on GitHub</span>
+          </a>
+        </div>
+
+        <!-- Quick Highlights Strip -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+          <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
+            <div class="text-xl font-black text-emerald-400">11</div>
+            <div class="text-xs text-slate-400 font-semibold">Fleet Graph Windows</div>
+          </div>
+          <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
+            <div class="text-xl font-black text-cyan-400">Filament</div>
+            <div class="text-xs text-slate-400 font-semibold">OpenGL ES PBR 3D</div>
+          </div>
+          <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
+            <div class="text-xl font-black text-indigo-400">26+</div>
+            <div class="text-xs text-slate-400 font-semibold">Themes &amp; 11 Holidays</div>
+          </div>
+          <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
+            <div class="text-xl font-black text-amber-400">17 Bays</div>
+            <div class="text-xs text-slate-400 font-semibold">PEV Engineering Lab</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Hero Brand Card -->
+      <div class="lg:col-span-5 relative">
+        <div class="absolute -inset-1 rounded-3xl bg-gradient-to-tr from-emerald-500/30 via-cyan-500/20 to-indigo-500/30 blur-2xl"></div>
+        <div class="relative card-glass border border-slate-700/80 rounded-3xl overflow-hidden shadow-2xl">
+          <img
+            src="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/aistudio/splash_cd16c5c0.png"
+            alt="Rural ERides GO Splash Artwork"
+            class="w-full h-56 object-cover border-b border-slate-800"
+          />
+          <div class="p-6 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-[11px] font-mono-tech uppercase tracking-widest text-emerald-400 font-bold block">Architecture Summary</span>
+                <h2 class="text-lg font-black text-white">Rural ERides GO • Build 47</h2>
+              </div>
+              <span class="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold">Zero Mockups</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+                <span class="text-slate-500 font-bold block uppercase text-[10px]">3D Rendering</span>
+                <span class="text-cyan-300 font-bold">Filament OpenGL PBR</span>
+              </div>
+              <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+                <span class="text-slate-500 font-bold block uppercase text-[10px]">Telemetry Mode</span>
+                <span class="text-indigo-300 font-bold">5-Module Ride Inspector</span>
+              </div>
+              <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+                <span class="text-slate-500 font-bold block uppercase text-[10px]">Cloud &amp; AI</span>
+                <span class="text-amber-300 font-bold">Firestore + Gemini AI</span>
+              </div>
+              <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+                <span class="text-slate-500 font-bold block uppercase text-[10px]">Radar Privacy</span>
+                <span class="text-emerald-300 font-bold">Beacon Off by Default</span>
+              </div>
+            </div>
+            <div class="text-xs text-slate-400 pt-1 flex items-center justify-between border-t border-slate-800">
+              <span>Creator: <strong class="text-slate-200">Lord Bradley Callison</strong></span>
+              <span class="font-mono-tech text-emerald-400">Kotlin • Compose M3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive Feature Lab Explorer -->
+    <section id="explorer" class="max-w-7xl mx-auto px-5 sm:px-6 py-20 border-t border-slate-800/80">
+      <div class="max-w-3xl space-y-3 mb-10">
+        <span class="text-xs font-mono-tech uppercase tracking-widest text-emerald-400 font-bold">Interactive Module Explorer</span>
+        <h2 class="text-3xl sm:text-4xl font-black text-white">Explore Every Core Subsystem in v47.0</h2>
+        <p class="text-slate-400">Select any subsystem below to inspect how Rural ERides GO powers real rides from trailhead to workbench.</p>
+      </div>
+
+      <div class="flex flex-wrap gap-2.5 mb-8" role="tablist" aria-label="Rural ERides GO Subsystems">
+        <button type="button" data-tab="riglab" class="feature-tab tab-btn-active px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
+          3D Filament PBR Lab
+        </button>
+        <button type="button" data-tab="graphs" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
+          Graphs &amp; Ride Inspector
+        </button>
+        <button type="button" data-tab="cockpit" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
+          9-DOF AHRS Cockpit
+        </button>
+        <button type="button" data-tab="radar" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
+          Rider Radar &amp; Weather
+        </button>
+        <button type="button" data-tab="ai" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
+          AI Mechanic &amp; Co-Pilot
+        </button>
+        <button type="button" data-tab="community" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
+          Porch Board &amp; Stories
+        </button>
+      </div>
+
+      <div id="feature-panel" class="card-glass border border-slate-700/80 rounded-3xl p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div class="lg:col-span-7 space-y-4">
+          <div id="fp-badge" class="inline-flex px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-bold uppercase tracking-wider"></div>
+          <h3 id="fp-title" class="text-2xl sm:text-3xl font-black text-white"></h3>
+          <p id="fp-desc" class="text-slate-300 leading-relaxed"></p>
+          <ul id="fp-bullets" class="space-y-2.5 pt-2 text-sm text-slate-300"></ul>
+        </div>
+        <div class="lg:col-span-5 bg-slate-950/90 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <span class="text-[11px] font-mono-tech uppercase tracking-widest text-slate-400 font-bold block">Technical Specs</span>
+          <div id="fp-specs" class="space-y-3 text-sm"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PEV Physics & Voltage Reference -->
+    <section id="specs" class="max-w-7xl mx-auto px-5 sm:px-6 py-20 border-t border-slate-800/80">
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
+        <div class="space-y-2">
+          <span class="text-xs font-mono-tech uppercase tracking-widest text-amber-400 font-bold">Real Pack Physics Engine</span>
+          <h2 class="text-3xl sm:text-4xl font-black text-white">Exact Voltage, Sag &amp; Archetype Support</h2>
+        </div>
+        <p class="text-sm text-slate-400 max-w-md">
+          Live resting OCV and under-load voltage sag calculations calibrated across NMC and LiFePO4 battery packs from 36V to 134V.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="card-glass border border-slate-800 rounded-2xl p-6 space-y-2">
+          <span class="text-xs font-mono-tech text-emerald-400 font-bold">48V • 13S NMC</span>
+          <div class="text-2xl font-black text-white">54.6V Full</div>
+          <p class="text-xs text-slate-400">Fat-Tire e-Bikes, commuter cruisers, and trail rigs. Cutoff 39.0V, storage 49.4V.</p>
+        </div>
+        <div class="card-glass border border-slate-800 rounded-2xl p-6 space-y-2">
+          <span class="text-xs font-mono-tech text-cyan-400 font-bold">52V • 14S NMC</span>
+          <div class="text-2xl font-black text-white">58.8V Full</div>
+          <p class="text-xs text-slate-400">Dual-motor scooters and high-torque rural e-bikes. Cutoff 42.0V, storage 53.2V.</p>
+        </div>
+        <div class="card-glass border border-slate-800 rounded-2xl p-6 space-y-2">
+          <span class="text-xs font-mono-tech text-indigo-400 font-bold">72V • 20S NMC</span>
+          <div class="text-2xl font-black text-white">84.0V Full</div>
+          <p class="text-xs text-slate-400">Sur-Ron Ultra Bee eMotos &amp; Hyper-Scooters. Live sag alerts under heavy climb amps.</p>
+        </div>
+        <div class="card-glass border border-slate-800 rounded-2xl p-6 space-y-2">
+          <span class="text-xs font-mono-tech text-pink-400 font-bold">100V–134V • EUC</span>
+          <div class="text-2xl font-black text-white">24S–32S Packs</div>
+          <p class="text-xs text-slate-400">High-voltage Electric Unicycles with PWM headroom warnings &amp; Wh/mi range learning.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Holiday Themes & Ornaments Showcase -->
+    <section id="themes" class="max-w-7xl mx-auto px-5 sm:px-6 py-20 border-t border-slate-800/80">
+      <div class="max-w-3xl space-y-3 mb-10">
+        <span class="text-xs font-mono-tech uppercase tracking-widest text-pink-400 font-bold">Visual Customization • Always Unlocked</span>
+        <h2 class="text-3xl sm:text-4xl font-black text-white">26+ Visual Themes &amp; 11 Ornamented Holiday Themes</h2>
+        <p class="text-slate-400">
+          Every Holiday theme renders DP-scaled top-of-screen garlands, glowing twinkling string lights, hanging ornaments, full-screen backdrop motifs, foreground card corner emblems, and festive navigation bar trim—available year-round in Settings.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div class="card-glass border border-red-500/30 rounded-2xl p-4"><div class="font-bold text-white">Christmas Evergreen</div><div class="text-xs text-slate-400 mt-1">Pine garland, glass baubles, holly berries &amp; warm string lights</div></div>
+        <div class="card-glass border border-orange-500/30 rounded-2xl p-4"><div class="font-bold text-white">Halloween Jack-O'-Lantern</div><div class="text-xs text-slate-400 mt-1">Cobweb drape, hanging carved pumpkins &amp; gliding bats</div></div>
+        <div class="card-glass border border-amber-500/30 rounded-2xl p-4"><div class="font-bold text-white">Thanksgiving Harvest</div><div class="text-xs text-slate-400 mt-1">Autumn vine canopy &amp; golden-crimson maple leaves</div></div>
+        <div class="card-glass border border-blue-500/30 rounded-2xl p-4"><div class="font-bold text-white">4th of July Liberty</div><div class="text-xs text-slate-400 mt-1">Red/white/blue bunting, liberty stars &amp; firework bursts</div></div>
+        <div class="card-glass border border-yellow-500/30 rounded-2xl p-4"><div class="font-bold text-white">New Year's Midnight</div><div class="text-xs text-slate-400 mt-1">Champagne sparkle garlands &amp; midnight starbursts</div></div>
+        <div class="card-glass border border-pink-500/30 rounded-2xl p-4"><div class="font-bold text-white">Valentine's Ribbon</div><div class="text-xs text-slate-400 mt-1">Crimson hanging hearts &amp; rose-gold ribbon trim</div></div>
+        <div class="card-glass border border-emerald-500/30 rounded-2xl p-4"><div class="font-bold text-white">St. Patrick's Clover</div><div class="text-xs text-slate-400 mt-1">Emerald shamrock ornaments &amp; gold coin sparkles</div></div>
+        <div class="card-glass border border-purple-500/30 rounded-2xl p-4"><div class="font-bold text-white">Easter Spring Pastel</div><div class="text-xs text-slate-400 mt-1">Painted pastel egg garlands &amp; blossom accents</div></div>
+        <div class="card-glass border border-rose-500/30 rounded-2xl p-4"><div class="font-bold text-white">Memorial Day Poppy</div><div class="text-xs text-slate-400 mt-1">Remembrance poppy emblems &amp; honor stars</div></div>
+        <div class="card-glass border border-cyan-500/30 rounded-2xl p-4"><div class="font-bold text-white">Labor Day Heritage</div><div class="text-xs text-slate-400 mt-1">Forged mechanical gears &amp; workshop steel trim</div></div>
+        <div class="card-glass border border-sky-500/30 rounded-2xl p-4"><div class="font-bold text-white">Veterans Day Valor</div><div class="text-xs text-slate-400 mt-1">Gold valor chevrons &amp; ceremonial star banners</div></div>
+        <div class="card-glass border border-emerald-400/40 rounded-2xl p-4"><div class="font-bold text-emerald-300">+ 15 Rural &amp; Retro OS</div><div class="text-xs text-slate-400 mt-1">Barnwood, Pine Holler, Tactical Neon, Win95, XP Luna &amp; Win7 Aero</div></div>
+      </div>
+    </section>
+
+    <!-- Release History -->
+    <section id="changelog" class="max-w-7xl mx-auto px-5 sm:px-6 py-20 border-t border-slate-800/80">
+      <div class="max-w-3xl space-y-2 mb-10">
+        <span class="text-xs font-mono-tech uppercase tracking-widest text-indigo-400 font-bold">Version History</span>
+        <h2 class="text-3xl sm:text-4xl font-black text-white">What's New in Rural ERides GO</h2>
+      </div>
+      <div class="space-y-4">
+        <div class="card-glass border border-emerald-500/40 rounded-2xl p-6">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h3 class="text-lg font-black text-emerald-300">v47.0 — Filament OpenGL PBR 3D Lab, Ride Inspector, Holiday Ornaments &amp; Live Command Suite</h3>
+            <span class="font-mono-tech text-xs px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300">CURRENT</span>
+          </div>
+          <p class="text-sm text-slate-300 leading-relaxed">
+            Removed Vulkan PBR in favor of Google Filament 1.56.0 OpenGL ES PBR with 7-level Studio Softbox IBL and calibrated glTF materials; replaced the crashing stacked Per-Ride Deep Dive with the crash-proof 5-module Ride Inspector and Personal Records Ribbon; upgraded all 11 Holiday themes with visible canopies, lights, and hanging ornaments; removed duplicate action buttons; added 50-module Interactive Command Directory, 24h Rider Stories, and live HTTP endpoint probes.
+          </p>
+        </div>
+        <div class="card-glass border border-slate-800 rounded-2xl p-6">
+          <h3 class="text-base font-bold text-white mb-1">v36.0–v43.0 — Compartmentalized Architecture, Voice Studio &amp; Multi-Engine 3D</h3>
+          <p class="text-sm text-slate-400">Isolated Cockpit, Radar, Mechanic, Co-Pilot, Community, 3D CAD Lab, and Telemetry Studio compartments; added Custom Synthesized AI Voice Studio, zero-latency streaming TTS buffer, and Gravel Volt 3D Runner.</p>
+        </div>
+        <div class="card-glass border border-slate-800 rounded-2xl p-6">
+          <h3 class="text-base font-bold text-white mb-1">v14.0–v21.0 — Rural Heritage, Live "Bench Eyes" Camera, Ride Analytics &amp; Optical Morse</h3>
+          <p class="text-sm text-slate-400">Added CameraX workbench visual inspection, 14 switchable Cockpit HUD skins, RainViewer Doppler storm radar, zero-trust Firestore sync, and optical flashlight/camera Morse transceiver.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Download & Build CTA -->
+    <section id="download" class="max-w-5xl mx-auto px-5 sm:px-6 py-20">
+      <div class="bg-gradient-to-br from-emerald-950/70 via-slate-900 to-indigo-950/70 border border-emerald-500/30 rounded-3xl p-8 sm:p-14 text-center space-y-6 shadow-2xl">
+        <h2 class="text-3xl sm:text-5xl font-black text-white">Ready to Ride?</h2>
+        <p class="text-slate-300 max-w-2xl mx-auto text-base">
+          Download the latest Android release directly from GitHub Releases or clone the repository to build locally with Gradle and your Firebase configuration.
+        </p>
+        <div class="flex flex-wrap justify-center gap-4 pt-2">
+          <a
+            href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-8 py-4 rounded-2xl transition shadow-xl shadow-emerald-500/30 flex items-center gap-2.5"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Download v47.0 Release</span>
+          </a>
+          <a
+            href="https://github.com/bradley3398/Rural-Erides-GO"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-bold px-8 py-4 rounded-2xl transition"
+          >
+            View GitHub Repository
+          </a>
+          <a
+            href="https://github.com/bradley3398/Rural-Erides-GO/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="bg-slate-900/70 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold px-6 py-4 rounded-2xl transition"
+          >
+            Report Bug / Feature
+          </a>
+        </div>
+        <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 max-w-xl mx-auto text-left font-mono-tech text-xs text-emerald-300 overflow-x-auto">
+          <div># Build from source</div>
+          <div>git clone https://github.com/bradley3398/Rural-Erides-GO.git</div>
+          <div>gradle assembleDebug &amp;&amp; gradle :app:testDebugUnitTest</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800 bg-slate-950 py-10 px-5">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-400">
+      <div>
+        <strong class="text-white">Rural ERides GO</strong> • Created by <strong class="text-emerald-400">Lord Bradley Callison</strong> • KEEP IT RURAL YALL
+      </div>
+      <div class="flex items-center gap-5 text-xs font-semibold">
+        <a href="https://github.com/bradley3398/Rural-Erides-GO" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition">Repository</a>
+        <a href="https://github.com/bradley3398/Rural-Erides-GO/releases" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition">Releases</a>
+        <a href="https://github.com/bradley3398/Rural-Erides-GO/issues" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition">Issues</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const FEATURES = {
+      riglab: {
+        badge: 'Google Filament 1.56.0 • OpenGL ES 3.0',
+        title: 'Filament OpenGL PBR 3D Rig Lab',
+        desc: 'Vulkan PBR has been completely retired in favor of Google Filament on OpenGL ES for maximum Android device stability and photorealistic automotive lighting. Inspect realistic procedural .glb PEV models in real time.',
+        bullets: [
+          '7-level roughness-prefiltered Studio Softbox IBL cubemap + 3-band SH indirect lighting',
+          'ACES Filmic tone mapping, FXAA anti-aliasing, SSAO ambient occlusion, and 3-point shadow rig',
+          '4 realistic PEV archetypes: e-Moto, Hyper-Scooter, Fat-Tire e-Bike, and Electric Unicycle',
+          '7 interactive subsystem hotspots, exploded CAD teardown slider, Carbon Gloss, Wireframe, X-Ray, and live turn signal optics'
+        ],
+        specs: [
+          ['Backend', 'Engine.Backend.OPENGL (No Vulkan)'],
+          ['Asset Pipeline', 'Procedural glTF 2.0 (.glb) + UbershaderProvider'],
+          ['Materials', 'Calibrated metallic/roughness, normal & AO maps'],
+          ['Safety Net', 'Automatic fallback to OpenGL ES PBR viewport']
+        ]
+      },
+      graphs: {
+        badge: 'Telemetry Studio • 11 Fleet Windows + Ride Inspector',
+        title: 'Upgraded Graphs & Crash-Proof Ride Inspector',
+        desc: 'Analyze fleet-wide efficiency and inspect individual rides without memory spikes. The new 5-module Ride Inspector replaces the old stacked Per-Ride Deep Dive with fast, crash-proof single-module switching.',
+        bullets: [
+          '11 Fleet Graph Windows with live KPI subtitles (Speed, Climb, Efficiency/Voltage, Distance/Wh, 5-Slice Pie, Scatter, Duration, Watts/Amps, Radar, Gas ROI, AI Coach)',
+          'Personal Records Ribbon: 1-tap jump to Fastest Peak, Longest Trip, Biggest Climb, and Best Efficiency',
+          '5-Module Ride Inspector: Speed Curve, Climb Profile, Energy & Pack, GPS Route, and Replay & AI',
+          'Full-screen Analytics Modal with Simple Moving Average (SMA), Linear Trend, and Z-Score outlier detection'
+        ],
+        specs: [
+          ['GPS Parsing', 'Single-pass polyline parse per ride (5x faster)'],
+          ['NaN / Bounds Safety', 'Finite guards on curves, maps & Canvas clipRect'],
+          ['Export & Review', 'Synchronized timeline replay + Gemini AI debrief'],
+          ['UI Hygiene', 'Zero duplicate window or action buttons']
+        ]
+      },
+      cockpit: {
+        badge: 'Real Hardware Sensors • 1Hz–5Hz GPS + 9-DOF IMU',
+        title: 'Tactical Neon Cockpit & 9-DOF AHRS',
+        desc: 'Turn your Android phone into a high-contrast PEV avionics instrument panel with live sensor fusion, real battery sag physics, and 14 selectable HUD layouts.',
+        bullets: [
+          '9-DOF Sensor Fusion: Pitch, Roll with peak lean hold & lean alert, 360° Yaw compass, and Artificial Horizon',
+          'Exact NMC & LiFePO4 battery voltage curves (36V–134V) with live under-load sag estimation',
+          '10Hz–50Hz IMU crash detection with auto-cancelable SOS SMS dispatch & emergency siren',
+          'Road speed limit alerts, Return-to-Base homing beacon, and optical flashlight/CameraX Morse transceiver'
+        ],
+        specs: [
+          ['HUD Skins', '14 switchable cockpit gauge styles'],
+          ['Location', 'Google FusedLocationProvider (1Hz–5Hz)'],
+          ['Battery Physics', 'Series cell OCV + internal resistance sag'],
+          ['Audio', 'Tactile haptics + synthesized speed/thermal cues']
+        ]
+      },
+      radar: {
+        badge: 'Privacy-First Mesh • Live Maps & Storm Radar',
+        title: 'Rider Radar, PEV Navigation & Weather',
+        desc: 'Coordinate rural convoy rides safely with an opt-in Firestore radar mesh, live Doppler weather overlays, and PEV-aware turn-by-turn routing.',
+        bullets: [
+          'Your live Rider Beacon is OFF by default — toggle visibility whenever you join a group ride',
+          'Live RainViewer Doppler storm radar + Open-Meteo 6-tab PEV weather matrix (headwind, grip, cold derate)',
+          'Turn-by-Turn PEV GPS routing with OSRM / OpenRouteService fallback and rural trail waypoint drops',
+          'EV & PEV public charger finder (Overpass OSM) + Push-to-Talk Squad Walkie-Talkie'
+        ],
+        specs: [
+          ['Map Engine', 'OSMDroid with smooth pan/fling inertia'],
+          ['Storm Data', 'Live RainViewer precipitation tiles'],
+          ['Comms', 'Firestore mesh + real-time PCM Push-to-Talk'],
+          ['Privacy', 'Zero-trust Firestore rules + opt-in beacon']
+        ]
+      },
+      ai: {
+        badge: 'Firebase AI Logic • Gemini Vision & Voice',
+        title: 'AI Mechanic ("Bench Eyes") & Co-Pilot',
+        desc: 'Point your camera directly at a controller, BMS, brake caliper, or wiring harness for instant live Gemini Vision diagnosis alongside a 17-bay engineering calculator lab.',
+        bullets: [
+          'Live CameraX "Bench Eyes" workbench overlay with 1-tap Gemini visual hardware inspection',
+          '17-Bay Engineering Lab: wire drop, PWM headroom, motor/controller thermal, gearing, and OEM E-code decoder',
+          '20 Rural & PEV Co-Pilot personas + Custom AI Voice Studio with zero-latency streaming TTS buffer',
+          '4-Model PEV Spec Comparison Engine and offline Saved Briefings Vault'
+        ],
+        specs: [
+          ['AI SDK', 'Firebase AI Logic (App Check attested — no hardcoded keys)'],
+          ['Camera', 'CameraX live bench preview + Android Photo Picker'],
+          ['Voice', '10 Gemini neural bases + 8 DSP voice filters'],
+          ['Engineering', '17 live physics & electrical diagnostic bays']
+        ]
+      },
+      community: {
+        badge: 'Zero-Trust Firestore • Verified Authentic Riders',
+        title: 'Porch Community Board, 24h Stories & Trail TV',
+        desc: 'Connect with verified PEV riders—no synthetic profiles, no stock-face bots. Share live 24-hour trail stories, trail conditions, parts listings, and videos.',
+        bullets: [
+          'Live 24-Hour Rider Timeline Stories with zero-permission Photo Picker uploads and battery telemetry badges',
+          'Porch Board posts with Rural Trail Condition tags, polls, marketplace pricing, SOS triage, and threaded comments',
+          'Direct Messages and verified Google Sign-In via Jetpack Credential Manager',
+          'Integrated Trail TV YouTube video/music mini-player and live PEV News Wire'
+        ],
+        specs: [
+          ['Auth', 'Google Sign-In via Jetpack Credential Manager'],
+          ['Media Picker', 'Zero-permission Android Photo Picker'],
+          ['Sync', 'Real-time Firestore snapshot listeners'],
+          ['Integrity', 'Strict authentic-pilot verification (no fake users)']
+        ]
+      }
+    };
+
+    function renderFeature(key) {
+      const f = FEATURES[key] || FEATURES.riglab;
+      document.getElementById('fp-badge').textContent = f.badge;
+      document.getElementById('fp-title').textContent = f.title;
+      document.getElementById('fp-desc').textContent = f.desc;
+
+      const ul = document.getElementById('fp-bullets');
+      ul.innerHTML = '';
+      f.bullets.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'flex items-start gap-2.5';
+        li.innerHTML = '<span class="text-emerald-400 font-black mt-0.5">▸</span><span>' + item + '</span>';
+        ul.appendChild(li);
+      });
+
+      const specs = document.getElementById('fp-specs');
+      specs.innerHTML = '';
+      f.specs.forEach(([k, v]) => {
+        const row = document.createElement('div');
+        row.className = 'flex flex-col border-b border-slate-800/80 pb-2.5 last:border-0 last:pb-0';
+        row.innerHTML = '<span class="text-[11px] font-mono-tech uppercase text-slate-500">' + k + '</span><span class="text-slate-200 font-semibold">' + v + '</span>';
+        specs.appendChild(row);
+      });
+
+      document.querySelectorAll('.feature-tab').forEach(btn => {
+        const active = btn.getAttribute('data-tab') === key;
+        btn.classList.toggle('tab-btn-active', active);
+        btn.classList.toggle('bg-slate-900/90', !active);
+        btn.classList.toggle('text-slate-300', !active);
+      });
+    }
+
+    document.querySelectorAll('.feature-tab').forEach(btn => {
+      btn.addEventListener('click', () => renderFeature(btn.getAttribute('data-tab')));
+    });
+    renderFeature('riglab');
+  </script>
+</body>
+</html>

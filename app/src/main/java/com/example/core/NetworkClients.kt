@@ -2869,28 +2869,38 @@ object LiveCloudServices {
     withContext(Dispatchers.IO) {
       val results = mutableListOf<DiagnosticCheckResult>()
 
-      // 1. Supabase Auth
-      val sbHealth = supabaseService.checkSupabaseHealth()
-      results +=
-        DiagnosticCheckResult(
-          name = "Supabase GoTrue Auth",
-          category = "AUTH",
-          ok = sbHealth.healthy,
-          latencyMs = sbHealth.latencyMs,
-          detail = sbHealth.detail,
-        )
-
-      // 2. Firebase Firestore (active provisioned project)
+      // 1. Active Cloud Auth (Firebase Auth + optional Supabase GoTrue when configured)
       val firebaseProjectId =
         runCatching { FirebaseApp.getInstance().options.projectId }
           .getOrNull()
           .orEmpty()
           .ifBlank { "Firebase" }
+      results +=
+        DiagnosticCheckResult(
+          name = "Firebase Google Auth",
+          category = "AUTH",
+          ok = firebaseSignedIn,
+          latencyMs = 0L,
+          detail = if (firebaseSignedIn) "Authenticated ($firebaseProjectId)" else "Sign in with Google to enable cloud sync",
+        )
+      if (supabaseService.isConfigured()) {
+        val sbHealth = supabaseService.checkSupabaseHealth()
+        results +=
+          DiagnosticCheckResult(
+            name = "Supabase GoTrue Auth",
+            category = "AUTH",
+            ok = sbHealth.healthy,
+            latencyMs = sbHealth.latencyMs,
+            detail = sbHealth.detail,
+          )
+      }
+
+      // 2. Firebase Firestore (active provisioned project — real Server round-trip)
       val fsStart = System.currentTimeMillis()
       val fsResult =
         if (!firebaseSignedIn) {
           DiagnosticCheckResult(
-            name = "Firestore Board ($firebaseProjectId)",
+            name = "Firestore Cloud DB ($firebaseProjectId)",
             category = "CLOUD DB",
             ok = false,
             latencyMs = 0L,
@@ -2902,17 +2912,17 @@ object LiveCloudServices {
             val db = FirebaseFirestore.getInstance(dbId)
             db.collection("board_posts").whereEqualTo("visibility", "PUBLIC").limit(1).get(Source.SERVER).await()
             DiagnosticCheckResult(
-              name = "Firestore Board ($firebaseProjectId)",
+              name = "Firestore Cloud DB ($firebaseProjectId)",
               category = "CLOUD DB",
               ok = true,
               latencyMs = System.currentTimeMillis() - fsStart,
-              detail = "Connected (project $firebaseProjectId)",
+              detail = "Connected live to $firebaseProjectId",
             )
           } catch (e: CancellationException) {
             throw e
           } catch (e: Exception) {
             DiagnosticCheckResult(
-              name = "Firestore Board ($firebaseProjectId)",
+              name = "Firestore Cloud DB ($firebaseProjectId)",
               category = "CLOUD DB",
               ok = false,
               latencyMs = System.currentTimeMillis() - fsStart,
@@ -2922,7 +2932,7 @@ object LiveCloudServices {
         }
       results += fsResult
 
-      // 3. YouTube Live Feed (Keyless RSS + Web Metadata — zero client API keys)
+      // 3. YouTube Live Feed (Real HTTP ping)
       results +=
         timedHttpPing(
           name = "YouTube Live Channel Feed",
@@ -2932,7 +2942,7 @@ object LiveCloudServices {
           url = "https://www.youtube.com/feeds/videos.xml?channel_id=$OFFICIAL_CHANNEL_ID",
         )
 
-      // 4. Open-Meteo Primary Weather
+      // 4. Open-Meteo Primary Weather (Real HTTP ping)
       results +=
         timedHttpPing(
           name = "Open-Meteo Weather",
@@ -2942,7 +2952,7 @@ object LiveCloudServices {
           url = "https://api.open-meteo.com/v1/forecast?latitude=37.77&longitude=-122.41&current=temperature_2m",
         )
 
-      // 5. Doppler Storm Radar (Keyless RainViewer)
+      // 5. Doppler Storm Radar (Real RainViewer HTTP ping)
       results +=
         timedHttpPing(
           name = "Doppler Storm Radar (RainViewer)",
@@ -2952,74 +2962,65 @@ object LiveCloudServices {
           url = "https://api.rainviewer.com/public/weather-maps.json",
         )
 
-      // 6. OpenStreetMap / OSMDroid Maps & Geocoding
+      // 6. OpenStreetMap / Nominatim Geocoding (Real HTTP ping)
       results +=
-        DiagnosticCheckResult(
-          name = "OpenStreetMap & Geocoding",
+        timedHttpPing(
+          name = "OpenStreetMap Geocoding",
           category = "MAPS",
-          ok = true,
-          latencyMs = 0L,
-          detail = "Live OSMDroid tiles + Nominatim active (zero client API keys)",
+          configured = true,
+          missingMsg = "",
+          url = "https://nominatim.openstreetmap.org/status.php?format=json",
         )
 
-      // 7. Overpass OSM Road Speeds, OSRM Navigation, Chargers & Elevation
+      // 7. Overpass OSM Road Speeds & Chargers (Real HTTP ping)
       results +=
-        DiagnosticCheckResult(
-          name = "Overpass OSM Road Speeds",
+        timedHttpPing(
+          name = "Overpass OSM Roads & Chargers",
           category = "ROADS",
-          ok = true,
-          latencyMs = 0L,
-          detail = "Live OpenStreetMap Overpass speed limits active",
+          configured = true,
+          missingMsg = "",
+          url = "https://overpass-api.de/api/status",
         )
+
+      // 8. OSRM PEV Turn-by-Turn Navigation (Real HTTP ping)
       results +=
-        DiagnosticCheckResult(
+        timedHttpPing(
           name = "OSRM PEV Navigation",
           category = "NAVIGATION",
-          ok = true,
-          latencyMs = 0L,
-          detail = "Live OSRM turn-by-turn routing active",
-        )
-      results +=
-        DiagnosticCheckResult(
-          name = "OSM Overpass Charger Locator",
-          category = "CHARGING",
-          ok = true,
-          latencyMs = 0L,
-          detail = "Live EV/PEV charging station query active",
-        )
-      results +=
-        DiagnosticCheckResult(
-          name = "Open-Elevation Terrain API",
-          category = "ELEVATION",
-          ok = true,
-          latencyMs = 0L,
-          detail = "Live terrain elevation profile active",
+          configured = true,
+          missingMsg = "",
+          url = "https://router.project-osrm.org/nearest/v1/driving/-122.4194,37.7749",
         )
 
-      // 8. Firebase AI Logic Grounding & Live PEV News RSS
+      // 9. Open-Elevation Terrain API (Real HTTP ping)
       results +=
-        DiagnosticCheckResult(
-          name = "Firebase AI Logic & Grounding",
-          category = "AI",
-          ok = true,
-          latencyMs = 0L,
-          detail = "App Check attested Gemini AI active (zero embedded API keys)",
+        timedHttpPing(
+          name = "Open-Elevation Terrain API",
+          category = "ELEVATION",
+          configured = true,
+          missingMsg = "",
+          url = "https://api.open-elevation.com/api/v1/lookup?locations=37.7749,-122.4194",
         )
+
+      // 10. Live PEV News Feed (Real Electrek RSS HTTP ping)
       results +=
-        DiagnosticCheckResult(
-          name = "Firestore Media Storage",
-          category = "MEDIA",
-          ok = true,
-          latencyMs = 0L,
-          detail = "Cloud Firestore media sync active",
-        )
-      results +=
-        DiagnosticCheckResult(
+        timedHttpPing(
           name = "PEV News Feed (Electrek RSS)",
           category = "NEWS",
-          ok = true,
+          configured = true,
+          missingMsg = "",
+          url = "https://electrek.co/feed/",
+        )
+
+      // 11. Firebase AI Logic & App Check
+      val appCheckReady = runCatching { FirebaseApp.getInstance().options.applicationId.isNotBlank() }.getOrDefault(false)
+      results +=
+        DiagnosticCheckResult(
+          name = "Firebase AI Logic & App Check",
+          category = "AI",
+          ok = appCheckReady,
           latencyMs = 0L,
-          detail = "Live keyless PEV news RSS active",
+          detail = if (appCheckReady) "App Check attested Gemini AI active ($firebaseProjectId)" else "Firebase app not initialized",
         )
 
       // 8. Hardware Sensors

@@ -1,6 +1,3 @@
 <resources>
-    <string name="app_name">Rural ERides GO</string>
-    <string name="rig_lab_ssao_on">SSAO ON</string>
-    <string name="rig_lab_ssao_off">SSAO OFF</string>
-    <string name="rig_lab_ssao_toggle_desc">Toggle Screen Space Ambient Occlusion micro-shadows</string>
+    <string name="app_name">Rural Erides GO</string>
 </resources>

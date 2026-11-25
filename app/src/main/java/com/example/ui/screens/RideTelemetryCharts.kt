@@ -97,14 +97,18 @@ internal fun haversineMeters(a: GeoPoint, b: GeoPoint): Double {
   return 2 * r * atan2(sqrt(h), sqrt(1.0 - h))
 }
 
-internal fun buildRideSpeedProfile(ride: RideSession, distanceUnit: String): List<Double> {
+internal fun buildRideSpeedProfile(
+  ride: RideSession,
+  distanceUnit: String,
+  preParsedPoints: List<GeoPoint>? = null,
+): List<Double> {
   val safeMax = ride.maxSpeedKmh.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
   val safeAvg = ride.avgSpeedKmh.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
   val maxSpd = formatSpeedValue(safeMax, distanceUnit).takeIf { it.isFinite() } ?: 0.0
   val avgSpd = (formatSpeedValue(safeAvg, distanceUnit).takeIf { it.isFinite() } ?: 0.0).coerceAtMost(maxSpd)
   if (maxSpd <= 0.1 && avgSpd <= 0.1) return List(16) { 0.0 }
 
-  val pts = parseRideTrackPoints(ride)
+  val pts = preParsedPoints ?: parseRideTrackPoints(ride)
   val buckets = 16
   val rawWeights =
     if (pts.size >= 4) {
@@ -140,13 +144,17 @@ internal fun buildRideSpeedProfile(ride: RideSession, distanceUnit: String): Lis
   }
 }
 
-internal fun buildRideElevationProfile(ride: RideSession, distanceUnit: String): List<Double> {
+internal fun buildRideElevationProfile(
+  ride: RideSession,
+  distanceUnit: String,
+  preParsedPoints: List<GeoPoint>? = null,
+): List<Double> {
   val safeElev = ride.elevationGainM.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
   val totalGain = formatElevationValue(safeElev, distanceUnit).takeIf { it.isFinite() } ?: 0.0
   val buckets = 16
   if (totalGain <= 0.1) return List(buckets) { 0.0 }
 
-  val pts = parseRideTrackPoints(ride)
+  val pts = preParsedPoints ?: parseRideTrackPoints(ride)
   val increments =
     if (pts.size >= 4) {
       val segDists = (1 until pts.size).map { i ->
@@ -446,7 +454,7 @@ internal fun HistoricalSpeedProfileChart(
         }
         val maxY8 = (h - 8f).coerceAtLeast(8f)
         val maxY6 = (h - 6f).coerceAtLeast(6f)
-        clipRect(left = 0f, top = 0f, right = w * entrance, bottom = h) {
+        clipRect(left = 0f, top = 0f, right = (w * entrance).coerceAtLeast(1f), bottom = h) {
           if (series.size == 1) {
             val r1 = ((maxSpdSeries[0] / yMax).toFloat() * h * entrance).let { if (it.isFinite()) it else 8f }
             val r2 = ((avgSpdSeries[0] / yMax).toFloat() * h * entrance).let { if (it.isFinite()) it else 8f }
@@ -642,7 +650,7 @@ internal fun HistoricalElevationGainChart(
           val rY = h - rawRate.coerceIn(6f, maxRateY)
           ratePts.add(Offset(xLeft + barW / 2f, rY))
         }
-        clipRect(0f, 0f, w * entrance, h) {
+        clipRect(0f, 0f, (w * entrance).coerceAtLeast(1f), h) {
           if (ratePts.size > 1) {
             val path = buildSmoothSplinePath(ratePts)
             drawPath(path, rateColor.copy(alpha = 0.22f), style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round))
@@ -708,27 +716,30 @@ internal fun HistoricalEfficiencyVoltageChart(
   var showTooltip by remember(seriesKey) { mutableStateOf(false) }
   val pulseAlphaState = rememberNeonPulseAlphaState(active = showTooltip, reducedMotion = settings.reducedMotion)
 
-  val nomV = activeVehicle?.voltage ?: 48.0
+  val nomV = activeVehicle?.voltage?.takeIf { it.isFinite() && it >= 12.0 } ?: 48.0
   val distUnit = distUnitLabel(settings.distanceUnit)
   val effSeries =
     remember(series, settings.distanceUnit) {
       series.map { r ->
-        if (settings.distanceUnit == "km") PevBatteryPhysics.whPerKm(r.whUsed, r.distanceKm)
+        val raw = if (settings.distanceUnit == "km") PevBatteryPhysics.whPerKm(r.whUsed, r.distanceKm)
         else PevBatteryPhysics.whPerMile(r.whUsed, r.distanceKm)
+        if (raw.isFinite() && raw >= 0.0) raw else 0.0
       }
     }
   val drainSeries =
     remember(series) {
       series.map { r ->
-        if (r.startBatteryPct >= 0 && r.endBatteryPct >= 0) (r.startBatteryPct - r.endBatteryPct).coerceAtLeast(0).toDouble()
+        val raw = if (r.startBatteryPct >= 0 && r.endBatteryPct >= 0) (r.startBatteryPct - r.endBatteryPct).coerceAtLeast(0).toDouble()
         else (r.whUsed / ((activeVehicle?.batteryWh ?: 1500L).toDouble().coerceAtLeast(200.0)) * 100.0).coerceIn(0.0, 100.0)
+        if (raw.isFinite()) raw.coerceIn(0.0, 100.0) else 0.0
       }
     }
   val maxEff = max(20.0, (effSeries.maxOrNull() ?: 35.0) * 1.2)
   val effColor = MaterialTheme.colorScheme.tertiary
   val drainColor = Color(0xFFEF4444)
   val gridC = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-  val inspected = series[selectedIdx.coerceIn(0, series.lastIndex)]
+  val safeIdx = selectedIdx.coerceIn(0, series.lastIndex)
+  val inspected = series[safeIdx]
   val startV = if (inspected.startBatteryPct >= 0) PevBatteryPhysics.voltageForSoc(nomV, inspected.startBatteryPct.toDouble(), settings.batteryChemistry) else 0.0
   val endV = if (inspected.endBatteryPct >= 0) PevBatteryPhysics.voltageForSoc(nomV, inspected.endBatteryPct.toDouble(), settings.batteryChemistry) else 0.0
 
@@ -786,17 +797,17 @@ internal fun HistoricalEfficiencyVoltageChart(
           val y = h - rawEff.coerceIn(6f, maxEffY)
           pts.add(Offset(xLeft + barW / 2f, y))
         }
-        clipRect(0f, 0f, w * entrance, h) {
+        clipRect(0f, 0f, (w * entrance).coerceAtLeast(1f), h) {
           if (pts.size > 1) {
             val path = buildSmoothSplinePath(pts)
             drawPath(path, effColor.copy(alpha = 0.24f), style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round))
             drawPath(path, effColor, style = Stroke(width = 2.8.dp.toPx(), cap = StrokeCap.Round))
           }
           pts.forEachIndexed { idx, pt ->
-            if (idx == selectedIdx) {
+            if (idx == safeIdx) {
               drawCircle(effColor.copy(alpha = 0.34f * pulseAlpha), radius = 10.dp.toPx(), center = pt)
             }
-            drawCircle(effColor, radius = if (idx == selectedIdx) 5.dp.toPx() else 3.dp.toPx(), center = pt)
+            drawCircle(effColor, radius = if (idx == safeIdx) 5.dp.toPx() else 3.dp.toPx(), center = pt)
           }
         }
       }
@@ -805,12 +816,12 @@ internal fun HistoricalEfficiencyVoltageChart(
         visible = showTooltip,
         anchorXFraction = anchorXFrac,
         title = inspected.title.ifBlank { "Pack Drain" },
-        subtitle = if (startV > 0.0 && endV > 0.0) "${"%.1f".format(startV)}V → ${"%.1f".format(endV)}V" else "${inspected.whUsed.toInt()} Wh total",
+        subtitle = if (startV > 0.0 && endV > 0.0) "${"%.1f".format(startV)}V → ${"%.1f".format(endV)}V" else "${(inspected.whUsed.takeIf { it.isFinite() } ?: 0.0).toInt()} Wh total",
         accentColor = effColor,
         metrics =
           listOf(
-            NeonTooltipMetric("EFF", "${"%.1f".format(effSeries[selectedIdx.coerceIn(0, effSeries.lastIndex)])} Wh/$distUnit", effColor),
-            NeonTooltipMetric("DRAIN", "-${drainSeries[selectedIdx].toInt()}%", drainColor),
+            NeonTooltipMetric("EFF", "${"%.1f".format(effSeries[safeIdx])} Wh/$distUnit", effColor),
+            NeonTooltipMetric("DRAIN", "-${drainSeries[safeIdx].toInt()}%", drainColor),
           ),
         modifier = Modifier.align(Alignment.TopStart).padding(top = 2.dp),
       )
@@ -823,10 +834,10 @@ internal fun HistoricalEfficiencyVoltageChart(
       modifier = Modifier.fillMaxWidth(),
     ) {
       Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("${"%.1f".format(effSeries[selectedIdx.coerceIn(0, effSeries.lastIndex)])} Wh/$distUnit", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = effColor, maxLines = 1, softWrap = false)
+        Text("${"%.1f".format(effSeries[safeIdx])} Wh/$distUnit", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = effColor, maxLines = 1, softWrap = false)
         Text(
-          if (startV > 0.0 && endV > 0.0) "${"%.1f".format(startV)}V → ${"%.1f".format(endV)}V (-${drainSeries[selectedIdx].toInt()}%)"
-          else "${inspected.whUsed.toInt()} Wh used",
+          if (startV > 0.0 && endV > 0.0) "${"%.1f".format(startV)}V → ${"%.1f".format(endV)}V (-${drainSeries[safeIdx].toInt()}%)"
+          else "${(inspected.whUsed.takeIf { it.isFinite() } ?: 0.0).toInt()} Wh used",
           style = MaterialTheme.typography.labelSmall,
           fontWeight = FontWeight.Bold,
           color = drainColor,
@@ -1178,7 +1189,7 @@ internal fun RideDurationHistogramChart(
         }
       }
 
-      val hIdx = hoveredIdx
+      val hIdx = hoveredIdx?.takeIf { it in buckets.indices }
       NeonChartTooltipOverlay(
         visible = hIdx != null,
         anchorXFraction = anchorXFrac,
@@ -1249,19 +1260,20 @@ fun PerRideTelemetryPanel(
   val spdUnit = speedUnitLabel(settings.distanceUnit)
   val distUnit = distUnitLabel(settings.distanceUnit)
   val elevUnit = elevationUnitLabel(settings.distanceUnit)
-  val nomV = activeVehicle?.voltage ?: 48.0
-
-  val speedCurve = remember(ride.id, settings.distanceUnit) { buildRideSpeedProfile(ride, settings.distanceUnit) }
-  val elevCurve = remember(ride.id, settings.distanceUnit) { buildRideElevationProfile(ride, settings.distanceUnit) }
+  val nomV = activeVehicle?.voltage?.takeIf { it.isFinite() && it >= 12.0 } ?: 48.0
+  val parsedTrack = remember(ride.id, ride.polylinePoints.size) { parseRideTrackPoints(ride) }
+  val speedCurve = remember(ride.id, settings.distanceUnit, parsedTrack.size) { buildRideSpeedProfile(ride, settings.distanceUnit, parsedTrack) }
+  val elevCurve = remember(ride.id, settings.distanceUnit, parsedTrack.size) { buildRideElevationProfile(ride, settings.distanceUnit, parsedTrack) }
   val primaryC = MaterialTheme.colorScheme.primary
   val secondaryC = MaterialTheme.colorScheme.secondary
   val tertiaryC = MaterialTheme.colorScheme.tertiary
   val elevC = Color(0xFF38BDF8)
 
+  val safeWhUsed = ride.whUsed.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
   val energySlices = remember(ride.id, primaryC, secondaryC, tertiaryC) { computeRideEnergySplit(ride, primaryC, secondaryC, tertiaryC) }
   val usedPct =
     if (ride.startBatteryPct >= 0 && ride.endBatteryPct >= 0) (ride.startBatteryPct - ride.endBatteryPct).coerceAtLeast(1)
-    else ((ride.whUsed / (activeVehicle?.batteryWh ?: 1500L).toDouble().coerceAtLeast(200.0)) * 100.0).toInt().coerceIn(1, 99)
+    else ((safeWhUsed / (activeVehicle?.batteryWh ?: 1500L).toDouble().coerceAtLeast(200.0)) * 100.0).toInt().coerceIn(1, 99)
   val remPct = (if (ride.endBatteryPct >= 0) ride.endBatteryPct else (100 - usedPct)).coerceIn(0, 100)
   val batterySlices =
     remember(usedPct, remPct, primaryC, tertiaryC) {
@@ -1275,9 +1287,7 @@ fun PerRideTelemetryPanel(
   val endV = if (ride.endBatteryPct >= 0) PevBatteryPhysics.voltageForSoc(nomV, ride.endBatteryPct.toDouble(), settings.batteryChemistry) else 0.0
 
   var activeGraphInspect by remember { mutableStateOf<GraphInspectData?>(null) }
-  val rideGpsPoints = remember(ride.id, ride.polylinePoints.size) {
-    parseRideTrackPoints(ride).map { it.latitude to it.longitude }
-  }
+  val rideGpsPoints = remember(parsedTrack) { parsedTrack.map { it.latitude to it.longitude } }
 
   fun openSpeedCurveInspect() {
     activeGraphInspect = GraphInspectData(
@@ -1569,7 +1579,7 @@ private fun SectionSubHeader(
 }
 
 @Composable
-private fun SingleCurveAreaChart(
+internal fun SingleCurveAreaChart(
   triggerKey: Any?,
   values: List<Double>,
   metricLabel: String,
@@ -1581,7 +1591,7 @@ private fun SingleCurveAreaChart(
   height: Dp,
   onTap: (() -> Unit)? = null,
 ) {
-  val cleanValues = remember(values) { values.map { if (it.isFinite()) it else 0.0 } }
+  val cleanValues = remember(values) { values.map { if (it.isFinite() && it >= 0.0) it else 0.0 } }
   if (cleanValues.isEmpty()) return
   val entranceState = rememberChartEntranceState(triggerKey = triggerKey, reducedMotion = reducedMotion, durationMs = 660)
   val maxV = max(5.0, (cleanValues.maxOrNull() ?: 10.0) * 1.15)
@@ -1609,7 +1619,7 @@ private fun SingleCurveAreaChart(
             onTap = onTap,
           ),
     ) {
-      val entrance = entranceState.value
+      val entrance = entranceState.value.coerceIn(0.02f, 1f)
       val pulseAlpha = pulseAlphaState.value
       val w = size.width
       val h = size.height
@@ -1627,7 +1637,7 @@ private fun SingleCurveAreaChart(
           pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f)),
         )
       }
-      clipRect(0f, 0f, w * entrance, h) {
+      clipRect(0f, 0f, (w * entrance).coerceAtLeast(1f), h) {
         if (cleanValues.size > 1) {
           val stepX = w / (cleanValues.size - 1)
           val pts = cleanValues.mapIndexed { i, v ->

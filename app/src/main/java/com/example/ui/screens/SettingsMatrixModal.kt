@@ -164,6 +164,7 @@ fun SettingsMatrixScreen(
   telemetry: LiveTelemetrySnapshot? = null,
   onReplayStartupIntro: () -> Unit = {},
   onOpenVoiceStudio: () -> Unit = {},
+  onOpenInfo: () -> Unit = {},
   onBack: () -> Unit,
 ) {
   val ctx = LocalContext.current
@@ -485,7 +486,7 @@ fun SettingsMatrixScreen(
           voiceAudio = sessionVm.voiceAudio,
         )
       }
-      AndroidSettingsCategory.ABOUT_DEV -> AboutDeveloperSettingsContent()
+      AndroidSettingsCategory.ABOUT_DEV -> AboutDeveloperSettingsContent(onOpenChangelogAndDiagnostics = onOpenInfo)
     }
   }
 

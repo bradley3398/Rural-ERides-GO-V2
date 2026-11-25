@@ -1,17 +1,34 @@
 package com.example
 
+import androidx.compose.ui.graphics.Color
 import com.example.core.PevBatteryPhysics
 import com.example.data.LiveTelemetrySnapshot
+import com.example.data.RideSession
+import com.example.data.VisualStyleMode
 import com.example.ui.screens.Pev3dArchetype
 import com.example.ui.screens.Pev3dEngine
+import com.example.ui.screens.Pev3dGltfBuilder
 import com.example.ui.screens.Pev3dRenderMode
+import com.example.ui.screens.Pev3dTechEngine
 import com.example.ui.screens.Pev3dTurnSignalMode
 import com.example.ui.screens.PevPbrMaterialId
+import com.example.ui.screens.buildRideElevationProfile
+import com.example.ui.screens.buildRideSpeedProfile
+import com.example.ui.screens.computeRideEnergySplit
+import com.example.ui.screens.normalizeGeoTrackToUnitBox
+import com.example.ui.theme.availableVisualStyles
+import com.example.ui.theme.holidayDecorationSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class Pev3dAndVoltageTest {
 
   @Test
@@ -150,6 +167,73 @@ class Pev3dAndVoltageTest {
       val hotspots = Pev3dEngine.hotspotsForArchetype(arch)
       assertEquals("Expected 7 hotspots for $arch", 7, hotspots.size)
       assertEquals(7, hotspots.map { it.partKey }.distinct().size)
+    }
+  }
+
+  @Test
+  fun pev3dTechEngineUsesFilamentOpenGlAndExcludesVulkan() {
+    val names = Pev3dTechEngine.entries.map { it.name }
+    assertEquals("FILAMENT_GL", names.first())
+    assertFalse("Vulkan PBR must be completely removed", names.any { it.contains("VULKAN", ignoreCase = true) })
+  }
+
+  @Test
+  fun pev3dGltfBuilderProducesValidGlbForAllArchetypes() {
+    val finish = Pev3dEngine.finishForModel("Sur-Ron Ultra Bee eMoto", "Electric Dirt Moped", 74)
+    Pev3dArchetype.entries.forEach { arch ->
+      val built = Pev3dGltfBuilder.buildVehicleGlb(
+        archetype = arch,
+        finish = finish,
+        lightsOn = true,
+        xrayShell = false,
+        carbonGlossMode = true,
+      )
+      assertTrue("GLB for $arch must be > 4KB, got ${built.glbBytes.size}", built.glbBytes.size > 4096)
+      assertEquals('g'.code.toByte(), built.glbBytes[0])
+      assertEquals('l'.code.toByte(), built.glbBytes[1])
+      assertEquals('T'.code.toByte(), built.glbBytes[2])
+      assertEquals('F'.code.toByte(), built.glbBytes[3])
+    }
+  }
+
+  @Test
+  fun rideInspectorTelemetryCurvesAreCrashProofForCorruptInputs() {
+    val corruptRide = RideSession(
+      id = "corrupt_ride_test",
+      title = "",
+      vehicleName = "",
+      distanceKm = Double.NaN,
+      maxSpeedKmh = Double.POSITIVE_INFINITY,
+      avgSpeedKmh = -12.0,
+      whUsed = Double.NaN,
+      elevationGainM = Double.NEGATIVE_INFINITY,
+      durationSec = -5L,
+      startBatteryPct = 140,
+      endBatteryPct = -10,
+      polylinePoints = listOf("bad_point", "NaN,NaN", "37.7,-122.4"),
+    )
+    val speed = buildRideSpeedProfile(corruptRide, "mi")
+    val elev = buildRideElevationProfile(corruptRide, "mi")
+    val split = computeRideEnergySplit(corruptRide, Color.Cyan, Color.Magenta, Color.Yellow)
+    assertTrue(speed.isNotEmpty() && speed.all { it.isFinite() && it >= 0.0 })
+    assertTrue(elev.isNotEmpty() && elev.all { it.isFinite() && it >= 0.0 })
+    assertTrue(split.isNotEmpty() && split.all { it.value.isFinite() && it.value > 0.0 })
+
+    val norm = normalizeGeoTrackToUnitBox(listOf(Double.NaN to 0.0, 37.7 to -122.4, 37.7 to -122.4))
+    assertTrue(norm.all { it.first.isFinite() && it.second.isFinite() })
+  }
+
+  @Test
+  fun allElevenHolidayThemesAreUnlockedWithOrnaments() {
+    val holidayModes = VisualStyleMode.entries.filter { it.name.startsWith("HOLIDAY_") }
+    assertEquals(11, holidayModes.size)
+    val available = availableVisualStyles().toSet()
+    holidayModes.forEach { mode ->
+      assertTrue("$mode should be selectable in availableVisualStyles()", mode in available)
+      val spec = holidayDecorationSpec(mode)
+      assertNotNull("Expected holiday decoration spec for $mode", spec)
+      assertTrue("Expected non-blank trim label for $mode", spec!!.trimLabel.isNotBlank())
+      assertTrue("Expected non-blank motif title for $mode", spec.motifTitle.isNotBlank())
     }
   }
 }

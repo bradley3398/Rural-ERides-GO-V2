@@ -59,11 +59,11 @@ private fun laborDay(year: Int): LocalDate =
 private fun thanksgivingDay(year: Int): LocalDate =
     LocalDate.of(year, Month.NOVEMBER, 1).with(TemporalAdjusters.dayOfWeekInMonth(4, DayOfWeek.THURSDAY))
 
-fun isVisualStyleAvailable(
+fun isHolidayInSeasonWindow(
     mode: VisualStyleMode,
     today: LocalDate = LocalDate.now()
 ): Boolean {
-    if (!mode.isHolidayTheme()) return true
+    if (!mode.isHolidayTheme()) return false
     val year = today.year
     return when (mode) {
         VisualStyleMode.HOLIDAY_NEW_YEARS ->
@@ -110,21 +110,25 @@ fun isVisualStyleAvailable(
         VisualStyleMode.HOLIDAY_CHRISTMAS ->
             today.month == Month.DECEMBER && today.dayOfMonth in 1..27
 
-        else -> true
+        else -> false
     }
 }
 
+fun isVisualStyleAvailable(
+    mode: VisualStyleMode,
+    today: LocalDate = LocalDate.now()
+): Boolean = true
+
 fun availableVisualStyles(today: LocalDate = LocalDate.now()): List<VisualStyleMode> =
-    VisualStyleMode.entries.filter { isVisualStyleAvailable(it, today) }
+    VisualStyleMode.entries
 
 fun activeHolidayStyles(today: LocalDate = LocalDate.now()): List<VisualStyleMode> =
-    VisualStyleMode.entries.filter { it.isHolidayTheme() && isVisualStyleAvailable(it, today) }
+    VisualStyleMode.entries.filter { it.isHolidayTheme() && isHolidayInSeasonWindow(it, today) }
 
 fun sanitizeVisualStyleForSeason(
     mode: VisualStyleMode,
     today: LocalDate = LocalDate.now()
-): VisualStyleMode =
-    if (isVisualStyleAvailable(mode, today)) mode else VisualStyleMode.DARK_STUDIO
+): VisualStyleMode = mode
 
 fun holidayBadgeInfo(mode: VisualStyleMode): SeasonalHolidayWindow? = when (mode) {
     VisualStyleMode.HOLIDAY_NEW_YEARS -> SeasonalHolidayWindow(

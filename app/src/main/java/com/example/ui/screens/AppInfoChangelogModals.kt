@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -77,7 +78,7 @@ fun AppInfoAndChangelogScreen(
   var showConsole by remember { mutableStateOf(false) }
   var cmdInput by remember { mutableStateOf("") }
   var consoleOutput by remember {
-    mutableStateOf("Rural ERides Kernel Shell v14.0 ready.\nType: help | dev | sysinfo | ahrs | sensors | battery | memory | telemetry | keys | clear")
+    mutableStateOf("Rural ERides Kernel Shell v${BuildConfig.VERSION_NAME} ready.\nType: help | dev | sysinfo | ahrs | sensors | battery | memory | telemetry | keys | clear")
   }
   var hwSnap by remember { mutableStateOf(collectHardwareDiagnostics(ctx)) }
   var notice by remember { mutableStateOf("") }
@@ -85,6 +86,35 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
+        "v47.0 Filament OpenGL PBR 3D Lab, Crash-Proof Ride Inspector & Holiday Ornaments" to
+          "• Google Filament 1.56.0 OpenGL ES PBR 3D Rig Lab: Removed Vulkan PBR completely; upgraded realistic procedural .glb PEV models with 7-level roughness-prefiltered Studio Softbox IBL, ACES Filmic tone mapping, FXAA + SSAO, live lighting presets, and automatic OpenGL ES fallback.\n" +
+          "• Upgraded Telemetry Studio & Crash-Proof Ride Inspector: Replaced the legacy stacked Per-Ride Deep Dive with a focused 5-module Ride Inspector (Speed Curve, Climb Profile, Energy & Pack, GPS Route, Replay & AI), added a 1-tap Personal Records Ribbon, live KPI subtitles on all 11 Fleet Graph Windows, and NaN/zero-width Canvas crash guards.\n" +
+          "• Holiday Themes Ornaments & Decorations: Unlocked all 11 Holiday themes year-round with DP-scaled top-canopy garlands, twinkling string lights, hanging ornaments, foreground card corner emblems, and festive nav bar trim.\n" +
+          "• Duplicate Button Cleanup & Official GitHub Links: Removed redundant UI buttons across 3D Lab, Ride Logbook, and Graph modals, updated all links to github.com/bradley3398/Rural-Erides-GO, and restored GitHub Pages & Release Workflows.",
+        "v44.0 Live Command Suite, Timeline Stories & Real Connection Probes" to
+          "• 50-Module Interactive Command Directory: Replaced static feature list with live search, category filters, and real 1-tap routing across Cockpit, Radar, Mechanic, Co-Pilot, Board, Telemetry Studio, 3D CAD Lab, and Settings.\n" +
+          "• Live 24h Rider Timeline Stories: Restored live Firestore-backed 24-hour trail stories on the Porch Board with zero-permission Photo Picker uploads and live battery telemetry badges.\n" +
+          "• Real Live Server Sync & HTTP Diagnostics: Upgraded Board Refresh to pull fresh server snapshots from Firestore and upgraded Live Diagnostics to run genuine timed HTTP pings across Open-Meteo, RainViewer, Nominatim, Overpass, OSRM, Open-Elevation, YouTube RSS, and Electrek News.\n" +
+          "• Unified Complete Changelog (v7.0–v44.0): Consolidated full release history into About & Diagnostics with direct access from Settings.",
+        "v39.0–v43.0 Compartmentalized Architecture, 3D CAD Lab & Play Compliance" to
+          "• Compartmentalized Host Architecture: Isolated Cockpit, Radar, Mechanic, Co-Pilot, Community, 3D CAD Lab, and Telemetry Studio compartments for rock-solid lifecycle stability.\n" +
+          "• Creator Arcade Hub & Gravel Volt 3D Runner: Live Firebase AI Logic Image Studio, Voice Live, Search/Maps Grounding, Trail Music Lab, and hardware-accelerated 3D arcade runner.\n" +
+          "• Zero Client-Side Secret Exposure: Keyless App Check attested Gemini AI Logic + Firebase Auth/Firestore + open-data live telemetry endpoints.",
+        "v38.0 Custom Synthesized Voice Studio & Zero-Latency TTS Buffer" to
+          "• Custom AI Voice Studio: Synthesize bespoke Co-Pilot voices with reference audio clips, mic recording, pitch/rate tuning, 10 Gemini neural bases, and 8 DSP filters.\n" +
+          "• Zero-Latency Streaming Pre-Load Buffer: Splits sentences as Gemini streams into an async PCM buffer for instant gapless playback.",
+        "v37.0 Tri-Channel Push Notifications & Tactile Accessibility Audit" to
+          "• Tri-Channel Notifications: Deep-linked alerts for AI Co-Pilot/Mechanic, Community Board dispatches, and Direct Messages.\n" +
+          "• Global UI Debounce & Accessible 48dp Touch Targets across all Tactical controls.",
+        "v36.0 Multi-Engine 3D Viewport Lifecycle & Reactive Telemetry Studio" to
+          "• 3D Viewport Lifecycle Manager: Clean GPU surface pause/release across OpenGL ES, WebGL, and Compose 3D viewports.\n" +
+          "• Reactive RideTelemetryViewModel driving 10+ Neon analytics charts with zero-crash bounds.",
+        "v21.0 Optical Morse Transceiver & Telemetry Studio Pro" to
+          "• Torch Morse Code TX & CameraX Y-plane luminance Morse RX inside Trail Power Toolkit.\n" +
+          "• 10 interactive Neon ride graphs with synchronized timeline playback scrubber.",
+        "v18.0–v20.0 Zero-Trust Firestore Cloud Sync, 14 HUD Skins & PEV Physics" to
+          "• Google Credential Manager sign-in with zero-trust Firestore security rules, multiplayer Rider Radar, and offline Room vault.\n" +
+          "• 14 switchable Cockpit HUD skins, RainViewer Doppler storm radar, and LiFePO4/NMC battery physics engine.",
         "v14.0 Rural Heritage, Live Bench Vision, Brand Logos & Ride Analytics" to
           "• Original Rural ERides GO Launcher Icon Restored: Authentic olive-hill pine & electric scooter adaptive icon across all Android densities.\n" +
           "• Live Maintenance Bench Camera ('Bench Eyes') in AI Mechanic: Embedded live CameraX workbench viewer with optical reticle and 1-tap 'Inspect What I'm Working On' Gemini Vision AI diagnosis, plus 6 new rural/roadside workshop presets.\n" +
@@ -193,20 +223,33 @@ fun AppInfoAndChangelogScreen(
           }
           Spacer(Modifier.height(8.dp))
           Text(
-            "Package: ${BuildConfig.APPLICATION_ID}\nArchitecture: Kotlin • Jetpack Compose Material 3 • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • Supabase GoTrue • CameraX • OSMDroid",
+            "Package: ${BuildConfig.APPLICATION_ID}\nGitHub: https://github.com/bradley3398/Rural-Erides-GO\nArchitecture: Kotlin • Jetpack Compose Material 3 • Google Filament OpenGL PBR • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • CameraX • OSMDroid",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
+          Spacer(Modifier.height(8.dp))
+          TacticalOutlinedButton(
+            onClick = {
+              runCatching {
+                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bradley3398/Rural-Erides-GO")))
+              }
+            },
+            modifier = Modifier.fillMaxWidth().testTag("info_open_github_repo_button"),
+          ) {
+            Icon(Icons.Default.Code, null, Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("GitHub: bradley3398/Rural-Erides-GO", maxLines = 1)
+          }
           Spacer(Modifier.height(8.dp))
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             TacticalOutlinedButton(
               onClick = {
                 clipboard.setText(
                   AnnotatedString(
-                    "Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison (${BuildConfig.APPLICATION_ID})"
+                    "Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison — https://github.com/bradley3398/Rural-Erides-GO (${BuildConfig.APPLICATION_ID})"
                   )
                 )
-                Toast.makeText(ctx, "Copied developer & build info", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "Copied developer & GitHub info", Toast.LENGTH_SHORT).show()
               },
               modifier = Modifier.weight(1f).testTag("copy_developer_info_button"),
             ) {
@@ -222,7 +265,7 @@ fun AppInfoAndChangelogScreen(
                     putExtra(Intent.EXTRA_SUBJECT, "Rural ERides GO v${BuildConfig.VERSION_NAME}")
                     putExtra(
                       Intent.EXTRA_TEXT,
-                      "Rural ERides GO v${BuildConfig.VERSION_NAME} — Tactical PEV Telemetry, 9-DOF AHRS, Radar, Vision AR Mechanic & AI Co-Pilot. Created by Lord Bradley Callison.",
+                      "Rural ERides GO v${BuildConfig.VERSION_NAME} — Tactical PEV Telemetry, Filament GL-PBR 3D Lab, 9-DOF AHRS, Radar, Vision AR Mechanic & AI Co-Pilot. Created by Lord Bradley Callison.\nhttps://github.com/bradley3398/Rural-Erides-GO",
                     )
                   }
                 runCatching { ctx.startActivity(Intent.createChooser(shareIntent, "Share Rural ERides GO")) }

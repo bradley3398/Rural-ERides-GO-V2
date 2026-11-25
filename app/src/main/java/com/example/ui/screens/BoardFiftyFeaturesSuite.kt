@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,24 +10,33 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ElectricBolt
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.MasterSettings
@@ -38,114 +48,203 @@ data class BoardExtraFeature(
   val category: String,
   val title: String,
   val description: String,
-  val status: String,
+  val actionLabel: String,
+  val routeKey: String,
 )
 
 @Composable
 internal fun BoardFiftyFeaturesScreen(
   settings: MasterSettings,
+  onExecuteFeatureRoute: (String) -> Unit,
   onNavigateBack: () -> Unit,
 ) {
+  BackHandler(onBack = onNavigateBack)
   val chrome = LocalTacticalChrome.current
+  var searchQuery by remember { mutableStateOf("") }
+  var selectedCategory by remember { mutableStateOf("All") }
+
+  val categories = remember { listOf("All", "Diagnostics", "Navigation", "Community", "Toolkit", "Pro Suite") }
+
   val features = remember {
     listOf(
-      BoardExtraFeature(1, "Diagnostics", "AI Fleet Battery Health Clinic", "Deep cycle impedance testing and state-of-health cell balancing analysis.", "Active"),
-      BoardExtraFeature(2, "Diagnostics", "Motor Hall Sensor Phase Test", "Real-time oscilloscope inspection of brushless motor commutation signals.", "Ready"),
-      BoardExtraFeature(3, "Diagnostics", "Controller PWM Frequency Tuner", "Adjust motor controller pulse width modulation for silent or torque-heavy drive.", "Optimized"),
-      BoardExtraFeature(4, "Diagnostics", "BMS Cell Voltage Delta Monitor", "Live per-cell voltage discrepancy warning and thermal runaway guard.", "Monitoring"),
-      BoardExtraFeature(5, "Diagnostics", "Voltage Sag Dynamic Predictor", "Calculates internal pack resistance under heavy hill climbs.", "Calibrated"),
-      BoardExtraFeature(6, "Diagnostics", "Regenerative Braking Profiler", "Fine-tunes regen torque curve to protect MOSFETs during high-speed decel.", "Active"),
-      BoardExtraFeature(7, "Diagnostics", "Hub Motor Thermal Runaway Alarm", "Audible and haptic alert when stator temperature exceeds 85C.", "Armed"),
-      BoardExtraFeature(8, "Diagnostics", "Charger Efficiency & Ripple Tester", "Measures AC-DC charger ripple and output wattage stability.", "Ready"),
-      BoardExtraFeature(9, "Diagnostics", "Suspension Sag & Rebound Calculator", "Calculates preload settings based on pilot weight and riding terrain.", "Ready"),
-      BoardExtraFeature(10, "Diagnostics", "Tire Pressure & Puncture Predictor", "Real-time PSI telemetry logging with slow leak detection algorithms.", "Monitoring"),
-      BoardExtraFeature(11, "Navigation", "Offline Vector Map Tile Cacher", "Downloads regional topographic and county road grids for zero-signal rides.", "Cached"),
-      BoardExtraFeature(12, "Navigation", "RainViewer Doppler Radar Stream", "Live meteorological precipitation overlays projected directly onto map routes.", "Live"),
-      BoardExtraFeature(13, "Navigation", "GPS Geofence Perimeter Alarm", "Triggers siren and SOS beacon if PEV moves outside secure parking zone.", "Armed"),
-      BoardExtraFeature(14, "Navigation", "Anti-Theft Motion & Shock Beacon", "Uses IMU accelerometer to detect unauthorized tampering or towing.", "Armed"),
-      BoardExtraFeature(15, "Navigation", "Turn-by-Turn Audio Navigation", "Synthesized voice cues for backcountry trail intersections and charging stops.", "Enabled"),
-      BoardExtraFeature(16, "Navigation", "Live Multiplayer Rider Radar", "Peer-to-peer telemetry mesh showing nearby community pilots in real-time.", "Online"),
-      BoardExtraFeature(17, "Navigation", "Elevation Profile Grade Predictor", "Analyzes upcoming trail incline to recommend optimal throttle/assist torque.", "Active"),
-      BoardExtraFeature(18, "Navigation", "Emergency SOS Satellite Relay", "Automated crash detection with GPS coordinate broadcast via cellular/mesh.", "Standby"),
-      BoardExtraFeature(19, "Navigation", "Charger Station Availability Finder", "Live status of rural 240V RV pedestals, NEMA outlets, and fast chargers.", "Synced"),
-      BoardExtraFeature(20, "Navigation", "GPX Route Importer & Exporter", "Import custom backcountry GPX tracks and export recorded rides.", "Ready"),
-      BoardExtraFeature(21, "Community", "Convoy Voice Walkie-Talkie Channel", "Push-to-talk encrypted audio communication with riding group members.", "Ready"),
-      BoardExtraFeature(22, "Community", "Stolen PEV Recovery Broadcast", "Instant community alert with serial number and last known GPS ping.", "Ready"),
-      BoardExtraFeature(23, "Community", "Trail Hazard Crowdsourced Reporter", "Report washed-out bridges, fallen trees, and gravel traps to community feed.", "Active"),
-      BoardExtraFeature(24, "Community", "Leaderboard Trophy & XP Hall", "Global and regional rankings for distance, elevation climb, and energy efficiency.", "Updated"),
-      BoardExtraFeature(25, "Community", "Classifieds PEV Marketplace", "Buy, sell, and trade electric unicycles, e-bikes, scooters, and parts.", "Active"),
-      BoardExtraFeature(26, "Community", "Lost & Found Gear Tracker", "Community bulletin board for dropped chargers, helmets, and accessories.", "Active"),
-      BoardExtraFeature(27, "Community", "Group Ride Dispatcher & RSVP", "Organize weekend backcountry group rides with route maps and safety briefings.", "Ready"),
-      BoardExtraFeature(28, "Community", "Community Polls & Feedback Hub", "Vote on new trail access rights, accessory reviews, and feature requests.", "Open"),
-      BoardExtraFeature(29, "Community", "Slang & Technical Acronym Decoder", "Quick reference guide for PEV terminology (FOC, ESC, BMS, VESC, Wh/mi).", "Loaded"),
-      BoardExtraFeature(30, "Community", "Direct Messaging & Encrypted Chat", "Private peer-to-peer messaging with riding buddies and trail mechanics.", "Connected"),
-      BoardExtraFeature(31, "Toolkit", "Bolt Torque Quick Reference", "Essential torque specs for axle nuts, handlebars, brake calipers, and stems.", "Loaded"),
-      BoardExtraFeature(32, "Toolkit", "Gear Ratio & Top Speed Calculator", "Calculates theoretical top speed based on pole pairs, KV rating, and wheel size.", "Ready"),
-      BoardExtraFeature(33, "Toolkit", "Morse Code Flashlight Transceiver", "Flashlight encoder and camera Y-plane decoder for optical emergency signaling.", "Ready"),
-      BoardExtraFeature(34, "Toolkit", "First Aid & Wilderness Survival Guide", "Emergency medical reference for trail injuries, tourniquets, and snakebites.", "Loaded"),
-      BoardExtraFeature(35, "Toolkit", "Campfire Weather & Wind Index", "Real-time barometric pressure, wind gusts, and humidity for backcountry camps.", "Live"),
-      BoardExtraFeature(36, "Toolkit", "Custom Horn & Soundboard", "Acoustic warning sounds and digital air-horn generator for trail safety.", "Ready"),
-      BoardExtraFeature(37, "Toolkit", "HUD Neon Color Customizer", "Personalize cockpit accent hues, glowing borders, and neon opacity.", "Applied"),
-      BoardExtraFeature(38, "Toolkit", "Ride Timeline Replay Scrubber", "Scrub through recorded ride speed, elevation, and power curves interactively.", "Ready"),
-      BoardExtraFeature(39, "Toolkit", "Firmware Flasher & Version Log", "Changelog and release notes tracker for controller and display firmware.", "Updated"),
-      BoardExtraFeature(40, "Toolkit", "Export CSV Telemetry Logs", "Export raw ride logs for spreadsheet analysis and mechanical auditing.", "Ready"),
-      BoardExtraFeature(41, "Pro Suite", "AI Trail Chaplain Mechanic Copilot", "Gemini-powered diagnostic assistant for electrical faults and error codes.", "Online"),
-      BoardExtraFeature(42, "Pro Suite", "Autonomous Trail Follower Assist", "Predictive trajectory smoothing for rough off-road terrain.", "Calibrated"),
-      BoardExtraFeature(43, "Pro Suite", "Crash Detection G-Force Calibrator", "Adjusts accelerometer sensitivity to prevent false alarms during drop-offs.", "Optimized"),
-      BoardExtraFeature(44, "Pro Suite", "Offline Bluetooth Mesh Sync", "Synchronize ride records and chat messages via BLE mesh when offline.", "Ready"),
-      BoardExtraFeature(45, "Pro Suite", "Dynamic Speed Limiter Unlocker", "Trail vs street geofenced speed profile switching for legal compliance.", "Compliant"),
-      BoardExtraFeature(46, "Pro Suite", "Multi-Vehicle Garage Fleet Manager", "Manage specs, batteries, and maintenance logs for multiple PEVs.", "Active"),
-      BoardExtraFeature(47, "Pro Suite", "Night Vision HUD Monochrome Mode", "Reduces eye strain with high-contrast red/green monochrome cockpit themes.", "Ready"),
-      BoardExtraFeature(48, "Pro Suite", "Energy Economy Efficiency Optimizer", "Real-time Wh/mi coaching to maximize range on long backcountry loops.", "Active"),
-      BoardExtraFeature(49, "Pro Suite", "Backup & Restore Cloud Snapshot", "Cloud sync of all rides, vehicle profiles, and custom preferences.", "Synced"),
-      BoardExtraFeature(50, "Pro Suite", "Advanced Developer Telemetry Debugger", "Raw CAN-bus packet viewer and CPU thermal monitor for developers.", "Ready"),
+      BoardExtraFeature(1, "Diagnostics", "AI Fleet Battery Health Clinic", "Open live AI Mechanic battery physics, pack impedance & cell balancing diagnostics.", "OPEN BENCH", "TAB:MECHANIC"),
+      BoardExtraFeature(2, "Diagnostics", "Motor Hall Sensor Phase Test", "Inspect brushless motor commutation faults and wiring pinout maps in AI Mechanic.", "OPEN BENCH", "TAB:MECHANIC"),
+      BoardExtraFeature(3, "Diagnostics", "Controller PWM & FOC Spec Matrix", "Compare sine-wave/VESC controller specs, phase limits & wiring in Rig Specs.", "OPEN BENCH", "TAB:MECHANIC"),
+      BoardExtraFeature(4, "Diagnostics", "BMS Cell Voltage Delta Monitor", "Inspect live NMC/LiFePO4 voltage curves, cutoff & storage targets in Mechanic.", "OPEN BENCH", "TAB:MECHANIC"),
+      BoardExtraFeature(5, "Diagnostics", "Voltage Sag Dynamic Predictor", "Monitor live under-load voltage sag and pack reserve directly on your Cockpit HUD.", "OPEN COCKPIT", "TAB:COCKPIT"),
+      BoardExtraFeature(6, "Diagnostics", "Regenerative Braking Profiler", "Configure drivetrain, cold-pack & regen settings inside Dashboard Settings.", "OPEN SETTINGS", "OVERLAY:SETTINGS"),
+      BoardExtraFeature(7, "Diagnostics", "Hub Motor Thermal Runaway Guide", "Run live thermal camera overlay & stator heat inspection inside Vision AR Bench.", "OPEN BENCH", "TAB:MECHANIC"),
+      BoardExtraFeature(8, "Diagnostics", "Charger Speed & Cost Calculator", "Calculate CC+CV charge hours, wattage & electricity cost in Shop Calc & Rig Specs.", "OPEN BENCH", "TAB:MECHANIC"),
+      BoardExtraFeature(9, "Diagnostics", "Suspension Sag & Rider Weight Tuner", "Tune rider payload weight & suspension preload guidance in Co-Pilot or Settings.", "OPEN COPILOT", "TAB:COPILOT"),
+      BoardExtraFeature(10, "Diagnostics", "Tire Pressure & PSI Maintenance", "Track tire wear intervals, PSI reminders & torque logs inside Cockpit Maintenance.", "OPEN COCKPIT", "TAB:COCKPIT"),
+      BoardExtraFeature(11, "Navigation", "Offline Vector Map Tile Cacher", "Load OSMDroid topographic & county road maps on Rider Radar.", "OPEN RADAR", "TAB:RADAR"),
+      BoardExtraFeature(12, "Navigation", "RainViewer Doppler Radar Stream", "Toggle live RainViewer precipitation overlays directly on the Radar map.", "OPEN RADAR", "TAB:RADAR"),
+      BoardExtraFeature(13, "Navigation", "GPS Geofence Perimeter Alarm", "Drop a live GPS perimeter fence with breach warnings on Rider Radar.", "OPEN RADAR", "TAB:RADAR"),
+      BoardExtraFeature(14, "Navigation", "Anti-Theft Motion & Crash Guard", "Configure IMU G-force crash sensitivity & SOS countdown in Safety Settings.", "OPEN SETTINGS", "OVERLAY:SETTINGS"),
+      BoardExtraFeature(15, "Navigation", "Turn-by-Turn Audio Navigation", "Launch live OSRM PEV turn-by-turn routing with spoken voice guidance on Radar.", "OPEN RADAR", "TAB:RADAR"),
+      BoardExtraFeature(16, "Navigation", "Live Multiplayer Rider Radar", "Broadcast & track real authenticated community riders in real time on Radar.", "OPEN RADAR", "TAB:RADAR"),
+      BoardExtraFeature(17, "Navigation", "Elevation Profile Grade Predictor", "Inspect live Open-Elevation route grade profiles on Rider Radar.", "OPEN RADAR", "TAB:RADAR"),
+      BoardExtraFeature(18, "Navigation", "Emergency SOS Coordinate Relay", "Trigger or configure GPS SOS emergency contact alerts in Cockpit & Safety.", "OPEN COCKPIT", "TAB:COCKPIT"),
+      BoardExtraFeature(19, "Navigation", "Live Public Charger Locator", "Query live Overpass OSM EV & PEV charging stops around your GPS fix.", "OPEN RADAR", "TAB:RADAR"),
+      BoardExtraFeature(20, "Navigation", "Ride Track GPX & Telemetry Studio", "Inspect recorded GPS tracks, speed zones & energy graphs in Telemetry Studio.", "OPEN STUDIO", "OVERLAY:TELEMETRY_STUDIO"),
+      BoardExtraFeature(21, "Community", "Convoy Voice Walkie-Talkie Channel", "Open live Firestore PTT squad walkie-talkie channels on Rider Radar.", "OPEN RADAR", "TAB:RADAR"),
+      BoardExtraFeature(22, "Community", "Stolen PEV Recovery Broadcast", "Publish an instant Stolen PEV BOLO alert with rig details to the live Board.", "POST BOLO", "BOARD:COMPOSE_STOLEN"),
+      BoardExtraFeature(23, "Community", "Trail Hazard Crowdsourced Reporter", "Post live road debris, washout, or creek hazards straight to the Porch Board.", "POST ALERT", "BOARD:COMPOSE:ALERTS"),
+      BoardExtraFeature(24, "Community", "Leaderboard Trophy & XP Hall", "Inspect real verified rider XP, total distance & ride counts on Top Riders.", "TOP RIDERS", "BOARD:TAB:STANDINGS"),
+      BoardExtraFeature(25, "Community", "Classifieds PEV Marketplace", "Browse live rider-to-rider PEV & parts listings on the Porch Board.", "MARKETPLACE", "BOARD:CAT:MARKETPLACE"),
+      BoardExtraFeature(26, "Community", "Lost & Found / Gear Exchange", "Search live Board posts for gear, chargers, helmets, and trail parts.", "SEARCH FEED", "BOARD:SEARCH:charger"),
+      BoardExtraFeature(27, "Community", "Group Ride Dispatcher & Convoy", "Browse or host live rural group rides and local convoys on the Board.", "GROUP RIDES", "BOARD:CAT:GROUP_RIDES"),
+      BoardExtraFeature(28, "Community", "Community Polls & Voting Hub", "Filter active votable live Firestore polls on the Porch Board.", "OPEN POLLS", "BOARD:FILTER:POLLS"),
+      BoardExtraFeature(29, "Community", "Slang & Technical Acronym Decoder", "Open the instant PEV glossary (FOC, ESC, BMS, VESC, PWM, Wh/mi).", "OPEN GLOSSARY", "BOARD:SLANG"),
+      BoardExtraFeature(30, "Community", "Direct Messaging & WebRTC Calls", "Open live encrypted peer-to-peer DMs, voice notes & audio/video calls.", "OPEN DMs", "BOARD:DM_HUB"),
+      BoardExtraFeature(31, "Toolkit", "Bolt Torque & Trail Power Toolkit", "Open Cockpit Trail Power Toolkit for bolt torque charts, horn & survival tools.", "OPEN COCKPIT", "TAB:COCKPIT"),
+      BoardExtraFeature(32, "Toolkit", "Gear Ratio & Top Speed Calculator", "Compute motor KV, gear ratios, Wh/mi & speed envelopes in Shop Calc.", "OPEN BENCH", "TAB:MECHANIC"),
+      BoardExtraFeature(33, "Toolkit", "Morse Code Flashlight Transceiver", "Use Torch Morse TX & CameraX luminance Morse RX via Cockpit Trail Toolkit.", "OPEN COCKPIT", "TAB:COCKPIT"),
+      BoardExtraFeature(34, "Toolkit", "First Aid & Backcountry Safety", "Access rural safety checklists and AI emergency briefings in Co-Pilot.", "OPEN COPILOT", "TAB:COPILOT"),
+      BoardExtraFeature(35, "Toolkit", "Live Weather & Wind Headwind Index", "View real-time Open-Meteo wind, rain, barometric & range derate on Cockpit.", "OPEN COCKPIT", "TAB:COCKPIT"),
+      BoardExtraFeature(36, "Toolkit", "Trail TV, Radio & Music Mixes", "Stream live YouTube Rural ERides videos and riding music mixes in Channel.", "OPEN CHANNEL", "TAB:CHANNEL"),
+      BoardExtraFeature(37, "Toolkit", "HUD Skins & Theme Preview Studio", "Switch between 26 visual themes, 14 HUD skins & nav layouts in Settings.", "OPEN SETTINGS", "OVERLAY:SETTINGS"),
+      BoardExtraFeature(38, "Toolkit", "Ride Timeline Replay Scrubber", "Scrub through recorded ride speed, elevation & power curves in Telemetry Studio.", "OPEN STUDIO", "OVERLAY:TELEMETRY_STUDIO"),
+      BoardExtraFeature(39, "Toolkit", "Release Changelog & Kernel Shell", "Inspect full v7–v44 changelog, 9-DOF probe & live service pings in About.", "OPEN ABOUT", "OVERLAY:INFO"),
+      BoardExtraFeature(40, "Toolkit", "Export JSON Vault & Cloud Backup", "Export or restore full garage, rides & settings JSON in Cloud Vault Settings.", "OPEN SETTINGS", "OVERLAY:SETTINGS"),
+      BoardExtraFeature(41, "Pro Suite", "AI Trail Mechanic & Co-Pilot", "Chat with 20 live Gemini personas with real telemetry & weather context.", "OPEN COPILOT", "TAB:COPILOT"),
+      BoardExtraFeature(42, "Pro Suite", "Creator Studio & AI Image Lab", "Generate/edit trail art, compose music & run Maps/Web grounding in Creator Hub.", "CREATOR HUB", "OVERLAY:CREATOR_HUB"),
+      BoardExtraFeature(43, "Pro Suite", "Custom Synthesized Voice Studio", "Create custom Gemini neural Co-Pilot voices with DSP filters & mic samples.", "VOICE STUDIO", "OVERLAY:VOICE_STUDIO"),
+      BoardExtraFeature(44, "Pro Suite", "3D CAD Garage & Dyno Viewer", "Inspect 88 PEV rigs in OpenGL ES / WebGL / CAD Blueprint 3D Lab.", "OPEN 3D LAB", "POPUP:3D_LAB"),
+      BoardExtraFeature(45, "Pro Suite", "Legal Class Speed Governor", "Configure Class 1/2/3/Off-Road speed compliance & school zones in Settings.", "OPEN SETTINGS", "OVERLAY:SETTINGS"),
+      BoardExtraFeature(46, "Pro Suite", "Multi-Vehicle Garage Fleet Manager", "Add, switch & track multiple PEV rigs with auto specs & logos on Cockpit.", "OPEN COCKPIT", "TAB:COCKPIT"),
+      BoardExtraFeature(47, "Pro Suite", "Night Vision & Red-Shift Mode", "Toggle high-contrast night riding & red-shift themes inside Appearance Settings.", "OPEN SETTINGS", "OVERLAY:SETTINGS"),
+      BoardExtraFeature(48, "Pro Suite", "Energy Economy Range Simulator", "Run weight, grade, temperature & surface range simulations in Rig Specs.", "OPEN BENCH", "TAB:MECHANIC"),
+      BoardExtraFeature(49, "Pro Suite", "Firestore Cloud Sync & Restore", "Sync all vehicles, rides, settings & Board data with your Google account.", "OPEN SETTINGS", "OVERLAY:SETTINGS"),
+      BoardExtraFeature(50, "Pro Suite", "Hardware, Satellite & API Diagnostics", "Run live GNSS satellite, 9-DOF sensor, battery & HTTP endpoint diagnostics.", "OPEN ABOUT", "OVERLAY:INFO"),
     )
+  }
+
+  val filteredFeatures = remember(searchQuery, selectedCategory, features) {
+    features.filter { f ->
+      (selectedCategory == "All" || f.category == selectedCategory) &&
+        (searchQuery.isBlank() ||
+          f.title.contains(searchQuery, ignoreCase = true) ||
+          f.description.contains(searchQuery, ignoreCase = true) ||
+          f.category.contains(searchQuery, ignoreCase = true) ||
+          f.actionLabel.contains(searchQuery, ignoreCase = true))
+    }
   }
 
   Scaffold(
     topBar = {
       TacticalTopBar(
-        title = "50 Advanced Board Features Suite",
+        title = "50 Live Command Modules",
+        subtitle = "Tap any module to launch live",
         onBack = onNavigateBack,
+        backTestTag = "fifty_features_back_button",
         icon = Icons.Default.ElectricBolt,
-        badgeText = "50 MODULES",
+        badgeText = "${filteredFeatures.size} LIVE",
       )
     },
     containerColor = MaterialTheme.colorScheme.background,
   ) { innerPadding ->
-    LazyColumn(
-      modifier = Modifier.fillMaxSize().padding(innerPadding),
-      contentPadding = PaddingValues(16.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-      itemsIndexed(features) { idx, feat ->
-        Surface(
-          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-          shape = chrome.cardShape,
-          border = BorderStroke(chrome.cardBorderWidth, MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
-          modifier = Modifier.fillMaxWidth(),
-        ) {
-          Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-              Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.ElectricBolt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Text("#${feat.id}. ${feat.title}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
-              }
-              Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                shape = chrome.smallShape,
-              ) {
-                Text(
-                  feat.status,
-                  style = MaterialTheme.typography.labelSmall,
-                  fontWeight = FontWeight.Bold,
-                  color = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                )
-              }
+    Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+      OutlinedTextField(
+        value = searchQuery,
+        onValueChange = { searchQuery = it },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        trailingIcon = {
+          if (searchQuery.isNotBlank()) {
+            IconButton(onClick = { searchQuery = "" }) {
+              Icon(Icons.Default.Close, contentDescription = "Clear search")
             }
-            Text(feat.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Category: ${feat.category}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+          }
+        },
+        placeholder = { Text("Search 50 live tools (radar, 3D lab, BOLO, Morse, voice)...") },
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("fifty_features_search_input"),
+      )
+
+      LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        items(categories) { cat ->
+          FilterChip(
+            selected = selectedCategory == cat,
+            onClick = { selectedCategory = cat },
+            label = { Text(cat) },
+            modifier = Modifier.testTag("fifty_cat_${cat.lowercase().replace(" ", "_")}"),
+          )
+        }
+      }
+
+      Spacer(Modifier.height(6.dp))
+
+      LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+      ) {
+        items(filteredFeatures, key = { it.id }) { feat ->
+          Surface(
+            onClick = {
+              onNavigateBack()
+              onExecuteFeatureRoute(feat.routeKey)
+            },
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+            shape = chrome.cardShape,
+            border = BorderStroke(chrome.cardBorderWidth, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+            modifier = Modifier.fillMaxWidth().testTag("fifty_feature_card_${feat.id}"),
+          ) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Row(
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  modifier = Modifier.weight(1f),
+                ) {
+                  Icon(
+                    Icons.Default.ElectricBolt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                  )
+                  Text(
+                    "#${feat.id}. ${feat.title}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
+                  )
+                }
+                Surface(
+                  color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                  shape = chrome.smallShape,
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                  ) {
+                    Text(
+                      feat.actionLabel,
+                      style = MaterialTheme.typography.labelSmall,
+                      fontWeight = FontWeight.Bold,
+                      color = MaterialTheme.colorScheme.primary,
+                    )
+                    Icon(
+                      Icons.AutoMirrored.Filled.OpenInNew,
+                      contentDescription = "Launch ${feat.title}",
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(12.dp),
+                    )
+                  }
+                }
+              }
+              Text(feat.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text("Category: ${feat.category}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            }
           }
         }
       }

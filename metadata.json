@@ -1,6 +1,6 @@
 {
-  "name": "Rural ERides GO",
-  "description": "Rural ERides GO Tactical Neon HUD for PEV riders: dual Firebase & Supabase GoTrue auth, GPS & 9-DOF AHRS telemetry, live Rider Radar & P2P Walkie-Talkie, Gemini 3.1 Flash-Lite Vision AR Mechanic, 80+ engineering calculators, in-app YouTube Music v3 mini-player, Live Community Board, and Admin Command Center.",
+  "name": "Rural Erides GO",
+  "description": "Rural Erides GO Tactical Neon HUD for PEV riders: dual Firebase & Supabase GoTrue auth, GPS & 9-DOF AHRS telemetry, live Rider Radar & P2P Walkie-Talkie, Gemini 3.5 Flash-Lite Vision AR Mechanic, 80+ engineering calculators, in-app YouTube Music v3 mini-player, Live Community Board, and Universal Seasonal Holiday Themes.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

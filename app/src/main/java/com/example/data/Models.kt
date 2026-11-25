@@ -1,910 +1,508 @@
 package com.example.data
 
-import androidx.annotation.Keep
+import android.content.Context
 import com.example.BuildConfig
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
-import com.google.firebase.firestore.IgnoreExtraProperties
-import com.google.firebase.firestore.ServerTimestamp
+import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.UUID
 
+// ============================================================================
+// GENERIC UI STATE & AUTH SESSION MODELS
+// ============================================================================
 sealed interface UiState<out T> {
   data object Loading : UiState<Nothing>
   data class Success<T>(val data: T) : UiState<T>
   data class Error(val message: String) : UiState<Nothing>
 }
 
-// ============================================================================
-// UNIFIED AUTHENTICATED SESSION IDENTITY (GOOGLE + SUPABASE)
-// ============================================================================
-
-enum class AuthProviderType {
-  GOOGLE,
-  SUPABASE,
+enum class AuthProviderType(val label: String) {
+  GOOGLE("Google Sign-In"),
+  SUPABASE("Supabase Cloud"),
 }
 
 data class ActiveSessionUser(
-  val uid: String,
-  val rawId: String,
-  val email: String,
-  val displayName: String,
-  val provider: AuthProviderType,
-  val firebaseAuthenticated: Boolean,
-)
-
-// ============================================================================
-// FIRESTORE DOMAIN MODELS (1:1 PARITY WITH firebase-blueprint & firestore.rules)
-// ============================================================================
-
-@Keep
-@IgnoreExtraProperties
-data class RiderProfile(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val displayName: String = "",
-  val callsign: String = "",
+  val uid: String = "",
+  val rawId: String = "",
   val email: String = "",
-  val activeVehicleId: String = "",
-  val unitSystem: String = "IMPERIAL",
-  val emergencyContactName: String = "",
-  val sosContactNumber: String = "",
-  val medicalProfile: String = "",
-  val acceptedLegal: Boolean = false,
-  val riderWeightLbs: Double = 0.0,
-  val avatarBase64: String = "",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class PevVehicle(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val name: String = "",
-  val category: String = "SCOOTER",
-  val batteryWh: Long = 960L,
-  val batteryAh: Double = 20.0,
-  val voltage: Double = 48.0,
-  val batteryChemistry: String = "NMC",
-  val motorWatts: Int = 0,
-  val topSpeedKmh: Double = 0.0,
-  val vehicleWeightLbs: Double = 0.0,
-  val targetPsi: Double = 36.0,
-  val odometerKm: Double = 0.0,
-  val serviceIntervalKm: Double = 500.0,
-  val tireSize: String = "10x3.0",
-  val photoUri: String = "",
-  val brandLogoUri: String = "",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class RideSession(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val vehicleId: String = "",
-  val vehicleName: String = "",
-  val title: String = "",
-  val durationSec: Long = 0L,
-  val distanceKm: Double = 0.0,
-  val maxSpeedKmh: Double = 0.0,
-  val avgSpeedKmh: Double = 0.0,
-  val elevationGainM: Double = 0.0,
-  val whUsed: Double = 0.0,
-  val startBatteryPct: Int = -1,
-  val endBatteryPct: Int = -1,
-  val weatherSummary: String = "",
-  val aiDebrief: String = "",
-  val polylinePoints: List<String> = emptyList(),
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class MaintenanceTask(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val vehicleId: String = "",
-  val vehicleName: String = "",
-  val title: String = "",
-  val notes: String = "",
-  val dueOdometerKm: Double = 0.0,
-  val completed: Boolean = false,
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class SavedVideo(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val videoId: String = "",
-  val title: String = "",
-  val channelTitle: String = "",
-  val thumbnailUrl: String = "",
-  val publishedAt: String = "",
-  val categoryTag: String = "General",
-  val personalNote: String = "",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class PrayerJournalEntry(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val title: String = "",
-  val body: String = "",
-  val category: String = "Trail Safety",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class UserNotification(
-  @DocumentId val id: String = "",
-  val recipientId: String = "",
-  val senderId: String = "",
-  val senderCallsign: String = "",
-  val type: String = "SYSTEM",
-  val title: String = "",
-  val body: String = "",
-  val read: Boolean = false,
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class PublicPilotProfile(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val callsign: String = "",
-  val rankBadge: String = "Rookie Pilot",
-  val xpPoints: Long = 0L,
-  val totalKm: Double = 0.0,
-  val ridesCount: Long = 0L,
-  val verified: Boolean = false,
-  val banned: Boolean = false,
-  val trustScore: Long = 100L,
-  val vehicleSummary: String = "",
-  val visibility: String = "PUBLIC",
-  val avatarBase64: String = "",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class BoardPost(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val authorCallsign: String = "",
-  val authorBadge: String = "",
-  val category: String = "UNIVERSAL",
-  val title: String = "",
-  val body: String = "",
-  val imageUrl: String = "",
-  val pollQuestion: String = "",
-  val pollOptions: List<String> = emptyList(),
-  val priceUsd: Double = 0.0,
-  val locationLabel: String = "",
-  val telemetrySummary: String = "",
-  val helpNeeded: Boolean = false,
-  val speedTrap: Boolean = false,
-  val stolenAlert: Boolean = false,
-  val likesCount: Long = 0L,
-  val commentsCount: Long = 0L,
-  val flaggedCount: Long = 0L,
-  val visibility: String = "PUBLIC",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class BoardComment(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val authorCallsign: String = "",
-  val body: String = "",
-  val visibility: String = "PUBLIC",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class RadarRider(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val callsign: String = "",
-  val vehicleName: String = "",
-  val lat: Double = 0.0,
-  val lng: Double = 0.0,
-  val speedKmh: Double = 0.0,
-  val headingDeg: Double = 0.0,
-  val batteryPct: Long = 100L,
-  val statusTag: String = "CRUISING",
-  val visibility: String = "PUBLIC",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class RadarMeetup(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val creatorCallsign: String = "",
-  val title: String = "",
-  val description: String = "",
-  val scheduledTime: String = "",
-  val lat: Double = 0.0,
-  val lng: Double = 0.0,
-  val attendeeCount: Long = 1L,
-  val visibility: String = "PUBLIC",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class RadarHazard(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val creatorCallsign: String = "",
-  val hazardType: String = "POTHOLE",
-  val description: String = "",
-  val lat: Double = 0.0,
-  val lng: Double = 0.0,
-  val upvotes: Long = 0L,
-  val visibility: String = "PUBLIC",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class RadarWaypoint(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val creatorCallsign: String = "",
-  val waypointType: String = "CHARGER",
-  val title: String = "",
-  val notes: String = "",
-  val lat: Double = 0.0,
-  val lng: Double = 0.0,
-  val visibility: String = "PUBLIC",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class ChannelPresence(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val callsign: String = "",
-  val channelId: String = "",
-  val active: Boolean = true,
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class ChannelSpeakerState(
-  @DocumentId val id: String = "",
-  val speakerUid: String = "",
-  val speakerCallsign: String = "",
-  val channelId: String = "",
-  val active: Boolean = false,
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class WalkieVoiceLog(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val senderCallsign: String = "",
-  val channelId: String = "",
-  val audioBase64: String = "",
-  val durationMs: Long = 1000L,
-  val active: Boolean = true,
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class ChannelWebRtcSignal(
-  @DocumentId val id: String = "",
-  val senderId: String = "",
-  val senderCallsign: String = "",
-  val targetUid: String = "",
-  val channelId: String = "",
-  val signalType: String = "JOIN",
-  val payload: String = "",
-  val active: Boolean = true,
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class DmThread(
-  @DocumentId val id: String = "",
-  val participantUids: List<String> = emptyList(),
-  val participantCallsigns: List<String> = emptyList(),
-  val lastMessage: String = "",
-  val selfDestructSec: Long = 0L,
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class DmMessage(
-  @DocumentId val id: String = "",
-  val participantUids: List<String> = emptyList(),
-  val senderId: String = "",
-  val senderCallsign: String = "",
-  val text: String = "",
-  val imageUrl: String = "",
-  val voiceBase64: String = "",
-  val selfDestructSec: Long = 0L,
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class CallSession(
-  @DocumentId val id: String = "",
-  val callerUid: String = "",
-  val callerCallsign: String = "",
-  val calleeUid: String = "",
-  val calleeCallsign: String = "",
-  val callType: String = "AUDIO",
-  val status: String = "RINGING",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class CallSignal(
-  @DocumentId val id: String = "",
-  val senderId: String = "",
-  val signalType: String = "OFFER",
-  val payload: String = "",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class EmergencyBroadcast(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val category: String = "SYSTEM ALERT",
-  val message: String = "",
-  val active: Boolean = true,
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class YoutubeEngagement(
-  @DocumentId val id: String = "",
-  val videoId: String = "",
-  val voltsCount: Long = 0L,
-  val visibility: String = "PUBLIC",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
-)
-
-@Keep
-@IgnoreExtraProperties
-data class YoutubeComment(
-  @DocumentId val id: String = "",
-  val userId: String = "",
-  val authorCallsign: String = "",
-  val text: String = "",
-  val visibility: String = "PUBLIC",
-  @ServerTimestamp val createdAt: Timestamp? = null,
-  @ServerTimestamp val updatedAt: Timestamp? = null,
+  val displayName: String = "",
+  val provider: AuthProviderType = AuthProviderType.GOOGLE,
+  val firebaseAuthenticated: Boolean = true,
 )
 
 // ============================================================================
-// UI, TELEMETRY, THEME & SETTINGS ENUMS / MODELS
+// VISUAL STYLES, THEMES, HUD & WALLPAPERS
 // ============================================================================
-
-enum class AppThemePreset(val id: String, val label: String, val hexColor: Long) {
-  LIME("lime", "Tactical Lime", 0xFF39FF14),
-  CYAN("cyan", "Cyber Cyan", 0xFF06B6D4),
-  EMERALD("emerald", "Trail Emerald", 0xFF10B981),
-  AMBER("amber", "Solar Amber", 0xFFF59E0B),
-  ROSE("rose", "Crimson Pulse", 0xFFF43F5E),
-  PURPLE("purple", "Void Purple", 0xFFA855F7),
-  VOLT_YELLOW("volt_yellow", "72V Volt Yellow", 0xFFEAB308),
-  MOTOR_ORANGE("motor_orange", "Hub Motor Orange", 0xFFFF6B00),
-  REGEN_TEAL("regen_teal", "Regen Mint Teal", 0xFF14F1D9),
-  PLASMA_MAGENTA("plasma_magenta", "Plasma Neon", 0xFFFF2EE6),
-  VOID("void", "Stealth White", 0xFFFFFFFF),
+enum class VisualStyleMode(val id: String, val label: String, val description: String = "") {
+  DARK_STUDIO("dark_studio", "Dark Studio", "Tactical Dark Studio"),
+  NEON_CYBERPUNK("neon_cyberpunk", "Neon Cyberpunk", "High-contrast cyber HUD"),
+  BRUTALIST_HIGH_VIS("brutalist_high_vis", "Brutalist High-Vis", "High-visibility sharp edges"),
+  OLED_STEALTH("oled_stealth", "OLED Stealth", "Pure black OLED stealth"),
+  VAPORWAVE_RETRO("vaporwave_retro", "Vaporwave Retro", "Outrun synthwave horizon"),
+  CUPERTINO_FROST("cupertino_frost", "Cupertino Frost", "Frosted glass & brushed metal"),
+  MATERIAL_EXPRESSIVE("material_expressive", "Material Expressive", "Dynamic Material 3 expressive"),
+  PEV_TACTICAL_NEON("pev_tactical_neon", "PEV Tactical Neon", "VESC carbon & neon lime"),
+  PEV_APEX_TRACK("pev_apex_track", "PEV Apex Track", "Hyper-scooter track telemetry"),
+  PEV_GRAVEL_DUST("pev_gravel_dust", "PEV Gravel Dust", "Backroad gravel & amber dust"),
+  PEV_TITANIUM_PRO("pev_titanium_pro", "PEV Titanium Pro", "CNC titanium & cyan telemetry"),
+  PEV_LITHIUM_LAB("pev_lithium_lab", "PEV Lithium Lab", "High-voltage cell diagnostics"),
+  PEV_NIGHT_CONVOY("pev_night_convoy", "PEV Night Convoy", "Midnight convoy tactical"),
+  PEV_TRAIL_FOREST("pev_trail_forest", "PEV Trail Forest", "Deep woods singletrack"),
+  PEV_MIDNIGHT_NEON("pev_midnight_neon", "PEV Midnight Neon", "Electric horizon neon"),
+  PEV_DESERT_ENDURO("pev_desert_enduro", "PEV Desert Enduro", "Canyon enduro warmth"),
+  PEV_SUNSET_CRUISE("pev_sunset_cruise", "PEV Sunset Cruise", "Coastal sunset carving"),
+  PEV_VOLT_RACER("pev_volt_racer", "PEV Volt Racer", "High-amp racing cockpit"),
+  PEV_CYBER_CARBON("pev_cyber_carbon", "PEV Cyber Carbon", "Forged carbon weave"),
+  PEV_ARCTIC_ICE("pev_arctic_ice", "PEV Arctic Ice", "Alpine glacier clarity"),
+  RURAL_BARNWOOD("rural_barnwood", "Rural Barnwood", "Warm homestead timber & iron"),
+  RURAL_SUNSET_GRAVEL("rural_sunset_gravel", "Rural Sunset Gravel", "Golden hour county gravel"),
+  RURAL_PINE_HOLLER("rural_pine_holler", "Rural Pine Holler", "Appalachian pine & moss"),
+  RURAL_PRAIRIE_GOLD("rural_prairie_gold", "Rural Prairie Gold", "Harvest wheat & brass"),
+  RURAL_CREEK_MIST("rural_creek_mist", "Rural Creek Mist", "Cool creek slate & mist"),
+  RURAL_HARVEST_IRON("rural_harvest_iron", "Rural Harvest Iron", "Barn workshop forged iron"),
+  WINDOWS_CLASSIC("windows_classic", "Windows 95 Classic", "Authentic Win95 3D bevel desktop"),
+  WINDOWS_95("windows_95", "Windows 95", "Classic 1995 desktop"),
+  WINDOWS_98("windows_98", "Windows 98", "Classic 1998 desktop"),
+  WINDOWS_2000("windows_2000", "Windows 2000 Pro", "Professional slate bevel desktop"),
+  WINDOWS_XP("windows_xp", "Windows XP Luna", "Luna blue & olive Bliss desktop"),
+  WINDOWS_7("windows_7", "Windows 7 Aero", "Translucent Aero glass desktop"),
+  WINDOWS_10("windows_10", "Windows 10 Fluent", "Fluent dark acrylic desktop"),
+  WINDOWS_11("windows_11", "Windows 11 Mica", "Rounded Mica bloom desktop"),
+  HOLIDAY_NEW_YEARS("holiday_new_years", "New Year's Midnight", "Gold champagne & midnight fireworks"),
+  HOLIDAY_VALENTINES("holiday_valentines", "Valentine's Crimson", "Rose neon & velvet hearts"),
+  HOLIDAY_ST_PATRICKS("holiday_st_patricks", "St. Patrick's Clover", "Emerald clover & lucky gold"),
+  HOLIDAY_EASTER("holiday_easter", "Easter Spring Bloom", "Pastel spring & meadow bloom"),
+  HOLIDAY_MEMORIAL_DAY("holiday_memorial_day", "Memorial Honor", "Stars, stripes & honor poppy"),
+  HOLIDAY_FOURTH_JULY("holiday_fourth_july", "4th of July Liberty", "Patriotic fireworks & liberty stars"),
+  HOLIDAY_LABOR_DAY("holiday_labor_day", "Labor Day Iron", "American workshop & industrial brass"),
+  HOLIDAY_HALLOWEEN("holiday_halloween", "Halloween Midnight", "Jack-o'-lantern amber & violet mist"),
+  HOLIDAY_VETERANS_DAY("holiday_veterans_day", "Veterans Valor", "Service gold star & honor ribbon"),
+  HOLIDAY_THANKSGIVING("holiday_thanksgiving", "Thanksgiving Harvest", "Autumn maple & harvest gold"),
+  HOLIDAY_CHRISTMAS("holiday_christmas", "Christmas Pine & Holly", "Festive pine, holly & string lights"),
 }
 
-enum class VisualStyleMode(val id: String, val label: String, val description: String) {
-  DARK_STUDIO("dark_studio", "Dark Tactical Studio", "Stealth obsidian HUD with neon telemetry"),
-  PEV_CYBER_CARBON("pev_cyber_carbon", "Carbon Hyper-PEV", "Weave carbon dark cockpit with high-voltage lime & ice-cyan HUD"),
-  PEV_TRAIL_FOREST("pev_trail_forest", "Forest EUC Trail", "Deep Pacific Northwest pine canopy with crisp emerald-mint instruments"),
-  PEV_VOLT_RACER("pev_volt_racer", "72V Volt Racing", "Track-ready obsidian asphalt with electric volt-yellow & racing red gauges"),
-  PEV_MIDNIGHT_NEON("pev_midnight_neon", "Midnight Scooter Run", "Wet neon street-run aesthetic with glowing cyan & lime reflections"),
-  PEV_DESERT_ENDURO("pev_desert_enduro", "Desert Canyon eMoto", "Red-rock twilight canyon slate with glowing amber & copper accents"),
-  PEV_ARCTIC_ICE("pev_arctic_ice", "Arctic Cold-Cell", "Sub-zero glacier navy with frosted ice-blue battery telemetry"),
-  PEV_SUNSET_CRUISE("pev_sunset_cruise", "Coastal Sunset Glide", "Deep ocean twilight with warm sunset gold & horizon teal"),
-  PEV_TACTICAL_NEON("pev_tactical_neon", "Tactical Neon 9-DOF", "High-contrast obsidian avionics with laser lime, cyber cyan & amber needles"),
-  PEV_APEX_TRACK("pev_apex_track", "Apex Track Telemetry", "Motorsport carbon deck with crimson pulse & crisp white lap gauges"),
-  PEV_GRAVEL_DUST("pev_gravel_dust", "Rural Gravel Enduro", "Dark basalt trail slate with burnt copper & off-road gold accents"),
-  PEV_TITANIUM_PRO("pev_titanium_pro", "Titanium CNC Pro", "Brushed dark gunmetal aluminum with ice-blue precision lines"),
-  PEV_LITHIUM_LAB("pev_lithium_lab", "21700 Lithium Lab", "Deep cell-engineering emerald slate with high-vis BMS green"),
-  PEV_NIGHT_CONVOY("pev_night_convoy", "Night Convoy Stealth", "Deep midnight indigo with amber headlight gold & neon tail glow"),
-  WINDOWS_CLASSIC("windows_classic", "Windows Classic 95", "3D silver bevels, navy title bars & classic teal desktop"),
-  WINDOWS_2000("windows_2000", "Windows 2000 Pro", "Slate #3A6EA5 desktop, warm putty chrome & navy-to-sky title bars"),
-  WINDOWS_XP("windows_xp", "Windows XP Luna", "Bliss hills desktop, royal Luna blue title bars & green Start button"),
-  WINDOWS_7("windows_7", "Windows 7 Aero", "Frosted sapphire Aero glass windows & glowing Orb taskbar"),
-  WINDOWS_10("windows_10", "Windows 10 Fluent", "Sharp Fluent Reveal borders, dark matte taskbar & crisp accent chrome"),
-  WINDOWS_11("windows_11", "Windows 11 Mica", "Silky Bloom desktop, translucent Mica rounded windows & centered taskbar"),
-  M3_DYNAMIC("m3_dynamic", "Material 3 Dynamic", "Android wallpaper-derived adaptive palette"),
-  WARM_EDITORIAL("warm_editorial", "Warm Editorial", "Earth-toned trail journal with crisp contrast"),
-  VIBRANT_CARDS("vibrant_cards", "Vibrant Cards", "Bold gradient contrast & kinetic surface pop"),
-  BRUTALIST_HIGH_VIS("brutalist_high_vis", "Brutalist High-Vis", "Zero-radius high-contrast industrial chrome"),
-  VAPORWAVE_RETRO("vaporwave_retro", "Vaporwave Synth", "Retro neon magenta-cyan midnight CRT palette"),
-  OLED_STEALTH("oled_stealth", "OLED True Black", "Pure #000000 battery-saving night tactical HUD"),
-  RURAL_BARNWOOD("rural_barnwood", "Rural Barnwood Shop", "Warm cedar barn slate with lantern amber & olive pasture trim"),
-  RURAL_SUNSET_GRAVEL("rural_sunset_gravel", "Gravel Backroad Dusk", "Warm twilight terracotta dirt road with golden headlight glow"),
-  RURAL_PINE_HOLLER("rural_pine_holler", "Appalachian Pine Holler", "Deep misty hemlock evergreen with moss-lime trail telemetry"),
-  RURAL_PRAIRIE_GOLD("rural_prairie_gold", "Heartland Prairie Gold", "Midnight wheat-field charcoal with harvest gold & sky cyan"),
-  RURAL_CREEK_MIST("rural_creek_mist", "Creek Crossing Mist", "Riverstone slate blue with cool spring-water mint accents"),
-  RURAL_HARVEST_IRON("rural_harvest_iron", "Farmhouse Cast Iron", "Forged shop iron black with tractor green & safety orange"),
-  HOLIDAY_NEW_YEARS("holiday_new_years", "New Year's Midnight", "Seasonal champagne gold & midnight sparkler fireworks HUD"),
-  HOLIDAY_VALENTINES("holiday_valentines", "Valentine's Crimson", "Seasonal velvet plum slate with rose-crimson & warm gold accents"),
-  HOLIDAY_ST_PATRICKS("holiday_st_patricks", "St. Patrick's Clover", "Seasonal emerald Isle slate with lucky clover green & Celtic gold"),
-  HOLIDAY_EASTER("holiday_easter", "Easter Spring Bloom", "Seasonal pastel lilac, spring meadow mint & warm sunrise gold"),
-  HOLIDAY_MEMORIAL_DAY("holiday_memorial_day", "Memorial Honor", "Seasonal deep navy valor slate with crimson & starlight silver"),
-  HOLIDAY_FOURTH_JULY("holiday_fourth_july", "4th of July Liberty", "Seasonal midnight starfield navy with red, white & electric ice blue"),
-  HOLIDAY_LABOR_DAY("holiday_labor_day", "Labor Day Iron", "Seasonal end-of-summer forged steel with safety amber & denim blue"),
-  HOLIDAY_HALLOWEEN("holiday_halloween", "Halloween Midnight", "Seasonal jack-o'-lantern orange, witch violet & slime lime HUD"),
-  HOLIDAY_VETERANS_DAY("holiday_veterans_day", "Veterans Valor", "Seasonal brass olive drab with bronze gold & crisp ceremonial blue"),
-  HOLIDAY_THANKSGIVING("holiday_thanksgiving", "Thanksgiving Harvest", "Seasonal spiced autumn slate with harvest amber & cranberry accents"),
-  HOLIDAY_CHRISTMAS("holiday_christmas", "Christmas Pine & Holly", "Seasonal deep evergreen slate with holly red, pine green & gold"),
+enum class AppThemePreset(val id: String, val label: String) {
+  LIME("lime", "Lime Neon"),
+  CYAN("cyan", "Cyber Cyan"),
+  EMERALD("emerald", "Emerald Trail"),
+  PURPLE("purple", "Deep Purple"),
+  AMBER("amber", "Amber Warning"),
+  HOT_PINK("hot_pink", "Hot Pink"),
+  ELECTRIC_BLUE("electric_blue", "Electric Blue"),
+  SOLARIZED("solarized", "Solarized"),
 }
 
-enum class VoiceDspProfile {
-  WARM_PORCH,
-  DEEP_BARN,
-  BRIGHT_DISPATCH,
-  TACTICAL_CRISP,
-  WARM_SCOUT,
-  OUTBACK_AU,
-  HIGHLAND_UK,
-  CB_RADIO,
+enum class ColorModeOverride(val id: String, val label: String) {
+  DARK("dark", "Dark"),
+  LIGHT("light", "Light"),
+  SYSTEM("system", "System"),
+}
+
+enum class HudStyle(val id: String, val label: String) {
+  ORB("orb", "Neon Orb"),
+  ANALOG("analog", "Analog Dial"),
+  CYBER("cyber", "Cyber Arc"),
+  MINIMAL("minimal", "Minimal Digital"),
+  BAR("bar", "LED Bar"),
+  AVIATION("aviation", "Aviation Horizon"),
+  SUPERBIKE("superbike", "Superbike Tach"),
+  F1_TELEMETRY("f1_telemetry", "F1 Telemetry"),
+  FIGHTER_JET("fighter_jet", "Fighter Jet HUD"),
+  COMPASS_ROSE("compass_rose", "Compass Rose"),
+  DUAL_TWIN("dual_twin", "Dual Twin Cluster"),
+  RETRO_SYNTH("retro_synth", "Retro Synth"),
+  EUC_LEAN("euc_lean", "EUC Lean Carver"),
+}
+
+enum class FontPreset(val id: String, val label: String, val familyName: String = label) {
+  TACTICAL_MONO("tactical_mono", "Tactical Mono"),
+  HIGHWAY_SANS("highway_sans", "Highway Sans"),
+  CLASSIC_SERIF("classic_serif", "Classic Serif"),
+  BRUTAL_CONDENSED("brutal_condensed", "Brutal Condensed"),
+  SPACE_GROTESK("space_grotesk", "Space Grotesk"),
+  JETBRAINS_MONO("jetbrains_mono", "JetBrains Mono"),
+  ROBOTO("roboto", "Roboto"),
+  INTER("inter", "Inter"),
+}
+
+enum class TypographyScaleMode(val id: String, val label: String, val multiplier: Float) {
+  COMPACT("compact", "Compact", 0.92f),
+  STANDARD("standard", "Standard", 1.0f),
+  LARGE("large", "Large", 1.12f),
+}
+
+enum class BgTexture(val id: String, val label: String) {
+  NONE("none", "None"),
+  GRID("grid", "Tactical Grid"),
+  COUNTY_GRID("county_grid", "County Section Grid"),
+  ASPHALT("asphalt", "Asphalt Grain"),
+  GRAVEL("gravel", "Crushed Gravel"),
+  TRAIL_DUST("trail_dust", "Trail Dust"),
+  CONTOUR("contour", "Elevation Contour"),
+  TOPO("topo", "Topographic"),
+  WAVES("waves", "Sine Waves"),
+  FOREST("forest", "Pine Forest"),
+  FARMLAND("farmland", "Farmland Furrows"),
+  HEX("hex", "Hex Honeycomb"),
+  MOUNTAIN("mountain", "Mountain Ridge"),
+  CIRCUIT("circuit", "PCB Circuit"),
+  CARBON("carbon", "Carbon Weave"),
+  STEEL_PLATE("steel_plate", "Diamond Steel"),
+  RADAR_GRID("radar_grid", "Radar Polar"),
+  MATRIX("matrix", "Digital Matrix"),
+  BLUEPRINT("blueprint", "CAD Blueprint"),
+  SCANLINES("scanlines", "CRT Scanlines"),
+  DIAMOND_GRID("diamond_grid", "Diamond Lattice"),
+  STARFIELD("starfield", "Night Starfield"),
+  WOODGRAIN("woodgrain", "Barn Woodgrain"),
+  ISOMETRIC("isometric", "3D Isometric"),
+}
+
+enum class PevWallpaper(val id: String, val label: String) {
+  NONE("none", "None"),
+  AUTO_THEME("auto_theme", "Auto Match Theme"),
+  HYPER_TRACK("hyper_track", "Hyper Track"),
+  VESC_CARBON("vesc_carbon", "VESC Carbon"),
+  ALPINE_RIDGE("alpine_ridge", "Alpine Ridge"),
+  CYBER_CITY_EUC("cyber_city_euc", "Cyber City EUC"),
+  FOREST_EUC("forest_euc", "Forest EUC"),
+  NEON_SCOOTER("neon_scooter", "Neon Scooter"),
+  CANYON_EMOTO("canyon_emoto", "Canyon E-Moto"),
+  COASTAL_ONEWHEEL("coastal_onewheel", "Coastal Onewheel"),
+  MOUNTAIN_TRAIL("mountain_trail", "Mountain Trail"),
+  COCKPIT_HERO("cockpit_hero", "Cockpit Hero"),
+  BOARD_CONVOY("board_convoy", "Board Convoy"),
+  CYBER_ALLEY("cyber_alley", "Cyber Alley"),
+  GRAVEL_SUNSET("gravel_sunset", "Gravel Sunset"),
+  BARN_WORKBENCH("barn_workbench", "Barn Workbench"),
+  SYNTHWAVE_GRID("synthwave_grid", "Synthwave Grid"),
+  ALPINE_GLACIER("alpine_glacier", "Alpine Glacier"),
+}
+
+enum class PevLegalClass(val id: String, val label: String, val maxMph: Int) {
+  CLASS_1_15("class_1_15", "Class 1 (15 MPH Assist)", 15),
+  CLASS_2_20("class_2_20", "Class 2 (20 MPH Throttle)", 20),
+  CLASS_3_28("class_3_28", "Class 3 (28 MPH Fast)", 28),
+  OFFROAD_UNLIMITED("offroad_unlimited", "Off-Road Unlimited", 99);
+
+  val maxSpeedMph: Int
+    get() = maxMph
+}
+
+// ============================================================================
+// AUDIO, VOICE & HAPTIC PRESETS
+// ============================================================================
+enum class VoiceDspProfile(
+  val id: String,
+  val label: String,
+  val bassGainMb: Int = 250,
+  val highShelfHz: Int = 3600,
+) {
+  DEEP_BARN("deep_barn", "Deep Barn Resonance", 450, 2800),
+  WARM_PORCH("warm_porch", "Warm Porch Acoustic", 340, 3200),
+  WARM_SCOUT("warm_scout", "Warm Creek Scout", 280, 3600),
+  BRIGHT_DISPATCH("bright_dispatch", "Bright Trail Dispatch", 180, 4400),
+  TACTICAL_CRISP("tactical_crisp", "Tactical Crisp Presence", 160, 4800),
+  OUTBACK_AU("outback_au", "Outback Open Air", 260, 3900),
+  HIGHLAND_UK("highland_uk", "Highland Studio Warm", 310, 3500),
+  CB_RADIO("cb_radio", "Bandpass CB Convoy", 120, 2400),
 }
 
 enum class AiVoiceProfile(
   val id: String,
   val label: String,
   val description: String,
-  val pitch: Float,
-  val speechRate: Float,
-  val voiceHint: String,
-  val sampleLine: String,
   val geminiVoiceName: String,
-  val styleDirective: String,
   val dspProfile: VoiceDspProfile,
+  val speechRate: Float,
+  val pitch: Float,
+  val localeTag: String,
+  val preferFemale: Boolean,
+  val styleDirective: String,
+  val sampleLine: String,
 ) {
   WARM_RURAL_PORCH(
     id = "warm_rural_porch",
-    label = "Warm Country Porch",
-    description = "Friendly, steady rural hospitality & unhurried cadence",
-    pitch = 0.96f,
-    speechRate = 0.96f,
-    voiceHint = "en-us-male-warm",
-    sampleLine = "Howdy neighbor, welcome back to the gravel! Battery's strong and the backroads are clear.",
-    geminiVoiceName = "Achird",
-    styleDirective = "Speak warmly and conversationally in an unhurried, friendly rural porch neighbor tone",
+    label = "Warm Rural Porch",
+    description = "Friendly backroad trail guide with warm country cadence",
+    geminiVoiceName = "Aoede",
     dspProfile = VoiceDspProfile.WARM_PORCH,
+    speechRate = 0.96f,
+    pitch = 0.94f,
+    localeTag = "en-US",
+    preferFemale = false,
+    styleDirective = "Speak with a warm, unhurried rural porch cadence.",
+    sampleLine = "Evening partner, battery pack is balanced and the county gravel is clear ahead.",
   ),
-  BARN_SHOP_GRANDPA(
-    id = "barn_shop_grandpa",
-    label = "Barn Shop Grandpa",
-    description = "Deep, gravelly old-school mechanic wisdom",
-    pitch = 0.76f,
-    speechRate = 0.88f,
-    voiceHint = "en-us-male-deep",
-    sampleLine = "Grab a wrench and pull up a stool, friend. Let's check them brake pads and tire PSI right.",
-    geminiVoiceName = "Enceladus",
-    styleDirective = "Speak in a deep, gravelly, seasoned old-school barn mechanic voice with warm wisdom",
+  BARN_CHIEF_DEEP(
+    id = "barn_chief_deep",
+    label = "Barn Chief Deep",
+    description = "Deep workshop mechanic voice with steady bass authority",
+    geminiVoiceName = "Charon",
     dspProfile = VoiceDspProfile.DEEP_BARN,
+    speechRate = 0.93f,
+    pitch = 0.86f,
+    localeTag = "en-US",
+    preferFemale = false,
+    styleDirective = "Speak with a deep, calm barn-mechanic baritone.",
+    sampleLine = "Phase leads look clean and your 72-volt pack is holding zero sag under load.",
   ),
-  COUNTRY_DISPATCH_GAL(
-    id = "country_dispatch_gal",
-    label = "Country Trail Dispatch",
-    description = "Bright, reassuring rural trail guide voice",
-    pitch = 1.15f,
-    speechRate = 1.02f,
-    voiceHint = "en-us-female-bright",
-    sampleLine = "Hey there trail rider! Creek bridge ahead is dry, and you've got plenty of juice to get home.",
-    geminiVoiceName = "Zephyr",
-    styleDirective = "Speak in a bright, upbeat, encouraging female outdoor trail guide voice",
+  BRIGHT_TRAIL_DISPATCH(
+    id = "bright_trail_dispatch",
+    label = "Bright Trail Dispatch",
+    description = "Clear upbeat trail dispatcher for wind & road noise clarity",
+    geminiVoiceName = "Kore",
     dspProfile = VoiceDspProfile.BRIGHT_DISPATCH,
+    speechRate = 1.02f,
+    pitch = 1.04f,
+    localeTag = "en-US",
+    preferFemale = true,
+    styleDirective = "Speak clearly and briskly like a trail radio dispatcher.",
+    sampleLine = "Trail dispatch copy: headwind at 8 miles per hour, charger waypoint 4 miles north.",
   ),
-  TACTICAL_COMMANDER(
-    id = "tactical_commander",
-    label = "Tactical HUD Comms",
-    description = "Crisp, clear high-speed cockpit callouts",
-    pitch = 0.98f,
-    speechRate = 1.10f,
-    voiceHint = "en-us-male-crisp",
-    sampleLine = "Telemetry locked. Voltage nominal at 58 volts. Keep eyes on the gravel curve ahead.",
-    geminiVoiceName = "Orus",
-    styleDirective = "Speak with crisp, firm, high-clarity tactical cockpit avionics precision",
-    dspProfile = VoiceDspProfile.TACTICAL_CRISP,
-  ),
-  RANCH_SCOUT_FEMALE(
-    id = "ranch_scout_female",
-    label = "Homestead Scout",
-    description = "Warm, grounded female rural trail voice",
-    pitch = 1.05f,
-    speechRate = 0.95f,
-    voiceHint = "en-us-female-warm",
-    sampleLine = "Sun's dipping over the ridge, partner. Flip on your headlight and enjoy the quiet country air.",
-    geminiVoiceName = "Sulafat",
-    styleDirective = "Speak in a warm, grounded, calm female homestead trail scout voice",
-    dspProfile = VoiceDspProfile.WARM_SCOUT,
-  ),
-  AUSSIE_OUTBACK_RIDER(
-    id = "aussie_outback_rider",
-    label = "Outback Bush Trail",
-    description = "Laid-back backcountry bush accent",
-    pitch = 0.95f,
-    speechRate = 1.00f,
-    voiceHint = "en-au-male",
-    sampleLine = "G'day mate! Dirt track looks mint today, tyres are pumped and ready to roll.",
-    geminiVoiceName = "Puck",
-    styleDirective = "Speak with a cheerful, laid-back Australian outback trail rider accent",
-    dspProfile = VoiceDspProfile.OUTBACK_AU,
-  ),
-  HIGHLAND_COUNTRY_UK(
-    id = "highland_country_uk",
-    label = "Highland Country Lane",
-    description = "Calm British countryside hedgerow guide",
-    pitch = 1.02f,
-    speechRate = 0.97f,
-    voiceHint = "en-gb-female",
-    sampleLine = "Lovely day on the country lanes. Battery cells are balanced and steady as you go.",
-    geminiVoiceName = "Gacrux",
-    styleDirective = "Speak in a calm, mature, articulate British countryside voice",
-    dspProfile = VoiceDspProfile.HIGHLAND_UK,
-  ),
-  NIGHT_CONVOY_RADIO(
-    id = "night_convoy_radio",
-    label = "CB Convoy Radio",
-    description = "Punchy CB-radio dispatch cadence with radio FX",
-    pitch = 0.84f,
-    speechRate = 1.08f,
-    voiceHint = "en-us-male-radio",
-    sampleLine = "Breaker one-nine, trail rider! Backroad's all clear out past the old creek crossing, over.",
+  TACTICAL_COACH_CRISP(
+    id = "tactical_coach_crisp",
+    label = "Tactical Coach Crisp",
+    description = "High-precision cockpit telemetry & apex pacing coach",
     geminiVoiceName = "Fenrir",
-    styleDirective = "Speak with a punchy, alert, energetic late-night CB convoy radio dispatcher cadence",
+    dspProfile = VoiceDspProfile.TACTICAL_CRISP,
+    speechRate = 1.04f,
+    pitch = 0.98f,
+    localeTag = "en-US",
+    preferFemale = false,
+    styleDirective = "Deliver concise, high-clarity tactical PEV telemetry callouts.",
+    sampleLine = "Telemetry locked: 9-axis AHRS calibrated, lean angle nominal, ready to roll.",
+  ),
+  CREEK_SCOUT_FRIENDLY(
+    id = "creek_scout_friendly",
+    label = "Creek Scout Friendly",
+    description = "Relaxed backwoods singletrack scout",
+    geminiVoiceName = "Puck",
+    dspProfile = VoiceDspProfile.WARM_SCOUT,
+    speechRate = 0.98f,
+    pitch = 1.00f,
+    localeTag = "en-US",
+    preferFemale = true,
+    styleDirective = "Speak like an encouraging backcountry trail scout.",
+    sampleLine = "Creek crossing ahead looks shallow, keep steady throttle through the pine bend.",
+  ),
+  OUTBACK_OVERLAND_AU(
+    id = "outback_overland_au",
+    label = "Outback Overland",
+    description = "Australian overland trail guide",
+    geminiVoiceName = "Puck",
+    dspProfile = VoiceDspProfile.OUTBACK_AU,
+    speechRate = 0.99f,
+    pitch = 0.96f,
+    localeTag = "en-AU",
+    preferFemale = false,
+    styleDirective = "Speak with a relaxed Australian overland trail tone.",
+    sampleLine = "G'day rider, solar top-up looks solid and the ridge track is dry.",
+  ),
+  HIGHLAND_RIDGE_UK(
+    id = "highland_ridge_uk",
+    label = "Highland Ridge UK",
+    description = "Crisp British rally co-driver cadence",
+    geminiVoiceName = "Kore",
+    dspProfile = VoiceDspProfile.HIGHLAND_UK,
+    speechRate = 1.00f,
+    pitch = 0.98f,
+    localeTag = "en-GB",
+    preferFemale = true,
+    styleDirective = "Speak like a composed British rally co-driver.",
+    sampleLine = "Crest into slight left over gravel, sixty meters to the scenic overlook.",
+  ),
+  MIDNIGHT_CB_CONVOY(
+    id = "midnight_cb_convoy",
+    label = "Midnight CB Convoy",
+    description = "Classic highway CB radio convoy tone",
+    geminiVoiceName = "Fenrir",
     dspProfile = VoiceDspProfile.CB_RADIO,
-  );
-
-  val localeTag: String
-    get() =
-      when {
-        voiceHint.startsWith("en-gb", ignoreCase = true) -> "en-GB"
-        voiceHint.startsWith("en-au", ignoreCase = true) -> "en-AU"
-        else -> "en-US"
-      }
-
-  val preferFemale: Boolean
-    get() = voiceHint.contains("female", ignoreCase = true)
+    speechRate = 0.95f,
+    pitch = 0.90f,
+    localeTag = "en-US",
+    preferFemale = false,
+    styleDirective = "Speak with classic CB convoy radio warmth and brevity.",
+    sampleLine = "Breaker one-nine, convoy beacon locked and clear all the way to the county line.",
+  ),
 }
 
-@Keep
-@IgnoreExtraProperties
 data class CustomVoiceProfile(
-  val id: String = UUID.randomUUID().toString(),
-  val name: String = "",
+  val id: String = "",
+  val name: String = "Custom Voice",
   val description: String = "",
-  val pitch: Float = 1.0f,
-  val speechRate: Float = 1.0f,
-  val baseProfileId: String = "warm_rural_porch",
-  val geminiVoiceName: String = "Achird",
-  val styleDirective: String = "Speak warmly and conversationally in a friendly rural tone",
+  val baseProfileId: String = AiVoiceProfile.WARM_RURAL_PORCH.id,
+  val geminiVoiceName: String = "Aoede",
   val dspProfile: VoiceDspProfile = VoiceDspProfile.WARM_PORCH,
+  val speechRate: Float = 0.96f,
+  val pitch: Float = 0.94f,
+  val localeTag: String = "en-US",
+  val preferFemale: Boolean = false,
+  val warmthPct: Int = 72,
+  val clarityPct: Int = 65,
+  val styleDirective: String = "Speak with a warm, unhurried rural cadence.",
+  val sampleLine: String = "Testing custom rural PEV voice tuning on the county trail.",
   val audioSampleBase64: String = "",
   val audioSampleFileName: String = "",
   val audioSampleDurationMs: Long = 0L,
-  val isCustomUploaded: Boolean = true,
+  val isCustomUploaded: Boolean = false,
   val createdAtMs: Long = System.currentTimeMillis(),
-) {
-  fun resolveEffectiveBase(): AiVoiceProfile =
-    AiVoiceProfile.entries.firstOrNull { it.id == baseProfileId } ?: AiVoiceProfile.WARM_RURAL_PORCH
+)
 
-  fun toEffectiveAiVoiceProfile(): AiVoiceProfile = resolveEffectiveBase()
-}
+fun CustomVoiceProfile.resolveEffectiveBase(): AiVoiceProfile =
+  AiVoiceProfile.entries.firstOrNull { it.id == baseProfileId } ?: AiVoiceProfile.WARM_RURAL_PORCH
 
-fun parseCustomVoiceProfiles(json: String?): List<CustomVoiceProfile> {
-  if (json.isNullOrBlank() || json.trim() == "[]") return emptyList()
-  return runCatching {
+fun parseCustomVoiceProfiles(json: String): List<CustomVoiceProfile> =
+  runCatching {
+    if (json.isBlank()) return emptyList()
     val arr = JSONArray(json)
-    val list = mutableListOf<CustomVoiceProfile>()
-    for (i in 0 until arr.length()) {
-      val obj = arr.getJSONObject(i)
-      list.add(
-        CustomVoiceProfile(
-          id = obj.optString("id", UUID.randomUUID().toString()),
-          name = obj.optString("name", "Custom Voice"),
-          description = obj.optString("description", ""),
-          pitch = obj.optDouble("pitch", 1.0).toFloat(),
-          speechRate = obj.optDouble("speechRate", 1.0).toFloat(),
-          baseProfileId = obj.optString("baseProfileId", "warm_rural_porch"),
-          geminiVoiceName = obj.optString("geminiVoiceName", "Achird"),
-          styleDirective = obj.optString("styleDirective", ""),
-          dspProfile = runCatching { VoiceDspProfile.valueOf(obj.optString("dspProfile", "WARM_PORCH")) }.getOrDefault(VoiceDspProfile.WARM_PORCH),
-          audioSampleBase64 = obj.optString("audioSampleBase64", ""),
-          audioSampleFileName = obj.optString("audioSampleFileName", ""),
-          audioSampleDurationMs = obj.optLong("audioSampleDurationMs", 0L),
-          isCustomUploaded = obj.optBoolean("isCustomUploaded", true),
-          createdAtMs = obj.optLong("createdAtMs", System.currentTimeMillis()),
-        )
+    (0 until arr.length()).mapNotNull { i ->
+      val o = arr.optJSONObject(i) ?: return@mapNotNull null
+      val id = o.optString("id").trim()
+      if (id.isBlank()) return@mapNotNull null
+      val sampleB64 = o.optString("audioSampleBase64", "")
+      CustomVoiceProfile(
+        id = id,
+        name = o.optString("name", "Custom Voice"),
+        description = o.optString("description", ""),
+        baseProfileId = o.optString("baseProfileId", AiVoiceProfile.WARM_RURAL_PORCH.id),
+        geminiVoiceName = o.optString("geminiVoiceName", "Aoede"),
+        dspProfile =
+          VoiceDspProfile.entries.firstOrNull { it.id == o.optString("dspProfile") }
+            ?: VoiceDspProfile.WARM_PORCH,
+        speechRate = o.optDouble("speechRate", 0.96).toFloat().coerceIn(0.75f, 1.30f),
+        pitch = o.optDouble("pitch", 0.94).toFloat().coerceIn(0.70f, 1.30f),
+        localeTag = o.optString("localeTag", "en-US"),
+        preferFemale = o.optBoolean("preferFemale", false),
+        warmthPct = o.optInt("warmthPct", 70).coerceIn(0, 100),
+        clarityPct = o.optInt("clarityPct", 65).coerceIn(0, 100),
+        styleDirective = o.optString("styleDirective", "Speak with a warm rural cadence."),
+        sampleLine = o.optString("sampleLine", "Testing custom rural PEV voice tuning."),
+        audioSampleBase64 = sampleB64,
+        audioSampleFileName = o.optString("audioSampleFileName", ""),
+        audioSampleDurationMs = o.optLong("audioSampleDurationMs", 0L),
+        isCustomUploaded = o.optBoolean("isCustomUploaded", sampleB64.isNotBlank()),
+        createdAtMs = o.optLong("createdAtMs", System.currentTimeMillis()),
       )
     }
-    list
   }.getOrDefault(emptyList())
-}
 
 fun serializeCustomVoiceProfiles(list: List<CustomVoiceProfile>): String {
   val arr = JSONArray()
-  for (item in list) {
-    val obj = JSONObject().apply {
-      put("id", item.id)
-      put("name", item.name)
-      put("description", item.description)
-      put("pitch", item.pitch.toDouble())
-      put("speechRate", item.speechRate.toDouble())
-      put("baseProfileId", item.baseProfileId)
-      put("geminiVoiceName", item.geminiVoiceName)
-      put("styleDirective", item.styleDirective)
-      put("dspProfile", item.dspProfile.name)
-      put("audioSampleBase64", item.audioSampleBase64)
-      put("audioSampleFileName", item.audioSampleFileName)
-      put("audioSampleDurationMs", item.audioSampleDurationMs)
-      put("isCustomUploaded", item.isCustomUploaded)
-      put("createdAtMs", item.createdAtMs)
-    }
-    arr.put(obj)
+  list.forEach { v ->
+    arr.put(
+      JSONObject().apply {
+        put("id", v.id)
+        put("name", v.name)
+        put("description", v.description)
+        put("baseProfileId", v.baseProfileId)
+        put("geminiVoiceName", v.geminiVoiceName)
+        put("dspProfile", v.dspProfile.id)
+        put("speechRate", v.speechRate.toDouble())
+        put("pitch", v.pitch.toDouble())
+        put("localeTag", v.localeTag)
+        put("preferFemale", v.preferFemale)
+        put("warmthPct", v.warmthPct)
+        put("clarityPct", v.clarityPct)
+        put("styleDirective", v.styleDirective)
+        put("sampleLine", v.sampleLine)
+        put("audioSampleBase64", v.audioSampleBase64)
+        put("audioSampleFileName", v.audioSampleFileName)
+        put("audioSampleDurationMs", v.audioSampleDurationMs)
+        put("isCustomUploaded", v.isCustomUploaded)
+        put("createdAtMs", v.createdAtMs)
+      }
+    )
   }
   return arr.toString()
 }
 
-
-enum class PevWallpaper(val id: String, val label: String, val subtitle: String) {
-  AUTO_THEME("auto_theme", "Auto (Match PEV Theme)", "Automatically pairs wallpaper with active PEV theme"),
-  HYPER_TRACK("hyper_track", "Night Hyper-Track Rigs", "Wet night circuit with neon lime hyper-scooter & eMoto"),
-  VESC_CARBON("vesc_carbon", "Carbon & VESC Circuit", "Woven carbon fiber & glowing electric voltage traces"),
-  ALPINE_RIDGE("alpine_ridge", "Alpine Twilight eMTB", "Electric trail bike headlight over misty mountain ridge"),
-  CYBER_CITY_EUC("cyber_city_euc", "Neon Highway EUC Run", "High-speed electric unicycle on rain-slick neon bridge"),
-  FOREST_EUC("forest_euc", "Misty Pine EUC & eMTB", "Twilight forest singletrack with headlight beam"),
-  NEON_SCOOTER("neon_scooter", "Midnight Neon Scooter", "Rain-slick neon city dual-motor hyper-scooter"),
-  CANYON_EMOTO("canyon_emoto", "Desert Canyon eMoto", "Red rock ridge electric dirt bike at dusk"),
-  COASTAL_ONEWHEEL("coastal_onewheel", "Coastal Onewheel & eSkate", "Twilight ocean cliffside overlook"),
-  MOUNTAIN_TRAIL("mountain_trail", "Rural Mountain Trail", "Backcountry trail dusk horizon"),
-  COCKPIT_HERO("cockpit_hero", "Tactical PEV Cockpit", "Dark anodized cockpit energy art"),
-  BOARD_CONVOY("board_convoy", "Night Convoy Pack", "Group ride lights on open road"),
-  CYBER_ALLEY("cyber_alley", "Cyber Neon Alley", "Rain-slick cyberpunk alleyway with glowing electric ride lights"),
-  GRAVEL_SUNSET("gravel_sunset", "Backroad Gravel Sunset", "Golden-hour dirt road horizon with dramatic sky"),
-  BARN_WORKBENCH("barn_workbench", "Barn Shop Workbench", "Warm timber workshop bench with tools and amber lantern"),
-  SYNTHWAVE_GRID("synthwave_grid", "Synthwave Neon Grid", "Retro 80s sunset laser grid horizon"),
-  ALPINE_GLACIER("alpine_glacier", "Alpine Glacier Ridge", "Crisp frosted mountain peaks at sub-zero dawn"),
-  NONE("none", "Pure Procedural Only", "Disable photo wallpaper; use procedural grid/texture"),
+fun MasterSettings.getActiveCustomVoice(): CustomVoiceProfile? {
+  if (activeCustomVoiceId.isBlank()) return null
+  return parseCustomVoiceProfiles(customVoiceProfilesJson).firstOrNull {
+    it.id == activeCustomVoiceId
+  }
 }
 
-enum class RingtonePreset(val id: String, val label: String, val subtitle: String) {
-  VOLT_PULSE("volt_pulse", "Volt Pulse", "Crisp rising 3-note electric cadence"),
-  CYBER_ARPEGGIO("cyber_arpeggio", "Cyber Arpeggio", "Futuristic neon synth chord sweep"),
-  TACTICAL_RADAR("tactical_radar", "Tactical Radar", "Dual-sweep cockpit dispatch ping"),
-  HYPER_SCOOTER("hyper_scooter", "Hyper-PEV Horn", "High-energy dual-tone street chirp"),
-  CLASSIC_BELL("classic_bell", "eBike Brass Bell", "Bright harmonic bicycle bell ring"),
-  RETRO_CHIME_95("retro_chime_95", "Retro 95 Startup", "Nostalgic warm retro chord chime"),
-  AVIATION_COCKPIT("aviation_cockpit", "Aviation Chime", "Clean avionics double-ding"),
-  LASER_PING("laser_ping", "Plasma Laser", "Fast sci-fi frequency sweep"),
-  TRAIL_HORN("trail_horn", "Convoy Horn", "Bold low-mid outdoor trail blast"),
-  SYNTH_WAVE("synth_wave", "Synthwave 84", "4-step nostalgic vaporwave riff"),
-  SONAR_ECHO("sonar_echo", "Submarine Sonar", "Deep resonant radar echo"),
-  SYSTEM_DEFAULT("system_default", "Android System Ringtone", "Uses your device's default or custom ringtone"),
+enum class RingtonePreset(val id: String, val label: String) {
+  VOLT_PULSE("volt_pulse", "Volt Pulse"),
+  CYBER_ARPEGGIO("cyber_arpeggio", "Cyber Arpeggio"),
+  TACTICAL_RADAR("tactical_radar", "Tactical Radar"),
+  HYPER_SCOOTER("hyper_scooter", "Hyper Scooter"),
+  CLASSIC_BELL("classic_bell", "Classic Trail Bell"),
+  RETRO_CHIME_95("retro_chime_95", "Retro Chime '95"),
+  AVIATION_COCKPIT("aviation_cockpit", "Aviation Cockpit"),
+  LASER_PING("laser_ping", "Laser Ping"),
+  TRAIL_HORN("trail_horn", "Trail Horn"),
+  SYNTH_WAVE("synth_wave", "Synth Wave"),
+  SONAR_ECHO("sonar_echo", "Sonar Echo"),
+  SYSTEM_DEFAULT("system_default", "System Default"),
 }
 
 enum class AlertTonePreset(val id: String, val label: String) {
   CHIRP_TACTICAL("chirp_tactical", "Tactical Chirp"),
-  ROGER_BEEPS("roger_beeps", "Walkie Roger Beep"),
+  ROGER_BEEPS("roger_beeps", "Roger Beeps"),
   BELL_CLEAR("bell_clear", "Clear Bell"),
   CYBER_BLIP("cyber_blip", "Cyber Blip"),
   TWO_TONE_ALERT("two_tone_alert", "Two-Tone Alert"),
-  SUBTLE_TAP("subtle_tap", "Subtle Tick"),
-  ALARM_SIREN("alarm_siren", "Urgent Siren"),
+  SUBTLE_TAP("subtle_tap", "Subtle Tap"),
+  ALARM_SIREN("alarm_siren", "Alarm Siren"),
   SILENT("silent", "Silent"),
 }
 
 enum class VibrationPatternPreset(val id: String, val label: String, val timings: LongArray) {
-  STANDARD("standard", "Standard Pulse", longArrayOf(0, 60)),
-  DOUBLE_TAP("double_tap", "Double Tactical Tap", longArrayOf(0, 45, 70, 55)),
-  HEARTBEAT("heartbeat", "Heartbeat Cadence", longArrayOf(0, 35, 60, 80, 140, 35)),
-  SOS_MORSE("sos_morse", "SOS Morse Alert", longArrayOf(0, 60, 50, 60, 50, 60, 120, 160, 50, 160)),
-  RAPID_BUZZ("rapid_buzz", "Triple Rapid Buzz", longArrayOf(0, 30, 40, 30, 40, 30)),
-  OFF("off", "Vibration Off", longArrayOf()),
+  OFF("off", "Off", longArrayOf()),
+  SINGLE_PULSE("single_pulse", "Single Pulse", longArrayOf(0, 40)),
+  DOUBLE_TAP("double_tap", "Double Tap", longArrayOf(0, 28, 60, 42)),
+  TRIPLE_BURST("triple_burst", "Triple Burst", longArrayOf(0, 25, 45, 25, 45, 40)),
+  HEARTBEAT("heartbeat", "Heartbeat", longArrayOf(0, 35, 70, 55, 220, 30)),
+  SOS_MORSE("sos_morse", "SOS Pulse", longArrayOf(0, 30, 40, 30, 40, 30, 90, 75, 50, 75)),
 }
 
-enum class NavRouteProfile(val id: String, val label: String, val osrmProfile: String, val orsProfile: String, val mapboxProfile: String) {
-  PEV_BIKE_LANE("pev_bike_lane", "PEV Bike Lane", "cycling", "cycling-electric", "cycling"),
-  OFFROAD_TRAIL("offroad_trail", "Trail / Dirt", "cycling", "cycling-mountain", "cycling"),
-  FAST_STREET("fast_street", "Fast Street", "driving", "driving-car", "driving"),
-  SCENIC_LOW_TRAFFIC("scenic_low_traffic", "Quiet Backroads", "cycling", "cycling-regular", "cycling"),
-}
-
-data class NavManeuverStep(
-  val instruction: String,
-  val streetName: String = "",
-  val distanceM: Double = 0.0,
-  val durationSec: Double = 0.0,
-  val maneuverType: String = "straight", // left, right, sharp_left, sharp_right, slight_left, slight_right, uturn, roundabout, arrive, depart, straight
-  val lat: Double = 0.0,
-  val lng: Double = 0.0,
-)
-
-data class ActiveNavRoute(
-  val destinationName: String,
-  val destLat: Double,
-  val destLng: Double,
-  val profile: NavRouteProfile,
-  val totalDistanceKm: Double,
-  val totalDurationSec: Long,
-  val elevationGainM: Double = 0.0,
-  val polylinePoints: List<Pair<Double, Double>>,
-  val steps: List<NavManeuverStep>,
-  val providerSource: String,
-  val estimatedBatteryPctNeeded: Int = 0,
-  val createdAtMs: Long = System.currentTimeMillis(),
-)
-
-data class LiveChargingStation(
+// ============================================================================
+// NAVIGATION & RIDER MATCHING ENUMS
+// ============================================================================
+enum class NavRouteProfile(
   val id: String,
-  val title: String,
-  val address: String,
-  val lat: Double,
-  val lng: Double,
-  val distanceKm: Double,
-  val powerKw: String = "Standard AC",
-  val operatorName: String = "Public Charger",
-  val isFree: Boolean = false,
-)
-
-enum class ColorModeOverride(val id: String, val label: String) {
-  SYSTEM("system", "System Auto"),
-  DARK("dark", "Dark Cockpit"),
-  LIGHT("light", "Daylight Crisp"),
+  val label: String,
+  val mapboxProfile: String,
+  val orsProfile: String,
+  val osrmProfile: String,
+) {
+  PEV_BIKE_LANE("pev_bike_lane", "PEV Bike Lane", "cycling", "cycling-electric", "bike"),
+  FAST_STREET("fast_street", "Fast Street", "driving", "driving-car", "driving"),
+  GRAVEL_TRAIL("gravel_trail", "Gravel / Trail", "cycling", "cycling-mountain", "bike"),
+  FOOT_WALK("foot_walk", "Slow Path / Walk", "walking", "foot-walking", "foot"),
 }
 
-enum class PevLegalClass(val id: String, val label: String, val maxMph: Int, val description: String) {
-  CLASS_1_15("class_1", "Class 1 / Sidewalk (15 MPH)", 15, "Pedestrian-safe bikeway cap"),
-  CLASS_2_20("class_2", "Class 2 PEV (20 MPH)", 20, "Standard urban scooter & e-bike limit"),
-  CLASS_3_28("class_3", "Class 3 Commuter (28 MPH)", 28, "Street & Class 3 corridor limit"),
-  OFFROAD_UNLIMITED("offroad", "Off-Road / Track (Open)", 99, "Unrestricted private trail telemetry"),
-}
-
-enum class HudStyle(val id: String, val label: String) {
-  ORB("orb", "Cyber Orb"),
-  DIGITAL("digital", "Digital HUD"),
-  ANALOG("analog", "Analog Dial"),
-  MINIMAL("minimal", "Minimalist"),
-  BAR("bar", "Bar Telemetry"),
-  CYBER("cyber", "Cyber Arc"),
-  AVIATION("aviation", "Aviation Horizon"),
-  SUPERBIKE("superbike", "Superbike Tach"),
-  F1_TELEMETRY("f1_telemetry", "F1 Telemetry"),
-  FIGHTER_JET("fighter_jet", "Fighter Jet HUD"),
-  COMPASS_ROSE("compass_rose", "Compass Rose"),
-  DUAL_TWIN("dual_twin", "Twin Dial Pod"),
-  RETRO_SYNTH("retro_synth", "Retro 80s Synth"),
-  EUC_LEAN("euc_lean", "EUC / Lean HUD"),
-}
-
-enum class FontPreset(val id: String, val label: String) {
-  SPACE_GROTESK("space_grotesk", "Space Grotesk"),
-  ORBITRON("orbitron", "Orbitron HUD"),
-  JETBRAINS_MONO("jetbrains_mono", "JetBrains Mono"),
-  RAJDHANI("rajdhani", "Rajdhani Avionics"),
-  PLUS_JAKARTA("plus_jakarta", "Plus Jakarta Sans"),
-  AUDIOWIDE("audiowide", "Audiowide Display"),
-  SHARE_TECH("share_tech", "Share Tech Mono"),
-  FIRA_CODE("fira_code", "Fira Code"),
-  CHAKRA_PETCH("chakra_petch", "Chakra Petch HUD"),
-  OXANIUM("oxanium", "Oxanium Cyber"),
-  BEBAS_NEUE("bebas_neue", "Bebas Neue Display"),
-  RUSSO_ONE("russo_one", "Russo One Track"),
-  PLAYFAIR_DISPLAY("playfair_display", "Playfair Editorial"),
-  INTER("inter", "Inter Clean UI"),
-  VT323("vt323", "VT323 Retro CRT"),
-  SILKSCREEN("silkscreen", "Silkscreen Pixel"),
-}
-
-enum class BgTexture(val id: String, val label: String, val description: String) {
-  NONE("none", "Pure Void", "Immersive matte dark cockpit"),
-  GRID("grid", "Cyber Grid", "High-tech neon digital matrix"),
-  ASPHALT("asphalt", "Midnight Asphalt", "Road-grade textured surface"),
-  GRAVEL("gravel", "Gravel Trail", "Off-road dirt and stone grit"),
-  CONTOUR("contour", "Mountain Ridge", "Topographic elevation contours"),
-  FOREST("forest", "Pine Canopy", "Dense woodland canopy lines"),
-  FARMLAND("farmland", "Desert Dust", "Arid terrain track lines"),
-  HEX("hex", "Neon Synthwave", "Retro-futuristic electric grid"),
-  TOPO("topo", "Stardust Topo", "Cosmic stardust telemetry alignment"),
-  COUNTY_GRID("county_grid", "County Road", "Rural section grid overlay"),
-  MOUNTAIN("mountain", "Alpine Peak", "Jagged mountain wireframes"),
-  TRAIL_DUST("trail_dust", "Trail Dust", "Backcountry particulate texture"),
-  CIRCUIT("circuit", "Circuit Board", "Cybernetic schematic tracks"),
-  CARBON("carbon", "Carbon Fiber", "Woven motorsport composite"),
-  STEEL_PLATE("steel_plate", "Diamond Plate", "Industrial metal grip texture"),
-  RADAR_GRID("radar_grid", "Radar Sweep", "Concentric navigation rings"),
-  WAVES("waves", "Ocean Waves", "Fluid coastal ripple pattern"),
-  MATRIX("matrix", "Digital Stream", "Vertical cyber data flow"),
-  BLUEPRINT("blueprint", "Engineering CAD", "Precision drafting blueprint grid & callout ticks"),
-  SCANLINES("scanlines", "CRT Scanlines", "Retro synthwave horizontal phosphor scanlines"),
-  DIAMOND_GRID("diamond_grid", "Diamond Lattice", "Angled 45° tactical diamond mesh"),
-  STARFIELD("starfield", "Night Starfield", "Clear rural night sky constellation field"),
-  WOODGRAIN("woodgrain", "Timber Grain", "Warm barnwood organic plank grain lines"),
-  ISOMETRIC("isometric", "Isometric Cube", "3D isometric CAD wireframe cubes"),
-}
-
-enum class RiderPaceTier(val id: String, val code: String, val label: String, val minMph: Int, val maxMph: Int) {
-  ANY("ANY", "AN", "Any Pace", 0, 999),
-  CHILL("CHILL", "CH", "Chill (<18 mph)", 0, 18),
-  CRUISE("CRUISE", "CR", "Cruise (18–28 mph)", 18, 28),
-  FAST("FAST", "FS", "Fast (28–40 mph)", 28, 40),
-  HYPER("HYPER", "HY", "Hyper (40+ mph)", 40, 200),
+enum class RiderPaceTier(val id: String, val code: String, val label: String, val mphBand: String) {
+  ANY("any", "ANY", "Any Pace", "All Speeds"),
+  CHILL("chill", "CHL", "Chill (10-16 mph)", "10-16 mph"),
+  CRUISE("cruise", "CRZ", "Cruise (16-24 mph)", "16-24 mph"),
+  FAST("fast", "FST", "Fast (25-38 mph)", "25-38 mph"),
+  HYPER("hyper", "HYP", "Hyper (40+ mph)", "40+ mph"),
 }
 
 enum class RiderTerrainPref(val id: String, val code: String, val label: String) {
-  ANY("ANY", "AN", "Any Terrain"),
-  PAVED("PAVED", "PV", "Paved Street"),
-  MIXED("MIXED", "MX", "Mixed Backroads"),
-  GRAVEL("GRAVEL", "GV", "Gravel & Dirt"),
-  SINGLETRACK("SINGLETRACK", "ST", "Singletrack Trail"),
+  ANY("any", "ANY", "Any Terrain"),
+  PAVED("paved", "PAV", "Paved & Bike Lanes"),
+  GRAVEL("gravel", "GRV", "Gravel & Backroads"),
+  SINGLETRACK("singletrack", "TRL", "Dirt & Singletrack"),
+  MIXED("mixed", "MIX", "Mixed All-Terrain"),
 }
 
 enum class RiderScheduleVibe(val id: String, val code: String, val label: String) {
-  ANY("ANY", "AN", "Any Vibe"),
-  WEEKEND_DAWN("WEEKEND_DAWN", "WD", "Weekend Dawn"),
-  EVENING_SUNSET("EVENING_SUNSET", "ES", "Evening Sunset"),
-  GROUP_CONVOY("GROUP_CONVOY", "GC", "Pack Convoy"),
-  EXPLORE_WRENCH("EXPLORE_WRENCH", "EW", "Explore & Wrench"),
-  RANGE_BUDDY("RANGE_BUDDY", "RB", "Range Buddy"),
+  ANY("any", "ANY", "Any Schedule"),
+  GROUP_CONVOY("group_convoy", "GRP", "Group Convoys"),
+  WEEKEND("weekend", "WKD", "Weekend Trail Runs"),
+  EVENING("evening", "EVE", "Sunset & Night Rides"),
+  COMMUTE("commute", "COM", "Daily Commute & Coffee"),
 }
 
+// ============================================================================
+// MASTER SETTINGS
+// ============================================================================
 data class MasterSettings(
   val themePreset: AppThemePreset = AppThemePreset.LIME,
   val visualStyle: VisualStyleMode = VisualStyleMode.DARK_STUDIO,
@@ -943,7 +541,8 @@ data class MasterSettings(
   val biometricAppLock: Boolean = false,
   val crashSensitivityG: Float = 8.0f,
   val sosCancelWindowSec: Int = 12,
-  val sosTemplate: String = "EMERGENCY: Rural ERides GO pilot requires immediate assistance at GPS coordinates.",
+  val sosTemplate: String =
+    "EMERGENCY: Rural ERides GO pilot requires immediate assistance at GPS coordinates.",
   val voiceHotwordActive: Boolean = false,
   val wakeLockEnabled: Boolean = true,
   val autoDimmer: Boolean = false,
@@ -1028,7 +627,7 @@ data class MasterSettings(
   val ttsSpeechRate: Float = 1.03f,
   val ttsPitch: Float = 1.0f,
   val autoMuteAlertsWhileRiding: Boolean = false,
-  val navDefaultProfile: NavRouteProfile = NavRouteProfile.PEV_BIKE_LANE,
+  val navDefaultProfile: NavRouteProfile = NavRouteProfile.FAST_STREET,
   val navVoiceGuidance: Boolean = true,
   val navAutoReroute: Boolean = true,
   val navAvoidHighways: Boolean = true,
@@ -1074,14 +673,12 @@ data class MasterSettings(
   val compassTrueNorth: Boolean = true,
   val touchSoundsEnabled: Boolean = true,
   val touchSoundPack: String = "Country Acoustic",
-  // Telemetry Charts & HUD Precision
   val chartNeonGlowEnabled: Boolean = true,
   val chartEntranceAnimMs: Int = 900,
   val chartHoverTooltipsEnabled: Boolean = true,
   val compactNumericHud: Boolean = false,
   val odometerDecimals: Int = 1,
   val autoPauseSpeedKmh: Float = 2.0f,
-  // Drivetrain, Barn Charging & Cold Weather
   val regenStrengthPreset: String = "Medium",
   val coldWeatherBatteryGuard: Boolean = true,
   val barnBreakerLimitAmps: Int = 15,
@@ -1089,7 +686,6 @@ data class MasterSettings(
   val headlightDuskReminder: Boolean = true,
   val duskAutoHeadlightReminderMin: Int = 30,
   val chainLubeIntervalKm: Int = 250,
-  // Rural Trail, Wildlife & Convoy Intelligence
   val wildlifeAlertRadiusMi: Int = 5,
   val farmEquipmentAlertEnabled: Boolean = true,
   val creekDepthWarningEnabled: Boolean = true,
@@ -1097,12 +693,10 @@ data class MasterSettings(
   val ruralRoadSignAlerts: Boolean = true,
   val convoyBeaconIntervalSec: Int = 15,
   val gpxIncludeElevation: Boolean = true,
-  // Audio Studio & Night Vision Polish
   val voiceCalloutVerbosity: String = "Balanced",
   val audioDuckingOnSpeech: Boolean = true,
   val windNoiseFilter: Boolean = true,
   val nightRedShiftIntensity: Float = 0.75f,
-  // Authentic Windows Chrome, Icon Studio & Cockpit Polish
   val winShowMenuBar: Boolean = true,
   val winShowTaskbarClock: Boolean = true,
   val winGlassIntensity: Float = 0.85f,
@@ -1115,7 +709,6 @@ data class MasterSettings(
   val batteryVoltageAlarmEnabled: Boolean = true,
   val hapticScrollDetents: Boolean = true,
   val quickThemeBarEnabled: Boolean = true,
-  // Rider Match Profile & Live Radar Compatibility Filters
   val matchPaceTier: RiderPaceTier = RiderPaceTier.CRUISE,
   val matchTerrainPref: RiderTerrainPref = RiderTerrainPref.MIXED,
   val matchMinRangeMi: Int = 20,
@@ -1125,90 +718,465 @@ data class MasterSettings(
   val matchPaceFilter: RiderPaceTier = RiderPaceTier.ANY,
   val matchTerrainFilter: RiderTerrainPref = RiderTerrainPref.ANY,
   val matchVibeFilter: RiderScheduleVibe = RiderScheduleVibe.ANY,
-  // Custom Synthesized Voice Studio & TTS Latency Preload Buffer
   val customVoiceProfilesJson: String = "[]",
   val activeCustomVoiceId: String = "",
   val ttsPreloadBufferEnabled: Boolean = true,
   val ttsPreloadBufferDepth: Int = 2,
 ) {
-  val hapticsEnabled: Boolean get() = hapticFeedback
-  val soundVolumePct: Int get() = globalVolume
+  val cardCornerRadiusDp: Int
+    get() =
+      when (cornerStyle.lowercase()) {
+        "sharp", "square" -> 4
+        "pill", "extra" -> 22
+        else -> 14
+      }
 
-  fun getActiveCustomVoice(): CustomVoiceProfile? {
-    if (activeCustomVoiceId.isBlank()) return null
-    return parseCustomVoiceProfiles(customVoiceProfilesJson).firstOrNull { it.id == activeCustomVoiceId }
-  }
+  val glassAlpha: Float
+    get() = cardOpacity.coerceIn(0.45f, 1.0f)
+
+  val useDynamicColors: Boolean
+    get() = visualStyle == VisualStyleMode.MATERIAL_EXPRESSIVE
+
+  val typographyScaleMode: TypographyScaleMode
+    get() =
+      when (uiScale.lowercase()) {
+        "compact", "small" -> TypographyScaleMode.COMPACT
+        "large", "expanded" -> TypographyScaleMode.LARGE
+        else -> TypographyScaleMode.STANDARD
+      }
+
+  val soundVolumePct: Int
+    get() = globalVolume
+
+  val hapticsEnabled: Boolean
+    get() = hapticFeedback
 }
 
-data class LiveTelemetrySnapshot(
-  val lat: Double = 0.0,
-  val lng: Double = 0.0,
-  val launchLat: Double? = null,
-  val launchLng: Double? = null,
-  val altitudeM: Double = 0.0,
-  val speedKmh: Double = 0.0,
+// ============================================================================
+// PEV SPECS, PARTS & FLEET MODELS
+// ============================================================================
+data class PevSpecRecord(
+  val name: String = "",
+  val brand: String = "",
+  val category: String = "SCOOTER",
+  val price: String = "",
+  val topSpeed: String = "",
+  val range: String = "",
+  val motorPower: String = "",
+  val battery: String = "",
+  val nominalVoltage: Int = 52,
+  val weight: String = "",
+  val chargingTime: String = "",
+  val efficiency: String = "",
+  val brakingSystem: String = "",
+  val suspensionType: String = "",
+  val tireProfile: String = "",
+  val ipRating: String = "",
+  val maxLoad: String = "",
+  val siteUrl: String = "",
+  val imageUrls: List<String> = emptyList(),
+)
+
+data class PevPartItem(
+  val partName: String = "",
+  val category: String = "",
+  val exactDimensions: String = "",
+  val compatibility: String = "",
+  val estimatedPrice: String = "",
+  val recommendedBrands: String = "",
+  val sourcePlatform: String = "",
+  val partUrl: String = "",
+  val difficulty: String = "Easy",
+  val partType: String = "Part",
+  val weightLbs: Double = 1.0,
+  val imageUrl: String = "",
+)
+
+data class PevVehicle(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val name: String = "",
+  val category: String = "SCOOTER",
+  val batteryWh: Long = 1200L,
+  val batteryAh: Double = 24.0,
+  val voltage: Double = 52.0,
+  val batteryChemistry: String = "NMC",
+  val motorWatts: Int = 2000,
+  val topSpeedKmh: Double = 55.0,
+  val vehicleWeightLbs: Double = 68.0,
+  val targetPsi: Double = 36.0,
+  val odometerKm: Double = 0.0,
+  val serviceIntervalKm: Double = 500.0,
+  val tireSize: String = "10x3.0",
+  val photoUri: String = "",
+  val brandLogoUri: String = "",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class RiderProfile(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val displayName: String = "",
+  val callsign: String = "",
+  val email: String = "",
+  val activeVehicleId: String = "",
+  val unitSystem: String = "IMPERIAL",
+  val emergencyContactName: String = "",
+  val sosContactNumber: String = "",
+  val medicalProfile: String = "",
+  val acceptedLegal: Boolean = false,
+  val riderWeightLbs: Double = 175.0,
+  val avatarBase64: String = "",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class PublicPilotProfile(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val callsign: String = "",
+  val rankBadge: String = "Rookie Pilot",
+  val xpPoints: Long = 0L,
+  val totalKm: Double = 0.0,
+  val ridesCount: Long = 0L,
+  val verified: Boolean = false,
+  val banned: Boolean = false,
+  val trustScore: Long = 100L,
+  val vehicleSummary: String = "PEV Unit",
+  val visibility: String = "PUBLIC",
+  val avatarBase64: String = "",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class RideSession(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val vehicleId: String = "",
+  val vehicleName: String = "",
+  val title: String = "",
+  val durationSec: Long = 0L,
+  val distanceKm: Double = 0.0,
   val maxSpeedKmh: Double = 0.0,
   val avgSpeedKmh: Double = 0.0,
-  val tripDistanceKm: Double = 0.0,
-  val elapsedSec: Long = 0L,
   val elevationGainM: Double = 0.0,
-  val gpsAccuracyM: Float = 0f,
-  val bearingDeg: Float = 0f,
-  val pitchDeg: Float = 0f,
-  val rollDeg: Float = 0f,
-  val yawDeg: Float = 0f,
-  val gyroPitchRateDps: Float = 0f,
-  val gyroRollRateDps: Float = 0f,
-  val gyroYawRateDps: Float = 0f,
-  val magMicroTesla: Float = 0f,
-  val ahrsFused9Dof: Boolean = false,
-  val sensorAccuracy: Int = 0,
-  val peakLeanLeftDeg: Float = 0f,
-  val peakLeanRightDeg: Float = 0f,
-  val lateralG: Float = 0f,
-  val longitudinalG: Float = 0f,
-  val peakG: Float = 0f,
-  val batteryPct: Int = 100,
-  val estimatedVoltage: Double = 54.6,
-  val recording: Boolean = false,
-  val crashDetected: Boolean = false,
-  val speedLimitMph: Int? = null,
-  val roadName: String = "Awaiting GPS Fix...",
-  val inSchoolZone: Boolean = false,
-  val trailPoints: List<Pair<Double, Double>> = emptyList(),
-  val satellitesUsed: Int = 0,
-  val satellitesVisible: Int = 0,
-  val avgSatelliteSnrDb: Float = 0f,
-  val satelliteConstellations: String = "",
-  val barometerHpa: Float = 0f,
-  val baroAltitudeM: Float = 0f,
-  val ambientLightLux: Float = -1f,
-  val proximityNear: Boolean = false,
-  val roadRoughnessG: Float = 0f,
-  val ambientTempC: Float? = null,
-  val stepCountSession: Int = 0,
-  val activeSensorsList: List<String> = emptyList(),
+  val whUsed: Double = 0.0,
+  val startBatteryPct: Int = -1,
+  val endBatteryPct: Int = -1,
+  val weatherSummary: String = "",
+  val aiDebrief: String = "",
+  val polylinePoints: List<String> = emptyList(),
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class MaintenanceTask(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val vehicleId: String = "",
+  val vehicleName: String = "",
+  val title: String = "",
+  val notes: String = "",
+  val dueOdometerKm: Double = 0.0,
+  val completed: Boolean = false,
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
 )
 
 data class MaintenanceWearState(
-  val itemId: String,
-  val label: String,
-  val ratedKm: Double,
-  val lastResetKm: Double,
+  val itemId: String = "",
+  val label: String = "",
+  val ratedKm: Double = 1000.0,
+  val lastResetKm: Double = 0.0,
 )
 
 data class ServiceLogRecord(
-  val id: String,
-  val dateLabel: String,
-  val component: String,
-  val notes: String,
-  val costUsd: Double,
-  val odometerKm: Double,
+  val id: String = "",
+  val dateLabel: String = "",
+  val component: String = "",
+  val notes: String = "",
+  val costUsd: Double = 0.0,
+  val odometerKm: Double = 0.0,
+)
+
+data class SavedVideo(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val videoId: String = "",
+  val title: String = "",
+  val channelTitle: String = "",
+  val thumbnailUrl: String = "",
+  val publishedAt: String = "",
+  val categoryTag: String = "PEV Tech",
+  val personalNote: String = "",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class PrayerJournalEntry(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val title: String = "",
+  val body: String = "",
+  val category: String = "Trail Safety",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class UserNotification(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val title: String = "",
+  val body: String = "",
+  val message: String = "",
+  val type: String = "INFO",
+  val read: Boolean = false,
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+// ============================================================================
+// COMMUNITY BOARD, RADAR, WALKIE & DIRECT MESSAGES
+// ============================================================================
+data class BoardPost(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val authorCallsign: String = "",
+  val authorBadge: String = "Rookie Pilot",
+  val category: String = "UNIVERSAL",
+  val title: String = "",
+  val body: String = "",
+  val imageUrl: String = "",
+  val pollQuestion: String = "",
+  val pollOptions: List<String> = emptyList(),
+  val priceUsd: Double = 0.0,
+  val locationLabel: String = "",
+  val telemetrySummary: String = "",
+  val helpNeeded: Boolean = false,
+  val speedTrap: Boolean = false,
+  val stolenAlert: Boolean = false,
+  val likesCount: Long = 0L,
+  val commentsCount: Long = 0L,
+  val flaggedCount: Long = 0L,
+  val visibility: String = "PUBLIC",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class BoardComment(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val authorCallsign: String = "",
+  val body: String = "",
+  val visibility: String = "PUBLIC",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class RadarRider(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val callsign: String = "",
+  val vehicleName: String = "",
+  val lat: Double = 0.0,
+  val lng: Double = 0.0,
+  val speedKmh: Double = 0.0,
+  val headingDeg: Double = 0.0,
+  val batteryPct: Long = 100L,
+  val statusTag: String = "CRUISING",
+  val visibility: String = "PUBLIC",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class RadarMeetup(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val creatorCallsign: String = "",
+  val title: String = "",
+  val description: String = "",
+  val scheduledTime: String = "",
+  val lat: Double = 0.0,
+  val lng: Double = 0.0,
+  val attendeeCount: Long = 1L,
+  val visibility: String = "PUBLIC",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class RadarHazard(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val creatorCallsign: String = "",
+  val hazardType: String = "POTHOLE",
+  val description: String = "",
+  val lat: Double = 0.0,
+  val lng: Double = 0.0,
+  val upvotes: Long = 1L,
+  val visibility: String = "PUBLIC",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class RadarWaypoint(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val creatorCallsign: String = "",
+  val waypointType: String = "CHARGER",
+  val title: String = "",
+  val notes: String = "",
+  val lat: Double = 0.0,
+  val lng: Double = 0.0,
+  val visibility: String = "PUBLIC",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class ChannelPresence(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val callsign: String = "",
+  val channelId: String = "",
+  val active: Boolean = true,
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class ChannelSpeakerState(
+  @DocumentId val id: String = "",
+  val speakerUid: String = "",
+  val speakerCallsign: String = "",
+  val channelId: String = "",
+  val active: Boolean = false,
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class WalkieVoiceLog(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val senderCallsign: String = "",
+  val channelId: String = "",
+  val audioBase64: String = "",
+  val durationMs: Long = 0L,
+  val active: Boolean = true,
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class ChannelWebRtcSignal(
+  @DocumentId val id: String = "",
+  val senderId: String = "",
+  val senderCallsign: String = "",
+  val targetUid: String = "",
+  val channelId: String = "",
+  val signalType: String = "ICE",
+  val payload: String = "",
+  val active: Boolean = true,
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class DmThread(
+  @DocumentId val id: String = "",
+  val participantUids: List<String> = emptyList(),
+  val participantCallsigns: List<String> = emptyList(),
+  val lastMessage: String = "",
+  val selfDestructSec: Long = 0L,
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class DmMessage(
+  @DocumentId val id: String = "",
+  val participantUids: List<String> = emptyList(),
+  val senderId: String = "",
+  val senderCallsign: String = "",
+  val text: String = "",
+  val imageUrl: String = "",
+  val voiceBase64: String = "",
+  val selfDestructSec: Long = 0L,
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class CallSession(
+  @DocumentId val id: String = "",
+  val callerUid: String = "",
+  val callerCallsign: String = "",
+  val calleeUid: String = "",
+  val calleeCallsign: String = "",
+  val callType: String = "AUDIO",
+  val status: String = "RINGING",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class CallSignal(
+  @DocumentId val id: String = "",
+  val senderId: String = "",
+  val signalType: String = "ICE",
+  val payload: String = "",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+data class EmergencyBroadcast(
+  @DocumentId val id: String = "",
+  val category: String = "HAZARD ALERT",
+  val title: String = "",
+  val body: String = "",
+  val message: String = "",
+  val severity: String = "WARNING",
+  val active: Boolean = true,
+  val createdAt: Timestamp? = null,
+)
+
+data class YoutubeComment(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val authorCallsign: String = "",
+  val text: String = "",
+  val visibility: String = "PUBLIC",
+  val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+// ============================================================================
+// WEATHER, NEWS, YOUTUBE & TURN-BY-TURN NAVIGATION MODELS
+// ============================================================================
+data class WeatherGeoLocation(
+  val name: String = "",
+  val admin1: String = "",
+  val country: String = "",
+  val lat: Double = 0.0,
+  val lng: Double = 0.0,
+) {
+  fun displayTitle(): String =
+    listOf(name, admin1, country).filter { it.isNotBlank() }.joinToString(", ")
+
+  fun displayLabel(): String = displayTitle()
+}
+
+data class HourlyForecast(
+  val timeLabel: String = "",
+  val tempC: Double = 0.0,
+  val windKmh: Double = 0.0,
+  val precipPct: Int = 0,
+)
+
+data class DailyForecast(
+  val dateLabel: String = "",
+  val minTempC: Double = 0.0,
+  val maxTempC: Double = 0.0,
+  val precipPct: Int = 0,
+  val windMaxKmh: Double = 0.0,
 )
 
 data class WeatherMatrixData(
-  val tempC: Double = 0.0,
-  val feelsLikeC: Double = 0.0,
+  val tempC: Double = 18.0,
+  val feelsLikeC: Double = 18.0,
   val windSpeedKmh: Double = 0.0,
   val windGustKmh: Double = 0.0,
   val windDirDeg: Int = 0,
@@ -1217,8 +1185,8 @@ data class WeatherMatrixData(
   val pressureHpa: Double = 1013.0,
   val humidityPct: Int = 50,
   val weatherCode: Int = 0,
-  val conditionLabel: String = "Syncing Open-Meteo...",
-  val locationLabel: String = "Awaiting GPS Fix...",
+  val conditionLabel: String = "Clear Sky",
+  val locationLabel: String = "",
   val lat: Double = 0.0,
   val lng: Double = 0.0,
   val isGpsSource: Boolean = true,
@@ -1228,122 +1196,91 @@ data class WeatherMatrixData(
   val daily: List<DailyForecast> = emptyList(),
 )
 
-data class WeatherGeoLocation(
-  val name: String,
-  val admin1: String,
-  val country: String,
-  val lat: Double,
-  val lng: Double,
-) {
-  fun displayLabel(): String =
-    listOf(name, admin1, country).filter { it.isNotBlank() }.distinct().joinToString(", ")
-}
-
-data class HourlyForecast(
-  val timeLabel: String,
-  val tempC: Double,
-  val windKmh: Double,
-  val precipPct: Int,
-)
-
-data class DailyForecast(
-  val dateLabel: String,
-  val minTempC: Double,
-  val maxTempC: Double,
-  val precipPct: Int,
-  val windMaxKmh: Double,
-)
-
 data class YouTubeVideoItem(
-  val videoId: String,
-  val title: String,
-  val description: String,
-  val channelTitle: String,
-  val publishedAt: String,
-  val thumbnailUrl: String,
+  val videoId: String = "",
+  val title: String = "",
+  val description: String = "",
+  val channelTitle: String = "Rural ERides",
+  val publishedAt: String = "",
+  val thumbnailUrl: String = "",
   val viewCount: String = "--",
   val likeCount: String = "--",
   val durationLabel: String = "--:--",
 )
 
 data class NewsArticleItem(
-  val title: String,
-  val link: String,
-  val source: String,
-  val publishedAt: String,
-  val summary: String,
+  val title: String = "",
+  val link: String = "",
+  val source: String = "",
+  val publishedAt: String = "",
+  val summary: String = "",
 )
 
-data class PevSpecRecord(
-  val name: String,
-  val brand: String,
-  val category: String,
-  val price: String,
-  val topSpeed: String,
-  val range: String,
-  val motorPower: String,
-  val battery: String,
-  val nominalVoltage: Int,
-  val weight: String,
-  val chargingTime: String,
-  val efficiency: String,
-  val brakingSystem: String,
-  val suspensionType: String,
-  val tireProfile: String,
-  val ipRating: String,
-  val maxLoad: String,
-  val siteUrl: String,
-  val imageUrls: List<String> = emptyList(),
+data class LiveChargingStation(
+  val id: String = "",
+  val title: String = "",
+  val address: String = "",
+  val lat: Double = 0.0,
+  val lng: Double = 0.0,
+  val distanceKm: Double = 0.0,
+  val powerKw: String = "AC Outlet / EVSE",
+  val operatorName: String = "Public EVSE",
+  val isFree: Boolean = false,
 )
 
-data class PevPartItem(
-  val partName: String,
-  val category: String,
-  val exactDimensions: String,
-  val compatibility: String,
-  val estimatedPrice: String,
-  val recommendedBrands: String,
-  val sourcePlatform: String,
-  val partUrl: String,
-  val difficulty: String,
-  val partType: String,
-  val weightLbs: Double = 1.5,
-  val imageUrl: String = "",
+data class NavManeuverStep(
+  val instruction: String = "",
+  val streetName: String = "",
+  val distanceM: Double = 0.0,
+  val durationSec: Double = 0.0,
+  val maneuverType: String = "straight",
+  val lat: Double = 0.0,
+  val lng: Double = 0.0,
 )
 
-data class MechanicDiagMessage(
-  val id: String,
-  val isUser: Boolean,
-  val text: String,
-  val imageUris: List<String> = emptyList(),
-  val checklist: List<String> = emptyList(),
-  val anomalies: List<VisionAnomalyBox> = emptyList(),
+data class ActiveNavRoute(
+  val destinationName: String = "",
+  val destLat: Double = 0.0,
+  val destLng: Double = 0.0,
+  val profile: NavRouteProfile = NavRouteProfile.FAST_STREET,
+  val totalDistanceKm: Double = 0.0,
+  val totalDurationSec: Long = 0L,
+  val elevationGainM: Double = 0.0,
+  val polylinePoints: List<Pair<Double, Double>> = emptyList(),
+  val steps: List<NavManeuverStep> = emptyList(),
+  val providerSource: String = "OSRM Live Routing",
+  val estimatedBatteryPctNeeded: Int = 10,
 )
 
-data class VisionAnomalyBox(
-  val label: String,
-  val severity: String,
-  val xNorm: Float,
-  val yNorm: Float,
-  val wNorm: Float,
-  val hNorm: Float,
-)
-
+// ============================================================================
+// COPILOT AI, VISION DIAGNOSTICS & LIVE TELEMETRY SNAPSHOT
+// ============================================================================
 data class CopilotMessage(
-  val id: String,
-  val isUser: Boolean,
-  val text: String,
-  val persona: String,
+  val id: String = "",
+  val isUser: Boolean = false,
+  val text: String = "",
+  val persona: String = "Tactical Coach",
   val widgetTag: String? = null,
   val timestampMs: Long = System.currentTimeMillis(),
+)
+
+data class SavedCopilotBriefing(
+  val id: String = "",
+  val title: String = "",
+  val persona: String = "",
+  val content: String = "",
+  val savedAtMs: Long = System.currentTimeMillis(),
 )
 
 data class CopilotPersonaOption(
   val id: String,
   val name: String,
-  val roleSummary: String,
+  val subtitle: String,
   val systemPrompt: String,
-)
+) {
+  val roleSummary: String
+    get() = subtitle
+}
 
 data class CopilotSkillOption(
   val id: String,
@@ -1352,11 +1289,75 @@ data class CopilotSkillOption(
   val promptTemplate: String,
 )
 
-data class SavedCopilotBriefing(
-  val id: String,
-  val title: String,
-  val persona: String,
-  val content: String,
-  val savedAtMs: Long = System.currentTimeMillis(),
+data class VisionAnomalyBox(
+  val label: String = "",
+  val severity: String = "WARNING",
+  val xNorm: Float = 0.1f,
+  val yNorm: Float = 0.1f,
+  val wNorm: Float = 0.3f,
+  val hNorm: Float = 0.3f,
+  val confidence: Float = 0.9f,
 )
 
+data class MechanicDiagMessage(
+  val id: String = "",
+  val isUser: Boolean = false,
+  val text: String = "",
+  val checklist: List<String> = emptyList(),
+  val anomalies: List<VisionAnomalyBox> = emptyList(),
+  val imageUris: List<String> = emptyList(),
+  val timestampMs: Long = System.currentTimeMillis(),
+)
+
+data class LiveTelemetrySnapshot(
+  val recording: Boolean = false,
+  val paused: Boolean = false,
+  val speedKmh: Double = 0.0,
+  val maxSpeedKmh: Double = 0.0,
+  val avgSpeedKmh: Double = 0.0,
+  val tripDistanceKm: Double = 0.0,
+  val elapsedSec: Long = 0L,
+  val altitudeM: Double = 0.0,
+  val elevationGainM: Double = 0.0,
+  val bearingDeg: Float = 0f,
+  val gpsAccuracyM: Float = 0f,
+  val lat: Double = 0.0,
+  val lng: Double = 0.0,
+  val launchLat: Double? = null,
+  val launchLng: Double? = null,
+  val gForceTotal: Float = 1.0f,
+  val peakG: Float = 1.0f,
+  val pitchDeg: Float = 0f,
+  val rollDeg: Float = 0f,
+  val yawDeg: Float = 0f,
+  val gyroPitchRateDps: Float = 0f,
+  val gyroRollRateDps: Float = 0f,
+  val gyroYawRateDps: Float = 0f,
+  val magMicroTesla: Float = 0f,
+  val ahrsFused9Dof: Boolean = false,
+  val sensorAccuracy: Int = 3,
+  val peakLeanLeftDeg: Float = 0f,
+  val peakLeanRightDeg: Float = 0f,
+  val lateralG: Float = 0f,
+  val longitudinalG: Float = 0f,
+  val crashDetected: Boolean = false,
+  val roadRoughnessG: Float = 0f,
+  val barometerHpa: Float = 0f,
+  val baroAltitudeM: Float = 0f,
+  val ambientLightLux: Float = -1f,
+  val proximityNear: Boolean = false,
+  val ambientTempC: Float? = null,
+  val stepCountSession: Int = 0,
+  val activeSensorsList: List<String> = emptyList(),
+  val satellitesUsed: Int = 0,
+  val satellitesVisible: Int = 0,
+  val avgSatelliteSnrDb: Float = 0f,
+  val satelliteConstellations: String = "Searching...",
+  val batteryPct: Int = 100,
+  val batteryTempC: Double = 25.0,
+  val estimatedVoltage: Double = 52.0,
+  val roadName: String = "",
+  val speedLimitMph: Int? = null,
+  val inSchoolZone: Boolean = false,
+  val trailPoints: List<Pair<Double, Double>> = emptyList(),
+)

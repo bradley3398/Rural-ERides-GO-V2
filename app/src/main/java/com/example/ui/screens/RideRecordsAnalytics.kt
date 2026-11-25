@@ -639,7 +639,7 @@ fun RideRecordsAnalyticsSuite(
           val selectedRide = rides.firstOrNull { it.id == selectedMapRideId } ?: rides.first()
 
           LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(rides.take(10), key = { it.id }) { r ->
+            items(rides.take(10).withIndex().toList(), key = { (idx, r) -> "rec_map_${idx}_${r.id}" }) { (_, r) ->
               val ptsCount = remember(r.id, r.polylinePoints.size) { parseRideTrackPoints(r).size }
               FilterChip(
                 selected = selectedRide.id == r.id,

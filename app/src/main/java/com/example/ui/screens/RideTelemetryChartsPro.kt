@@ -174,7 +174,7 @@ internal fun HistoricalPowerAmpsChart(
           ampPts.add(Offset(xLeft + barW / 2f, aY))
         }
 
-        clipRect(0f, 0f, w * entrance, h) {
+        clipRect(0f, 0f, (w * entrance).coerceAtLeast(1f), h) {
           if (ampPts.size > 1) {
             val spline = buildSmoothSplinePath(ampPts)
             drawPath(spline, ampColor.copy(alpha = 0.22f), style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round))
@@ -466,7 +466,7 @@ internal fun CumulativeOdometerRoiChart(
         if (w < 24f || h < 24f) return@Canvas
         for (g in 0..3) drawLine(gridC, Offset(0f, h * g / 3f), Offset(w, h * g / 3f), strokeWidth = 1f)
         val maxYBound = (h - 8f).coerceAtLeast(8f)
-        clipRect(0f, 0f, w * entrance, h) {
+        clipRect(0f, 0f, (w * entrance).coerceAtLeast(1f), h) {
           if (ordered.size == 1) {
             val y = h * 0.35f
             drawCircle(accentC, radius = 6.dp.toPx(), center = Offset(w / 2f, y))

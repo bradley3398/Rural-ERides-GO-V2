@@ -67,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -915,10 +916,15 @@ fun TacticalCard(
           strokeWidth = 1.2.dp.toPx(),
         )
       }
-      if (holidaySpec != null) {
+    }
+
+  val holidayOverlayMod =
+    if (holidaySpec != null) {
+      Modifier.drawWithContent {
+        drawContent()
         drawHolidayCardOrnament(mode = effectiveStyle, highlight = highlight)
       }
-    }
+    } else Modifier
 
   Box(
     modifier =
@@ -927,7 +933,8 @@ fun TacticalCard(
         .clip(chrome.cardShape)
         .background(surfaceBrush, chrome.cardShape)
         .border(borderStroke, chrome.cardShape)
-        .then(chromeDecorationMod),
+        .then(chromeDecorationMod)
+        .then(holidayOverlayMod),
   ) {
     CompositionLocalProvider(LocalContentColor provides colors.contentColor) {
       Column(modifier = Modifier.fillMaxWidth()) {
@@ -964,41 +971,44 @@ fun TacticalCard(
               overflow = TextOverflow.Ellipsis,
               modifier = Modifier.weight(1f),
             )
-            if (highlight) {
-              Box(
-                modifier =
-                  Modifier
-                    .padding(start = 8.dp)
-                    .background(cs.primary.copy(alpha = 0.2f), chrome.smallShape)
-                    .border(0.8.dp, cs.primary.copy(alpha = 0.7f), chrome.smallShape)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-              ) {
-                Text(
-                  text = "LIVE",
-                  style = MaterialTheme.typography.labelSmall,
-                  fontWeight = FontWeight.Black,
-                  color = cs.primary,
-                  maxLines = 1,
-                  softWrap = false,
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+              if (holidaySpec != null) {
+                Box(
+                  modifier =
+                    Modifier
+                      .padding(start = 6.dp)
+                      .background(holidaySpec.ornamentColor.copy(alpha = 0.22f), chrome.smallShape)
+                      .border(1.dp, holidaySpec.ornamentColor.copy(alpha = 0.72f), chrome.smallShape)
+                      .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                  Text(
+                    text = holidaySpec.trimLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = holidaySpec.ornamentColor,
+                    maxLines = 1,
+                    softWrap = false,
+                  )
+                }
               }
-            } else if (holidaySpec != null) {
-              Box(
-                modifier =
-                  Modifier
-                    .padding(start = 8.dp)
-                    .background(holidaySpec.ornamentColor.copy(alpha = 0.16f), chrome.smallShape)
-                    .border(0.8.dp, holidaySpec.ornamentColor.copy(alpha = 0.55f), chrome.smallShape)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-              ) {
-                Text(
-                  text = holidaySpec.trimLabel,
-                  style = MaterialTheme.typography.labelSmall,
-                  fontWeight = FontWeight.Black,
-                  color = holidaySpec.ornamentColor,
-                  maxLines = 1,
-                  softWrap = false,
-                )
+              if (highlight) {
+                Box(
+                  modifier =
+                    Modifier
+                      .padding(start = if (holidaySpec == null) 8.dp else 0.dp)
+                      .background(cs.primary.copy(alpha = 0.2f), chrome.smallShape)
+                      .border(0.8.dp, cs.primary.copy(alpha = 0.7f), chrome.smallShape)
+                      .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                  Text(
+                    text = "LIVE",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = cs.primary,
+                    maxLines = 1,
+                    softWrap = false,
+                  )
+                }
               }
             }
           }

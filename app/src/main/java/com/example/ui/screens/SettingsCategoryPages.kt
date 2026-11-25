@@ -4,6 +4,7 @@ import com.example.core.PevBatteryPhysics
 
 import android.content.Intent
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -99,6 +100,7 @@ import com.example.data.PevWallpaper
 import com.example.data.RingtonePreset
 import com.example.data.VibrationPatternPreset
 import com.example.data.VisualStyleMode
+import com.example.data.getActiveCustomVoice
 import com.example.hardware.VoiceAudioManager
 import com.example.ui.components.RuralPevIcons
 import com.example.ui.components.TacticalButton
@@ -321,12 +323,8 @@ fun DisplayThemesSettingsContent(
     )
     Spacer(Modifier.height(12.dp))
     val filterCategories =
-      remember(activeHolidays) {
-        buildList {
-          add("All")
-          if (activeHolidays.isNotEmpty()) add("Holiday")
-          addAll(listOf("Windows OS", "Rural Country", "PEV Racing", "Modern & Dark"))
-        }
+      remember {
+        listOf("All", "Holiday", "Windows OS", "Rural Country", "PEV Racing", "Modern & Dark")
       }
     val filteredStyles =
       remember(themeFilter, unlockedStyles) {
@@ -1740,7 +1738,9 @@ fun SafetyCommunitySettingsContent(
 }
 
 @Composable
-fun AboutDeveloperSettingsContent() {
+fun AboutDeveloperSettingsContent(
+  onOpenChangelogAndDiagnostics: () -> Unit = {},
+) {
   val ctx = LocalContext.current
   val chrome = LocalTacticalChrome.current
   val clipboard = LocalClipboardManager.current
@@ -1787,17 +1787,31 @@ fun AboutDeveloperSettingsContent() {
         Text("Package ID: ${BuildConfig.APPLICATION_ID}", style = MaterialTheme.typography.labelSmall)
         Text("Device: ${Build.MANUFACTURER.uppercase()} ${Build.MODEL}", style = MaterialTheme.typography.labelSmall)
         Text("System: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})", style = MaterialTheme.typography.labelSmall)
-        Text("Powered by: Kotlin • Jetpack Compose • Live GPS & GNSS Satellites • 9-DOF Sensors • Live AR Camera • Firebase AI & Cloud Sync", style = MaterialTheme.typography.labelSmall)
+        Text("GitHub: https://github.com/bradley3398/Rural-Erides-GO", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Text("Powered by: Kotlin • Jetpack Compose • Filament GL-PBR 3D • Live GPS & GNSS • 9-DOF Sensors • Live AR Camera • Firebase AI & Cloud Sync", style = MaterialTheme.typography.labelSmall)
       }
     }
     Spacer(Modifier.height(12.dp))
+    TacticalOutlinedButton(
+      onClick = {
+        runCatching {
+          ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bradley3398/Rural-Erides-GO")))
+        }
+      },
+      modifier = Modifier.fillMaxWidth().testTag("settings_open_github_repo_button"),
+    ) {
+      Icon(Icons.Default.Code, null, Modifier.size(16.dp))
+      Spacer(Modifier.width(6.dp))
+      Text("GitHub Repository (bradley3398/Rural-Erides-GO)", maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    Spacer(Modifier.height(10.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
       TacticalOutlinedButton(
         onClick = {
           clipboard.setText(
-            AnnotatedString("Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison (${BuildConfig.APPLICATION_ID})")
+            AnnotatedString("Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison — https://github.com/bradley3398/Rural-Erides-GO (${BuildConfig.APPLICATION_ID})")
           )
-          Toast.makeText(ctx, "Copied developer info", Toast.LENGTH_SHORT).show()
+          Toast.makeText(ctx, "Copied developer & GitHub info", Toast.LENGTH_SHORT).show()
         },
         modifier = Modifier.weight(1f).testTag("settings_copy_dev_info_button"),
       ) {
@@ -1813,7 +1827,7 @@ fun AboutDeveloperSettingsContent() {
               putExtra(Intent.EXTRA_SUBJECT, "Rural ERides GO v${BuildConfig.VERSION_NAME}")
               putExtra(
                 Intent.EXTRA_TEXT,
-                "Rural ERides GO v${BuildConfig.VERSION_NAME} — Built by Lord Bradley Callison. Electric Ride Dashboard, Live GPS Satellites, AR Camera, Repair Shop & AI Helper.",
+                "Rural ERides GO v${BuildConfig.VERSION_NAME} — Built by Lord Bradley Callison. Electric Ride Dashboard, Filament 3D Rig Lab, Live GPS Satellites, AR Camera, Repair Shop & AI Helper.\nhttps://github.com/bradley3398/Rural-Erides-GO",
               )
             }
           runCatching { ctx.startActivity(Intent.createChooser(intent, "Share App Info")) }
@@ -1824,6 +1838,15 @@ fun AboutDeveloperSettingsContent() {
         Spacer(Modifier.width(6.dp))
         Text("Share")
       }
+    }
+    Spacer(Modifier.height(10.dp))
+    TacticalButton(
+      onClick = onOpenChangelogAndDiagnostics,
+      modifier = Modifier.fillMaxWidth().testTag("settings_open_full_changelog_button"),
+    ) {
+      Icon(Icons.Default.AutoAwesome, null, Modifier.size(16.dp))
+      Spacer(Modifier.width(6.dp))
+      Text("Full Release Changelog (v7–v${BuildConfig.VERSION_NAME}) & Diagnostics")
     }
   }
 

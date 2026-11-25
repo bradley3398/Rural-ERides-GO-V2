@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.volttrail.kqrmvx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 44
-    versionName = "44.0"
+    versionCode = 47
+    versionName = "47.0"
 
     buildConfigField("Boolean", "LEGAL_COMPLIANCE_MODE", "true")
 
@@ -149,9 +149,9 @@ dependencies {
   implementation(libs.okhttp)
   implementation(libs.osmdroid.android)
   implementation(libs.android.youtube.player)
-  // implementation(libs.filament.android)
-  // implementation(libs.filament.gltfio)
-  // implementation(libs.filament.utils)
+  implementation(libs.filament.android)
+  implementation(libs.filament.gltfio)
+  implementation(libs.filament.utils)
   implementation(libs.play.services.location)
   // implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)

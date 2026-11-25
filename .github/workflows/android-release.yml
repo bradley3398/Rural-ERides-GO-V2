@@ -1,0 +1,121 @@
+name: Rural ERides GO — Build, Test & Publish Release
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to publish (e.g. v47.0)"
+        required: true
+        default: "v47.0"
+      release_title:
+        description: "GitHub Release title"
+        required: true
+        default: "Rural ERides GO v47.0 — Filament OpenGL PBR, Ride Inspector & Holiday Ornaments"
+      prerelease:
+        description: "Mark as pre-release"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build_and_release:
+    name: Build APK, Run Unit Tests & Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.3.1
+
+      - name: Prepare Signing Keystore & Optional Secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+          ENV_FILE_BASE64: ${{ secrets.ENV_FILE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
+            echo "KEYSTORE_PATH=$PWD/release.keystore" >> "$GITHUB_ENV"
+          elif [ -f debug.keystore.base64 ] && [ ! -f debug.keystore ]; then
+            base64 --decode debug.keystore.base64 > debug.keystore
+          fi
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > app/google-services.json
+          fi
+          if [ -n "$ENV_FILE_BASE64" ]; then
+            echo "$ENV_FILE_BASE64" | base64 --decode > .env
+          fi
+
+      - name: Run Local JVM & Robolectric Unit Tests
+        run: gradle :app:testDebugUnitTest --stacktrace
+
+      - name: Build Debug & Release APKs
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle :app:assembleDebug :app:assembleRelease --stacktrace
+
+      - name: Stage Versioned Release APKs
+        id: stage
+        run: |
+          mkdir -p release-artifacts
+          TAG="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          if [[ "$TAG" != v* ]]; then
+            TAG="v47.0"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk "release-artifacts/Rural-ERides-GO-${TAG}-release.apk"
+          fi
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk "release-artifacts/Rural-ERides-GO-${TAG}-debug.apk"
+          fi
+          ls -lh release-artifacts/
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rural-erides-go-${{ steps.stage.outputs.tag }}-apks
+          path: release-artifacts/*.apk
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.stage.outputs.tag }}
+          name: ${{ github.event_name == 'workflow_dispatch' && inputs.release_title || format('Rural ERides GO {0}', steps.stage.outputs.tag) }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
+          generate_release_notes: true
+          files: release-artifacts/*.apk
+          body: |
+            ## Rural ERides GO ${{ steps.stage.outputs.tag }}
+
+            ### Highlights
+            - **Google Filament 1.56.0 OpenGL ES PBR 3D Rig Lab**: Vulkan PBR removed; realistic procedural `.glb` PEV vehicles with 7-level roughness-prefiltered Studio Softbox IBL, ACES Filmic tone mapping, FXAA + SSAO, and automatic OpenGL ES fallback.
+            - **Upgraded Telemetry Studio & Crash-Proof Ride Inspector**: 11 Fleet Graph Windows with live KPI summaries, 1-tap Personal Records Ribbon, and the new focused 5-module Ride Inspector (`Speed Curve`, `Climb Profile`, `Energy & Pack`, `GPS Route`, `Replay & AI`).
+            - **All 11 Holiday Themes with Ornaments & Decorations**: Top-canopy garlands, twinkling string lights, hanging ornaments, foreground card emblems, and festive nav bar trim unlocked year-round.
+            - **UI Polish & GitHub Pages**: Duplicate action buttons eliminated, official GitHub repository links updated, and user-facing GitHub Pages site restored.
+
+            Created & Architected by **Lord Bradley Callison** — *KEEP IT RURAL YALL*

@@ -1,12 +1,23 @@
 package com.example.ui.theme
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -15,6 +26,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import com.example.R
 import com.example.data.BgTexture
@@ -524,11 +536,43 @@ fun TacticalBackgroundCanvas(
         }
       }
     }
-    if (style.isHolidayTheme() && !settings.nightVisionMode && !settings.sunVisibilityMode) {
+    val showHolidayOrnaments = style.isHolidayTheme() && !settings.nightVisionMode && !settings.sunVisibilityMode
+    val holidayTwinklePhase =
+      if (showHolidayOrnaments && !settings.reducedMotion) {
+        val inf = rememberInfiniteTransition(label = "holiday_twinkle")
+        val phase by inf.animateFloat(
+          initialValue = 0f,
+          targetValue = 1f,
+          animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+          ),
+          label = "holiday_twinkle_phase",
+        )
+        phase
+      } else 0f
+
+    if (showHolidayOrnaments) {
       Canvas(modifier = Modifier.fillMaxSize()) {
-        drawHolidayBackgroundArt(mode = style, accent = accent, secondary = secondary)
+        drawHolidayBackgroundArt(
+          mode = style,
+          accent = accent,
+          secondary = secondary,
+          twinklePhase = holidayTwinklePhase,
+        )
       }
     }
     content()
+    if (showHolidayOrnaments) {
+      Canvas(
+        modifier = Modifier
+          .align(Alignment.TopCenter)
+          .statusBarsPadding()
+          .fillMaxWidth()
+          .height(58.dp),
+      ) {
+        drawHolidayTopCanopy(mode = style, twinklePhase = holidayTwinklePhase)
+      }
+    }
   }
 }

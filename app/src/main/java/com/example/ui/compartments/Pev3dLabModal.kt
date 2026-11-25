@@ -141,7 +141,7 @@ fun Pev3dLabModal(
                 )
               }
               Text(
-                text = "OpenGL PBR • WebGL 2.0 GLB • Compose 3D • $activeVehicleName (${activeVoltage.toInt()}V)",
+                text = "Filament GL-PBR • OpenGL ES • WebGL 2.0 • Compose 3D • $activeVehicleName (${activeVoltage.toInt()}V)",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.Gray,
               )
@@ -233,7 +233,7 @@ fun Pev3dLabLaunchpadCard(
             fontWeight = FontWeight.Bold,
           )
           Text(
-            text = "${AAA_PEV_MODELS.size} PEV rigs across OpenGL PBR, WebGL 2.0 GLB & Compose 3D with Normal Maps, Studio IBL, FLIR Thermal, Gemini Chief AI & Live Dyno Air.",
+            text = "${AAA_PEV_MODELS.size} realistic PEV rigs on Filament OpenGL PBR (ACES + Studio IBL + Clearcoat), OpenGL ES, WebGL 2.0 & Compose 3D with FLIR Thermal, Gemini Chief AI & Live Dyno Air.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -250,7 +250,7 @@ fun Pev3dLabLaunchpadCard(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Text("Paired Rig: $activeVehicleName (${activeVoltage.toInt()}V)", style = MaterialTheme.typography.labelSmall, color = Color(0xFFA855F7), fontWeight = FontWeight.Bold)
-        Text("3 Engines • 3 Cloud Services", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+        Text("4 Engines • 3 Cloud Services", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
       }
 
       Button(

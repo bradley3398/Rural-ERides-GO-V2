@@ -345,8 +345,8 @@ fun Pev3dGarageViewer(
   var selectedModelIdx by remember { mutableIntStateOf(0) }
   var motorThrottlePct by remember { mutableFloatStateOf(0.35f) }
 
-  // Technology & Method Selection States
-  var activeTechEngine by remember { mutableStateOf(Pev3dTechEngine.OPENGL_ES3) }
+  // Technology & Method Selection States (Filament OpenGL ES PBR default — zero Vulkan)
+  var activeTechEngine by remember { mutableStateOf(Pev3dTechEngine.FILAMENT_GL) }
   var inspectMethod by remember { mutableStateOf(Pev3dInspectMethod.ORBIT_TOUCH) }
 
   // 3D Interactive Camera & Animation States
@@ -363,7 +363,7 @@ fun Pev3dGarageViewer(
   var yawVelocityDegPerSec by remember { mutableFloatStateOf(0f) }
   var targetCameraPreset by remember { mutableStateOf<Pair<Float, Float>?>(null) }
   var viewportSize by remember { mutableStateOf(IntSize.Zero) }
-  var gpuBackendLabel by remember { mutableStateOf("OPENGL ES • GGX PBR") }
+  var gpuBackendLabel by remember { mutableStateOf("Filament GL-PBR • ACES + IBL") }
 
   // Live Service Results (Zero Mocks — 100% Real API / AI / Weather Calls)
   var aiDiagBusy by remember { mutableStateOf(false) }
@@ -550,6 +550,7 @@ fun Pev3dGarageViewer(
             onClick = {
               activeTechEngine = tech
               gpuBackendLabel = when (tech) {
+                Pev3dTechEngine.FILAMENT_GL -> "Filament GL-PBR • ACES + IBL"
                 Pev3dTechEngine.OPENGL_ES3 -> "OPENGL ES • GGX PBR"
                 Pev3dTechEngine.WEBGL_2 -> "WEBGL 2.0 • GLB PBR"
                 Pev3dTechEngine.VECTOR_CAD -> "COMPOSE 3D • GPU MESH"
@@ -713,15 +714,6 @@ fun Pev3dGarageViewer(
             modifier = Modifier.testTag("3d_signal_$tagSuffix"),
           )
         }
-        item {
-          FilterChip(
-            selected = explodePct > 0.1f,
-            onClick = { explodePct = if (explodePct > 0.1f) 0f else 0.75f },
-            leadingIcon = { Icon(Icons.Default.Layers, null, Modifier.size(14.dp)) },
-            label = { Text(if (explodePct > 0.1f) "Assemble" else "Explode 3D", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
-            modifier = Modifier.testTag("3d_explode_toggle_chip"),
-          )
-        }
         items(Pev3dLightingPreset.entries) { preset ->
           FilterChip(
             selected = lightingPreset == preset,
@@ -803,6 +795,29 @@ fun Pev3dGarageViewer(
             .testTag("aaa_pev_photo_viewport"),
       ) {
         when (activeTechEngine) {
+          Pev3dTechEngine.FILAMENT_GL -> {
+            Pev3dFilamentViewport(
+              archetype = archetype,
+              renderMode = renderMode,
+              lightingPreset = lightingPreset,
+              yawDeg = modelYawDeg,
+              pitchDeg = modelPitchDeg,
+              zoom = modelZoomScale,
+              explodePct = explodePct,
+              wheelSpinDeg = wheelSpinDeg,
+              throttlePct = motorThrottlePct,
+              lightsOn = lightsOn,
+              turnSignalMode = turnSignalMode,
+              selectedPartKey = selectedPart?.key,
+              accentRgb = finish.accentRgb,
+              bodyRgb = finish.bodyRgb,
+              caliperRgb = finish.caliperRgb,
+              ambientTempC = ambientTempC.toDouble(),
+              onBackendChanged = { gpuBackendLabel = it },
+              modifier = Modifier.fillMaxSize().testTag("pev_3d_interactive_canvas"),
+              finish = finish,
+            )
+          }
           Pev3dTechEngine.OPENGL_ES3 -> {
             Pev3dOpenGlViewport(
               archetype = archetype,

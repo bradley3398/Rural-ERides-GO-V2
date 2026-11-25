@@ -80,6 +80,27 @@ class CommunityRepository(
         .sortedByDescending { it.createdAt?.seconds ?: 0L }
     }
 
+  suspend fun fetchBoardPostsFromServer(): Result<List<BoardPost>> =
+    try {
+      requireUid()
+      val snap =
+        db.collection("board_posts")
+          .whereEqualTo("visibility", "PUBLIC")
+          .get(com.google.firebase.firestore.Source.SERVER)
+          .await()
+      val posts =
+        snap
+          .toObjects(BoardPost::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+          .filter { p -> isAuthenticPilot(userId = p.userId, callsign = p.authorCallsign) }
+          .sortedByDescending { it.createdAt?.seconds ?: 0L }
+      Result.success(posts)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      handleFirestoreError(e, OperationType.LIST, "board_posts")
+      Result.failure(e)
+    }
+
   fun observePostComments(postId: String): Flow<List<BoardComment>> =
     db.collection("board_posts")
       .document(postId)

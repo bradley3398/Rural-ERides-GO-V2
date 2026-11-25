@@ -28,6 +28,8 @@ import com.example.data.SavedVideo
 import com.example.data.UiState
 import com.example.data.YouTubeVideoItem
 import com.example.data.YoutubeComment
+import com.example.data.getActiveCustomVoice
+import com.example.data.resolveEffectiveBase
 import com.example.hardware.VoiceAudioManager
 import com.example.ui.components.bitmapToCloudBase64DataUri
 import java.io.ByteArrayOutputStream
@@ -497,7 +499,20 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   }
 
   fun refreshSupabaseBoard() {
-    if (boundFirebaseAuth || boundSupabaseToken.isBlank()) return
+    if (boundFirebaseAuth) {
+      viewModelScope.launch {
+        communityRepo.fetchBoardPostsFromServer()
+          .onSuccess { fresh ->
+            _boardPosts.value = fresh
+            _socialNotice.value = "Live Firestore board synced (${fresh.size} posts)."
+          }
+          .onFailure { err ->
+            _socialNotice.value = err.message ?: "Live Firestore board sync failed."
+          }
+      }
+      return
+    }
+    if (boundSupabaseToken.isBlank()) return
     viewModelScope.launch {
       LiveCloudServices.fetchSupabaseBoardPosts(boundSupabaseToken)
         .onSuccess { _boardPosts.value = it }
@@ -1359,10 +1374,11 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     helpNeeded: Boolean,
     speedTrap: Boolean,
     stolenAlert: Boolean,
+    externalImageUrl: String = "",
     onDone: () -> Unit,
   ) {
     viewModelScope.launch {
-      var uploadedUrl = ""
+      var uploadedUrl = externalImageUrl.trim().takeIf { it.startsWith("http://") || it.startsWith("https://") }.orEmpty()
       if (bitmap != null) {
         uploadedUrl = bitmapToCloudBase64DataUri(bitmap, maxDimension = 560, initialQuality = 65, maxChars = 155_000)
       }

@@ -93,7 +93,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.AiVoiceProfile
 import com.example.data.CustomVoiceProfile
 import com.example.data.VoiceDspProfile
+import com.example.data.getActiveCustomVoice
 import com.example.data.parseCustomVoiceProfiles
+import com.example.data.resolveEffectiveBase
 import com.example.data.serializeCustomVoiceProfiles
 import com.example.hardware.VoiceAudioManager
 import com.example.viewmodel.SessionViewModel

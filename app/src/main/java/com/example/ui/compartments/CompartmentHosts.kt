@@ -149,6 +149,7 @@ fun OverlayCompartmentHost(
           onReplayStartupIntro()
         },
         onOpenVoiceStudio = { onSelectOverlay(OverlayCompartment.VOICE_STUDIO) },
+        onOpenInfo = { onSelectOverlay(OverlayCompartment.INFO) },
         onBack = { onSelectOverlay(OverlayCompartment.NONE) },
       )
       return true
@@ -257,6 +258,9 @@ fun PrimaryTabCompartmentHost(
           sessionVm = sessionVm,
           cockpitVm = cockpitVm,
           socialVm = socialVm,
+          onSelectTab = onSelectTab,
+          onOpenOverlay = onOpenOverlay,
+          onOpen3dLab = { popups?.open3dLab() },
         )
     }
   }

@@ -953,7 +953,7 @@ fun MissionLogsCard(
                   contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                   modifier = Modifier.testTag("deep_dive_ride_${ride.id}"),
                 ) {
-                  Text("Studio Dive", maxLines = 1, softWrap = false)
+                  Text("Ride Inspector", maxLines = 1, softWrap = false)
                 }
               }
               item {
@@ -1027,10 +1027,7 @@ fun MissionLogsCard(
                 activeVehicle = activeVehicle,
                 settings = settings,
                 showAllStacked = false,
-                onOpenFullStudio = {
-                  playCue(VoiceAudioManager.TouchCue.ACTION_CONFIRM)
-                  onOpenTelemetryStudio(ride.id)
-                },
+                onOpenFullStudio = null,
               )
             }
           }

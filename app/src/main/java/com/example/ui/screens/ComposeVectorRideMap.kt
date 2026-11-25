@@ -225,12 +225,17 @@ internal fun ComposeVectorRideMap(
         val cx = w / 2f
         val cy = h / 2f
 
+        val safeZoom = if (zoomScale.isFinite()) zoomScale.coerceIn(0.8f, 6.0f) else 1f
+        val safePanX = if (panOffset.x.isFinite()) panOffset.x else 0f
+        val safePanY = if (panOffset.y.isFinite()) panOffset.y else 0f
         fun toCanvas(uv: Pair<Float, Float>): Offset {
-          val baseX = cx + (uv.first - 0.5f) * plotSize
-          val baseY = cy + (uv.second - 0.5f) * plotSize
+          val u = if (uv.first.isFinite()) uv.first.coerceIn(0f, 1f) else 0.5f
+          val v = if (uv.second.isFinite()) uv.second.coerceIn(0f, 1f) else 0.5f
+          val baseX = cx + (u - 0.5f) * plotSize
+          val baseY = cy + (v - 0.5f) * plotSize
           return Offset(
-            x = cx + (baseX - cx) * zoomScale + panOffset.x,
-            y = cy + (baseY - cy) * zoomScale + panOffset.y,
+            x = cx + (baseX - cx) * safeZoom + safePanX,
+            y = cy + (baseY - cy) * safeZoom + safePanY,
           )
         }
 
