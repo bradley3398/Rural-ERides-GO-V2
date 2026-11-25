@@ -1,9 +1,13 @@
 package com.example.ui.compartments
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import com.example.data.ActiveSessionUser
 import com.example.data.LiveTelemetrySnapshot
@@ -42,23 +46,25 @@ fun CompartmentHostRoot(
   content: @Composable () -> Unit,
 ) {
   CompositionLocalProvider(LocalCompartmentPopups provides popupsState) {
-    content()
+    Box(modifier = Modifier.fillMaxSize()) {
+      content()
 
-    if (popupsState.is3dLabOpen) {
-      Pev3dLabModal(
-        activeVehicleName = activeVehicle?.name ?: "Rural Hyper-PEV",
-        activeVoltage = activeVehicle?.voltage ?: 60.0,
-        gpsLat = gpsLat,
-        gpsLng = gpsLng,
-        onDismiss = { popupsState.close3dLab() },
-      )
-    }
+      if (popupsState.is3dLabOpen) {
+        Pev3dLabModal(
+          activeVehicleName = activeVehicle?.name ?: "Rural Hyper-PEV",
+          activeVoltage = activeVehicle?.voltage ?: 60.0,
+          gpsLat = gpsLat,
+          gpsLng = gpsLng,
+          onDismiss = { popupsState.close3dLab() },
+        )
+      }
 
-    popupsState.activeGraphInspect?.let { inspectData ->
-      GraphInspectModal(
-        data = inspectData,
-        onDismiss = { popupsState.closeGraphInspect() },
-      )
+      popupsState.activeGraphInspect?.let { inspectData ->
+        GraphInspectModal(
+          data = inspectData,
+          onDismiss = { popupsState.closeGraphInspect() },
+        )
+      }
     }
   }
 }
@@ -80,11 +86,15 @@ fun AuthAndOnboardingCompartmentHost(
 ) {
   when {
     activeUser == null -> {
+      LaunchedEffect(Unit) {
+        sessionVm.attemptSilentGoogleSignIn(activity)
+      }
       AuthLoginScreen(
         busy = authBusy,
         statusMessage = authStatusMessage,
         supabaseConfigured = remember { sessionVm.supabaseService.isConfigured() },
         onSignInGoogle = { sessionVm.signInWithGoogle(activity) },
+        onSignInGoogleBrowser = { sessionVm.signInWithGoogleBrowser(activity) },
         onSupabaseSignIn = { email, pass -> sessionVm.signInWithSupabase(email, pass) },
         onSupabaseSignUp = { email, pass, cs -> sessionVm.signUpWithSupabase(email, pass, cs) },
         onSupabaseResetPassword = { email -> sessionVm.sendSupabasePasswordReset(email) },

@@ -1788,7 +1788,7 @@ fun AboutDeveloperSettingsContent(
         Text("Device: ${Build.MANUFACTURER.uppercase()} ${Build.MODEL}", style = MaterialTheme.typography.labelSmall)
         Text("System: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})", style = MaterialTheme.typography.labelSmall)
         Text("GitHub: https://github.com/bradley3398/Rural-Erides-GO", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-        Text("Powered by: Kotlin • Jetpack Compose • Filament GL-PBR 3D • Live GPS & GNSS • 9-DOF Sensors • Live AR Camera • Firebase AI & Cloud Sync", style = MaterialTheme.typography.labelSmall)
+        Text("Powered by: Kotlin • Jetpack Compose • Studio 3D PBR + OpenGL ES + WebGL 2.0 • Live GPS & GNSS • 9-DOF Sensors • Live AR Camera • Firebase AI & Cloud Sync", style = MaterialTheme.typography.labelSmall)
       }
     }
     Spacer(Modifier.height(12.dp))
@@ -1827,7 +1827,7 @@ fun AboutDeveloperSettingsContent(
               putExtra(Intent.EXTRA_SUBJECT, "Rural ERides GO v${BuildConfig.VERSION_NAME}")
               putExtra(
                 Intent.EXTRA_TEXT,
-                "Rural ERides GO v${BuildConfig.VERSION_NAME} — Built by Lord Bradley Callison. Electric Ride Dashboard, Filament 3D Rig Lab, Live GPS Satellites, AR Camera, Repair Shop & AI Helper.\nhttps://github.com/bradley3398/Rural-Erides-GO",
+                "Rural ERides GO v${BuildConfig.VERSION_NAME} — Built by Lord Bradley Callison. Electric Ride Dashboard, Studio 3D Rig Lab, Live GPS Satellites, AR Camera, Repair Shop & AI Helper.\nhttps://github.com/bradley3398/Rural-Erides-GO",
               )
             }
           runCatching { ctx.startActivity(Intent.createChooser(intent, "Share App Info")) }

@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -322,7 +325,12 @@ fun VoltTrailRootApp(
                     )
 
                   if (!overlayConsumed) {
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                      modifier =
+                        Modifier
+                          .fillMaxSize()
+                          .then(if (!useTopRibbon) Modifier.statusBarsPadding() else Modifier),
+                    ) {
                       if (useTopRibbon) {
                         TacticalTopRibbonBar(
                           tabs = navTabs,
@@ -331,7 +339,19 @@ fun VoltTrailRootApp(
                         )
                       }
 
-                      Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                      Row(
+                        modifier =
+                          Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .then(
+                              if (useTopRibbon || useLeftRail || useRightRail) {
+                                Modifier.navigationBarsPadding()
+                              } else {
+                                Modifier
+                              }
+                            ),
+                      ) {
                         if (useLeftRail) {
                           TacticalSideNavigationRail(
                             tabs = navTabs,
@@ -341,24 +361,29 @@ fun VoltTrailRootApp(
                           )
                         }
 
-                        Box(modifier = Modifier.weight(1f).fillMaxSize()) {
-                          PrimaryTabCompartmentHost(
-                            tab = activeTab,
-                            sessionVm = sessionVm,
-                            cockpitVm = cockpitVm,
-                            radarVm = radarVm,
-                            mechanicVm = mechanicVm,
-                            socialVm = socialVm,
-                            onSelectTab = { nextTab ->
-                              activeOverlay = OverlayCompartment.NONE
-                              activeTab = nextTab
-                            },
-                            onOpenOverlay = { nextOverlay -> activeOverlay = nextOverlay },
-                            onOpenTelemetryStudio = { rideId ->
-                              telemetryStudioRideId = rideId
-                              activeOverlay = OverlayCompartment.TELEMETRY_STUDIO
-                            },
-                          )
+                        Box(
+                          modifier = Modifier.weight(1f).fillMaxSize(),
+                          contentAlignment = Alignment.TopCenter,
+                        ) {
+                          Box(modifier = Modifier.fillMaxSize().widthIn(max = 860.dp)) {
+                            PrimaryTabCompartmentHost(
+                              tab = activeTab,
+                              sessionVm = sessionVm,
+                              cockpitVm = cockpitVm,
+                              radarVm = radarVm,
+                              mechanicVm = mechanicVm,
+                              socialVm = socialVm,
+                              onSelectTab = { nextTab ->
+                                activeOverlay = OverlayCompartment.NONE
+                                activeTab = nextTab
+                              },
+                              onOpenOverlay = { nextOverlay -> activeOverlay = nextOverlay },
+                              onOpenTelemetryStudio = { rideId ->
+                                telemetryStudioRideId = rideId
+                                activeOverlay = OverlayCompartment.TELEMETRY_STUDIO
+                              },
+                            )
+                          }
                         }
 
                         if (useRightRail) {
@@ -391,6 +416,13 @@ fun VoltTrailRootApp(
                     modifier =
                       Modifier
                         .align(Alignment.BottomCenter)
+                        .then(
+                          if (overlayConsumed || useTopRibbon || useLeftRail || useRightRail) {
+                            Modifier.navigationBarsPadding()
+                          } else {
+                            Modifier
+                          }
+                        )
                         .padding(bottom = if (overlayConsumed) 12.dp else miniPlayerBottomOffset),
                   ) {
                     YoutubeMiniPlayerHost(

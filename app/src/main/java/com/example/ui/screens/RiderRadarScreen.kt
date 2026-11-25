@@ -331,11 +331,11 @@ fun RiderRadarScreen(
   val lockedTarget = nearbyRiders.firstOrNull { it.userId == lockedUid }
 
   Box(Modifier.fillMaxSize()) {
-    val pad = if (settings.spaciousLayoutMode) 16.dp else 12.dp
-    val gap = if (settings.spaciousLayoutMode) 16.dp else 10.dp
+    val pad = if (settings.spaciousLayoutMode) 18.dp else 14.dp
+    val gap = if (settings.spaciousLayoutMode) 16.dp else 12.dp
     LazyColumn(
       modifier = Modifier.fillMaxSize(),
-      contentPadding = PaddingValues(start = pad, end = pad, top = pad, bottom = 104.dp),
+      contentPadding = PaddingValues(start = pad, end = pad, top = pad, bottom = 124.dp),
       verticalArrangement = Arrangement.spacedBy(gap),
     ) {
       item {

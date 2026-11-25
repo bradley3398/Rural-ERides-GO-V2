@@ -84,12 +84,20 @@ private fun packArgb(a: Float, r: Float, g: Float, b: Float): Int {
   return (ai shl 24) or (ri shl 16) or (gi shl 8) or bi
 }
 
+private fun acesTone(x: Float): Float {
+  val v = x.coerceAtLeast(0f)
+  return ((v * (2.51f * v + 0.03f)) / (v * (2.43f * v + 0.59f) + 0.14f)).coerceIn(0f, 1f)
+}
+
 /**
- * Pure Jetpack Compose + Skia GPU Triangle-Rasterized 3D Showroom Engine.
- * Transforms, back-face culls, depth-sorts, and Gouraud-shades the full sculpted
- * Pev3dGltfBuilder geometry with metallic specular reflections, studio rim light,
- * ground turntable + soft AO shadow, X-Ray shell transparency, FLIR Thermal IR,
- * Carbon Gloss clearcoat contrast, and Wireframe CAD overlay.
+ * Pure Jetpack Compose + Skia GPU Triangle-Rasterized Studio 3D PBR Engine.
+ * Zero TextureView / SurfaceView / native JNI dependencies — guaranteed crash-proof inside
+ * any modal, sheet, or activity window on every Android device.
+ *
+ * Features full sculpted Pev3dGltfBuilder geometry with 3-point studio lighting (Warm Key,
+ * Cool Fill, Silhouette Rim), ACES Filmic tone mapping, clearcoat specular reflection,
+ * studio turntable shadow & volumetric headlight beam, X-Ray cutaway, FLIR Thermal IR,
+ * Carbon Gloss weave, Blueprint CAD, and Wireframe overlay.
  */
 @Composable
 internal fun Pev3dComposeShadedViewport(
@@ -135,13 +143,13 @@ internal fun Pev3dComposeShadedViewport(
     } else {
       when (lightingPreset) {
         Pev3dLightingPreset.STUDIO -> Brush.radialGradient(
-          listOf(Color(0xFF192231), Color(0xFF0E141E), Color(0xFF070A0F)),
+          listOf(Color(0xFF1F2B3E), Color(0xFF111824), Color(0xFF06090F)),
         )
         Pev3dLightingPreset.SUNSET -> Brush.radialGradient(
-          listOf(Color(0xFF2B181A), Color(0xFF191015), Color(0xFF0A080C)),
+          listOf(Color(0xFF331C1E), Color(0xFF1C1117), Color(0xFF09070B)),
         )
         Pev3dLightingPreset.NEON -> Brush.radialGradient(
-          listOf(Color(0xFF0F1D3A), Color(0xFF0A1024), Color(0xFF050711)),
+          listOf(Color(0xFF132448), Color(0xFF0B122A), Color(0xFF050712)),
         )
       }
     }
@@ -159,19 +167,58 @@ internal fun Pev3dComposeShadedViewport(
 
     drawRect(brush = bgBrush)
 
+    // Subtle overhead photographic studio softbox ceiling glow
+    if (!isBlueprintMode) {
+      val ceilingColor = when (lightingPreset) {
+        Pev3dLightingPreset.STUDIO -> Color(0x2893C5FD)
+        Pev3dLightingPreset.SUNSET -> Color(0x2EFDBA74)
+        Pev3dLightingPreset.NEON -> Color(0x2E38BDF8)
+      }
+      drawOval(
+        brush = Brush.radialGradient(
+          listOf(ceilingColor, Color.Transparent),
+          center = Offset(w * 0.5f, h * 0.08f),
+          radius = max(w, h) * 0.55f,
+        ),
+        topLeft = Offset(w * 0.05f, -h * 0.12f),
+        size = androidx.compose.ui.geometry.Size(w * 0.90f, h * 0.42f),
+      )
+    }
+
     Pev3dEngine.buildCameraViewProjection(w, h, yawDeg, pitchDeg, zoom, vp, camPos)
 
-    // Studio contact shadow & turntable ring directly under the bike
+    // Studio contact shadow, calibrated turntable double-ring & volumetric headlight pool
     val centerIn = floatArrayOf(0f, -0.77f, 0f, 1f)
     val centerOut = FloatArray(4)
     Mat4Math.multiplyMV(centerOut, vp, centerIn)
     if (centerOut[3] > 0.1f) {
       val cx = (centerOut[0] / centerOut[3] * 0.5f + 0.5f) * w
       val cy = (0.5f - centerOut[1] / centerOut[3] * 0.5f) * h
-      val shadowR = min(w, h) * 0.34f * zoom.coerceIn(0.7f, 1.5f)
+      val shadowR = min(w, h) * 0.36f * zoom.coerceIn(0.7f, 1.5f)
+
+      if (lightsOn && renderMode != Pev3dRenderMode.THERMAL_IR && !isBlueprintMode) {
+        val beamIn = floatArrayOf(1.15f, -0.76f, 0f, 1f)
+        val beamOut = FloatArray(4)
+        Mat4Math.multiplyMV(beamOut, vp, beamIn)
+        if (beamOut[3] > 0.1f) {
+          val bx = (beamOut[0] / beamOut[3] * 0.5f + 0.5f) * w
+          val by = (0.5f - beamOut[1] / beamOut[3] * 0.5f) * h
+          val beamR = shadowR * 0.72f
+          drawOval(
+            brush = Brush.radialGradient(
+              listOf(Color(0x40E0F2FE), Color(0x187DD3FC), Color.Transparent),
+              center = Offset(bx, by),
+              radius = beamR,
+            ),
+            topLeft = Offset(bx - beamR, by - beamR * 0.42f),
+            size = androidx.compose.ui.geometry.Size(beamR * 2f, beamR * 0.84f),
+          )
+        }
+      }
+
       drawOval(
         brush = Brush.radialGradient(
-          listOf(Color(0xAA000000), Color(0x44000000), Color.Transparent),
+          listOf(Color(0xBB000000), Color(0x55000000), Color.Transparent),
           center = Offset(cx, cy),
           radius = shadowR,
         ),
@@ -179,10 +226,16 @@ internal fun Pev3dComposeShadedViewport(
         size = androidx.compose.ui.geometry.Size(shadowR * 2f, shadowR * 0.72f),
       )
       drawOval(
-        color = if (isBlueprintMode) Color(0x6638BDF8) else Color(0x3338BDF8),
-        topLeft = Offset(cx - shadowR * 0.96f, cy - shadowR * 0.34f),
-        size = androidx.compose.ui.geometry.Size(shadowR * 1.92f, shadowR * 0.68f),
+        color = if (isBlueprintMode) Color(0x7738BDF8) else Color(0x3D38BDF8),
+        topLeft = Offset(cx - shadowR * 0.98f, cy - shadowR * 0.35f),
+        size = androidx.compose.ui.geometry.Size(shadowR * 1.96f, shadowR * 0.70f),
         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6f),
+      )
+      drawOval(
+        color = if (isBlueprintMode) Color(0x447DD3FC) else Color(0x2494A3B8),
+        topLeft = Offset(cx - shadowR * 0.68f, cy - shadowR * 0.24f),
+        size = androidx.compose.ui.geometry.Size(shadowR * 1.36f, shadowR * 0.48f),
+        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.1f),
       )
     }
 
@@ -221,16 +274,32 @@ internal fun Pev3dComposeShadedViewport(
       return@Canvas
     }
 
-    // Light rig setup matching lightingPreset
-    val lightCfg = when (lightingPreset) {
-      Pev3dLightingPreset.STUDIO -> floatArrayOf(0.45f, 0.85f, 0.35f, 1.0f, 0.99f, 0.97f)
-      Pev3dLightingPreset.SUNSET -> floatArrayOf(-0.78f, 0.42f, 0.45f, 1.08f, 0.72f, 0.45f)
-      Pev3dLightingPreset.NEON -> floatArrayOf(0.28f, 0.68f, -0.68f, 0.55f, 0.92f, 1.15f)
+    // 3-Point Photographic Studio Light Rig (Key + Cool Fill + Silhouette Rim)
+    val keyCfg = when (lightingPreset) {
+      Pev3dLightingPreset.STUDIO -> floatArrayOf(0.45f, 0.85f, 0.35f, 1.35f, 1.33f, 1.30f)
+      Pev3dLightingPreset.SUNSET -> floatArrayOf(-0.78f, 0.42f, 0.45f, 1.50f, 0.94f, 0.56f)
+      Pev3dLightingPreset.NEON -> floatArrayOf(0.28f, 0.68f, -0.68f, 0.72f, 1.24f, 1.52f)
     }
-    val kx = lightCfg[0]; val ky = lightCfg[1]; val kz = lightCfg[2]
-    val kr = lightCfg[3]; val kg = lightCfg[4]; val kb = lightCfg[5]
+    val fillRgb = when (lightingPreset) {
+      Pev3dLightingPreset.STUDIO -> floatArrayOf(0.38f, 0.46f, 0.58f)
+      Pev3dLightingPreset.SUNSET -> floatArrayOf(0.32f, 0.34f, 0.56f)
+      Pev3dLightingPreset.NEON -> floatArrayOf(0.92f, 0.28f, 0.80f)
+    }
+    val rimRgb = when (lightingPreset) {
+      Pev3dLightingPreset.STUDIO -> floatArrayOf(0.58f, 0.76f, 1.05f)
+      Pev3dLightingPreset.SUNSET -> floatArrayOf(1.10f, 0.52f, 0.30f)
+      Pev3dLightingPreset.NEON -> floatArrayOf(0.28f, 1.10f, 1.28f)
+    }
+
+    val kx = keyCfg[0]; val ky = keyCfg[1]; val kz = keyCfg[2]
+    val kr = keyCfg[3]; val kg = keyCfg[4]; val kb = keyCfg[5]
     val kLen = sqrt(kx * kx + ky * ky + kz * kz).coerceAtLeast(1e-5f)
     val ldx = kx / kLen; val ldy = ky / kLen; val ldz = kz / kLen
+
+    // Fill light opposite key
+    val fx0 = -kx * 0.85f; val fy0 = 0.32f; val fz0 = -kz * 0.55f
+    val fLen = sqrt(fx0 * fx0 + fy0 * fy0 + fz0 * fz0).coerceAtLeast(1e-5f)
+    val flx = fx0 / fLen; val fly = fy0 / fLen; val flz = fz0 / fLen
 
     val totalMaxTris = builtScene.parts.sumOf { if (it.partKey == "floor") 0 else it.indices.size / 3 }
     if (totalMaxTris == 0) return@Canvas
@@ -242,7 +311,7 @@ internal fun Pev3dComposeShadedViewport(
     val isBlueprint = renderMode == Pev3dRenderMode.BLUEPRINT
     val ambientBoost = ((ambientTempC - 15f) / 40f).coerceIn(0f, 0.25f)
     val throttleHeat = throttlePct.coerceIn(0f, 1f) * 0.68f
-    val flashPhase = ((wheelSpinDeg / 45f).toInt() % 2 == 0)
+    val flashPhase = ((System.currentTimeMillis() / 420L) % 2L == 0L)
     val leftActive = (turnSignalMode == Pev3dTurnSignalMode.LEFT || turnSignalMode == Pev3dTurnSignalMode.HAZARD) && flashPhase
     val rightActive = (turnSignalMode == Pev3dTurnSignalMode.RIGHT || turnSignalMode == Pev3dTurnSignalMode.HAZARD) && flashPhase
 
@@ -273,21 +342,25 @@ internal fun Pev3dComposeShadedViewport(
       val projZ = FloatArray(vCount)
       val vertColors = IntArray(vCount)
 
-      // Base color & material adjustments
       var br = part.baseRgb[0]
       var bg = part.baseRgb[1]
       var bb = part.baseRgb[2]
       var emR = part.emissiveRgb[0]
       var emG = part.emissiveRgb[1]
       var emB = part.emissiveRgb[2]
-      if (part.nodeName.contains("signal_left") && leftActive) {
-        emR = 1.0f; emG = 0.65f; emB = 0.05f
-      } else if (part.nodeName.contains("signal_right") && rightActive) {
-        emR = 1.0f; emG = 0.65f; emB = 0.05f
+      if (part.nodeName.contains("signal_left")) {
+        if (leftActive) { emR = 2.4f; emG = 1.35f; emB = 0.08f } else { emR = 0.04f; emG = 0.02f; emB = 0f }
+      } else if (part.nodeName.contains("signal_right")) {
+        if (rightActive) { emR = 2.4f; emG = 1.35f; emB = 0.08f } else { emR = 0.04f; emG = 0.02f; emB = 0f }
+      } else if (part.nodeName.contains("headlight")) {
+        if (lightsOn) { emR = 2.2f; emG = 2.35f; emB = 2.55f } else { emR = 0.04f; emG = 0.04f; emB = 0.05f }
+      } else if (part.nodeName.contains("tail")) {
+        if (lightsOn) { emR = 2.1f; emG = 0.20f; emB = 0.16f } else { emR = 0.05f; emG = 0.01f; emB = 0.01f }
       }
+
       val isSel = selectedPartKey != null && part.partKey == selectedPartKey
-      val specPow = if (isCarbon || part.clearcoat > 0.2f) 42f else 18f
-      val specWeight = if (isCarbon) 0.72f else (0.18f + part.metallic * 0.48f + part.clearcoat * 0.25f)
+      val specPow = if (isCarbon || part.clearcoat > 0.2f) 46f else (14f + (1f - part.roughness) * 28f)
+      val specWeight = if (isCarbon) 0.92f else (0.18f + part.metallic * 0.56f + part.clearcoat * 0.38f)
       val alpha = if (isXray && part.isShell) 0.26f else 1f
       val partHeatFactor = when (part.partKey) {
         "motor" -> 0.92f
@@ -299,7 +372,7 @@ internal fun Pev3dComposeShadedViewport(
       val heatBase = (0.12f + partHeatFactor * throttleHeat + ambientBoost).coerceIn(0.04f, 1f)
 
       if (isCarbon && part.isShell) {
-        br *= 0.42f; bg *= 0.42f; bb *= 0.45f
+        br *= 0.36f; bg *= 0.37f; bb *= 0.42f
       }
 
       for (vi in 0 until vCount) {
@@ -335,7 +408,7 @@ internal fun Pev3dComposeShadedViewport(
         vx *= vInv; vy *= vInv; vz *= vInv
 
         val nDotV = (nx * vx + ny * vy + nz * vz).coerceIn(0f, 1f)
-        val fresnel = (1f - nDotV).pow(2.3f)
+        val fresnel = (1f - nDotV).pow(2.4f)
 
         if (isXray) {
           val xr = if (part.isShell) 0.10f + fresnel * 0.25f else br * (0.45f + 0.55f * nDotV)
@@ -375,23 +448,49 @@ internal fun Pev3dComposeShadedViewport(
           continue
         }
 
-        val diff = (nx * ldx + ny * ldy + nz * ldz).coerceAtLeast(0f)
+        // Carbon weave subtle micro-contrast
+        var albedoR = br
+        var albedoG = bg
+        var albedoB = bb
+        if (isCarbon && part.isShell) {
+          val weave = if (sin(wx * 46f) * sin((wy + wz) * 46f) > 0f) 1.14f else 0.78f
+          albedoR *= weave; albedoG *= weave; albedoB *= weave
+        }
+
+        val diffKey = (nx * ldx + ny * ldy + nz * ldz).coerceAtLeast(0f)
+        val diffFill = (nx * flx + ny * fly + nz * flz).coerceAtLeast(0f)
+
         var hx = ldx + vx; var hy = ldy + vy; var hz = ldz + vz
         val hInv = 1f / sqrt(hx * hx + hy * hy + hz * hz).coerceAtLeast(1e-5f)
         hx *= hInv; hy *= hInv; hz *= hInv
         val nDotH = (nx * hx + ny * hy + nz * hz).coerceAtLeast(0f)
         val spec = nDotH.pow(specPow) * specWeight
-        val hemi = 0.24f + 0.18f * (0.5f + 0.5f * ny)
 
-        var r = br * (hemi + diff * kr * 0.85f) + spec * kr + fresnel * 0.20f + emR * 0.75f
-        var g = bg * (hemi + diff * kg * 0.85f) + spec * kg + fresnel * 0.24f + emG * 0.75f
-        var b = bb * (hemi + diff * kb * 0.85f) + spec * kb + fresnel * 0.32f + emB * 0.75f
+        // Overhead studio softbox reflection band (gives glossy car/moto paint sheen!)
+        val refY = (2f * nDotV * ny - vy).coerceIn(-1f, 1f)
+        val softboxSheen = ((refY - 0.35f) / 0.65f).coerceIn(0f, 1f).pow(2.4f) * (0.14f + part.metallic * 0.32f + part.clearcoat * 0.36f)
+
+        val hemi = 0.18f + 0.18f * (0.5f + 0.5f * ny)
+        val rimTerm = fresnel * (0.34f + part.metallic * 0.26f)
+
+        // Metallic specular tint blends toward albedo on metals, stays neutral white on dielectrics/clearcoat
+        val specTintR = 1f * (1f - part.metallic * 0.55f) + albedoR * (part.metallic * 0.55f)
+        val specTintG = 1f * (1f - part.metallic * 0.55f) + albedoG * (part.metallic * 0.55f)
+        val specTintB = 1f * (1f - part.metallic * 0.55f) + albedoB * (part.metallic * 0.55f)
+
+        var r = albedoR * (hemi + diffKey * kr * 0.78f + diffFill * fillRgb[0] * 0.45f) +
+          spec * kr * specTintR + softboxSheen * specTintR + rimTerm * rimRgb[0] + emR * 0.85f
+        var g = albedoG * (hemi + diffKey * kg * 0.78f + diffFill * fillRgb[1] * 0.45f) +
+          spec * kg * specTintG + softboxSheen * specTintG + rimTerm * rimRgb[1] + emG * 0.85f
+        var b = albedoB * (hemi + diffKey * kb * 0.78f + diffFill * fillRgb[2] * 0.45f) +
+          spec * kb * specTintB + softboxSheen * specTintB + rimTerm * rimRgb[2] + emB * 0.85f
+
         if (isSel) {
-          r += 0.12f + 0.22f * fresnel
-          g += 0.26f + 0.38f * fresnel
-          b += 0.42f + 0.52f * fresnel
+          r += 0.14f + 0.28f * fresnel
+          g += 0.30f + 0.46f * fresnel
+          b += 0.48f + 0.62f * fresnel
         }
-        vertColors[vi] = packArgb(alpha, r, g, b)
+        vertColors[vi] = packArgb(alpha, acesTone(r * 1.15f), acesTone(g * 1.15f), acesTone(b * 1.15f))
       }
 
       val indices = part.indices
@@ -407,7 +506,6 @@ internal fun Pev3dComposeShadedViewport(
         val x0 = projX[i0]; val y0 = projY[i0]
         val x1 = projX[i1]; val y1 = projY[i1]
         val x2 = projX[i2]; val y2 = projY[i2]
-        // Backface cull opaque meshes in screen space (CCW winding -> cross <= 0 is front-facing in flipped Y screen coords)
         val cross2d = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)
         if (!isXray && cross2d > 0f) continue
 

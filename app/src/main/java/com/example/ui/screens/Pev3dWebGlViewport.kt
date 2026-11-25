@@ -56,6 +56,31 @@ internal fun Pev3dWebGlViewport(
 ) {
   val webViewRef = remember { arrayOfNulls<WebView>(1) }
   var pageLoaded by remember { mutableStateOf(false) }
+  var webGlFailed by remember { mutableStateOf(false) }
+
+  if (webGlFailed) {
+    Pev3dComposeShadedViewport(
+      archetype = archetype,
+      renderMode = renderMode,
+      lightingPreset = lightingPreset,
+      yawDeg = yawDeg,
+      pitchDeg = pitchDeg,
+      zoom = zoom,
+      explodePct = explodePct,
+      wheelSpinDeg = wheelSpinDeg,
+      throttlePct = throttlePct,
+      lightsOn = lightsOn,
+      turnSignalMode = turnSignalMode,
+      selectedPartKey = selectedPartKey,
+      accentRgb = accentRgb,
+      bodyRgb = bodyRgb,
+      caliperRgb = caliperRgb,
+      ambientTempC = ambientTempC,
+      modifier = modifier,
+      finish = finish,
+    )
+    return
+  }
 
   val builtGlb = remember(archetype, finish, lightsOn) {
     Pev3dGltfBuilder.buildVehicleGlb(
@@ -86,7 +111,7 @@ internal fun Pev3dWebGlViewport(
     glbVersion++
     val ver = glbVersion
     val url = "https://local.volttrail.webgl/rig_$ver.glb"
-    wv.evaluateJavascript("if(window.loadPevGlb)window.loadPevGlb('$url',$rigMetaJson);", null)
+    runCatching { wv.evaluateJavascript("if(window.loadPevGlb)window.loadPevGlb('$url',$rigMetaJson);", null) }
   }
 
   LaunchedEffect(
@@ -108,14 +133,16 @@ internal fun Pev3dWebGlViewport(
     val wv = webViewRef[0] ?: return@LaunchedEffect
     val js =
       "if(window.updatePev3d)window.updatePev3d('${renderMode.name}','${lightingPreset.name}',$yawDeg,$pitchDeg,$zoom,$explodePct,$wheelSpinDeg,$throttlePct,${if (lightsOn) 1 else 0},'${turnSignalMode.name}','${selectedPartKey.orEmpty()}',$ambientTempC);"
-    wv.evaluateJavascript(js, null)
+    runCatching { wv.evaluateJavascript(js, null) }
   }
 
   DisposableEffect(Unit) {
     onDispose {
-      webViewRef[0]?.let { wv ->
-        wv.stopLoading()
-        wv.destroy()
+      runCatching {
+        webViewRef[0]?.let { wv ->
+          wv.stopLoading()
+          wv.destroy()
+        }
       }
       webViewRef[0] = null
       glbHolder[0] = null
@@ -125,48 +152,55 @@ internal fun Pev3dWebGlViewport(
   AndroidView(
     modifier = modifier,
     factory = { ctx ->
-      onBackendChanged("WEBGL 2.0 • GLB PBR")
-      WebView(ctx).apply {
-        setBackgroundColor(AndroidColor.parseColor("#080C12"))
-        settings.apply {
-          javaScriptEnabled = true
-          domStorageEnabled = false
-          cacheMode = WebSettings.LOAD_NO_CACHE
-          allowFileAccess = false
-        }
-        isHorizontalScrollBarEnabled = false
-        isVerticalScrollBarEnabled = false
-        setOnTouchListener { _, _ -> false }
-        webViewClient = object : WebViewClient() {
-          override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-            val url = request?.url?.toString().orEmpty()
-            if (url.startsWith("https://local.volttrail.webgl/rig_") && url.endsWith(".glb")) {
-              val bytes = glbHolder[0] ?: return null
-              return WebResourceResponse(
-                "model/gltf-binary",
-                null,
-                200,
-                "OK",
-                mapOf("Access-Control-Allow-Origin" to "*"),
-                ByteArrayInputStream(bytes),
-              )
+      runCatching {
+        onBackendChanged("WEBGL 2.0 • GLB PBR")
+        WebView(ctx).apply {
+          setBackgroundColor(AndroidColor.parseColor("#080C12"))
+          settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = false
+            cacheMode = WebSettings.LOAD_NO_CACHE
+            allowFileAccess = false
+          }
+          isHorizontalScrollBarEnabled = false
+          isVerticalScrollBarEnabled = false
+          setOnTouchListener { _, _ -> false }
+          webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+              val url = request?.url?.toString().orEmpty()
+              if (url.startsWith("https://local.volttrail.webgl/rig_") && url.endsWith(".glb")) {
+                val bytes = glbHolder[0] ?: return null
+                return WebResourceResponse(
+                  "model/gltf-binary",
+                  null,
+                  200,
+                  "OK",
+                  mapOf("Access-Control-Allow-Origin" to "*"),
+                  ByteArrayInputStream(bytes),
+                )
+              }
+              return super.shouldInterceptRequest(view, request)
             }
-            return super.shouldInterceptRequest(view, request)
-          }
 
-          override fun onPageFinished(view: WebView?, url: String?) {
-            pageLoaded = true
-          }
+            override fun onPageFinished(view: WebView?, url: String?) {
+              pageLoaded = true
+            }
 
-          override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
-            pageLoaded = false
-            webViewRef[0] = null
-            onBackendChanged("WEBGL RECOVERING...")
-            return true
+            override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+              pageLoaded = false
+              webViewRef[0] = null
+              webGlFailed = true
+              onBackendChanged("Studio 3D PBR (Safe Fallback)")
+              return true
+            }
           }
+          loadDataWithBaseURL("https://local.volttrail.webgl/", WEBGL_GLB_PBR_HTML, "text/html", "UTF-8", null)
+          webViewRef[0] = this
         }
-        loadDataWithBaseURL("https://local.volttrail.webgl/", WEBGL_GLB_PBR_HTML, "text/html", "UTF-8", null)
-        webViewRef[0] = this
+      }.getOrElse {
+        webGlFailed = true
+        onBackendChanged("Studio 3D PBR (Safe Fallback)")
+        android.view.View(ctx)
       }
     },
   )

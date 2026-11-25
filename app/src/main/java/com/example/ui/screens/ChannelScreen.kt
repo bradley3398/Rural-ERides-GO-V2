@@ -140,11 +140,11 @@ fun ChannelScreen(
     }
   }
 
-  val pad = if (settings.spaciousLayoutMode) 16.dp else 12.dp
-  val gap = if (settings.spaciousLayoutMode) 16.dp else 10.dp
+  val pad = if (settings.spaciousLayoutMode) 18.dp else 14.dp
+  val gap = if (settings.spaciousLayoutMode) 16.dp else 12.dp
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
-    contentPadding = PaddingValues(start = pad, end = pad, top = pad, bottom = if (activeVideo != null) 104.dp else 24.dp),
+    contentPadding = PaddingValues(start = pad, end = pad, top = pad, bottom = if (activeVideo != null) 116.dp else 32.dp),
     verticalArrangement = Arrangement.spacedBy(gap),
   ) {
     if (socialNotice.isNotBlank()) {

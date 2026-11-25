@@ -8,7 +8,10 @@ import android.opengl.GLUtils
 import android.opengl.Matrix
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -65,6 +68,7 @@ private class GlMaterialTextures(
 private class PevOpenGlRenderer(
   private val state: PevOpenGlState,
   private val onGlBackendReady: (String) -> Unit,
+  private val onGlFatalError: () -> Unit,
 ) : GLSurfaceView.Renderer {
 
   private var pbrProgram = 0
@@ -121,18 +125,23 @@ private class PevOpenGlRenderer(
   private val startNs = System.nanoTime()
 
   override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-    val glVersion = GLES20.glGetString(GLES20.GL_VERSION).orEmpty()
-    val glesTag = if (glVersion.contains("3.")) "OPENGL ES 3.0 • GGX PBR" else "OPENGL ES 2.0 • GGX PBR"
-    onGlBackendReady(glesTag)
+    runCatching {
+      val glVersion = GLES20.glGetString(GLES20.GL_VERSION).orEmpty()
+      val glesTag = if (glVersion.contains("3.")) "OPENGL ES 3.0 • GGX PBR" else "OPENGL ES 2.0 • GGX PBR"
+      onGlBackendReady(glesTag)
 
-    GLES20.glEnable(GLES20.GL_DEPTH_TEST)
-    GLES20.glEnable(GLES20.GL_BLEND)
-    GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+      GLES20.glEnable(GLES20.GL_DEPTH_TEST)
+      GLES20.glEnable(GLES20.GL_BLEND)
+      GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
 
-    buildPrograms()
-    uploadAllPbrTextures()
-    buildContactShadowQuad()
-    uploadedSceneKey = -1
+      buildPrograms()
+      uploadAllPbrTextures()
+      buildContactShadowQuad()
+      uploadedSceneKey = -1
+    }.onFailure {
+      pbrProgram = 0
+      onGlFatalError()
+    }
   }
 
   private fun buildPrograms() {
@@ -541,6 +550,15 @@ private class PevOpenGlRenderer(
   }
 
   override fun onDrawFrame(gl: GL10?) {
+    runCatching {
+      drawFrameInternal()
+    }.onFailure {
+      pbrProgram = 0
+      onGlFatalError()
+    }
+  }
+
+  private fun drawFrameInternal() {
     if (state.renderMode == Pev3dRenderMode.BLUEPRINT) {
       GLES20.glClearColor(0.028f, 0.105f, 0.245f, 1f)
     } else {
@@ -838,7 +856,42 @@ internal fun Pev3dOpenGlViewport(
   state.selectedPartKey = selectedPartKey
   state.ambientTempC = ambientTempC
 
-  val renderer = remember { PevOpenGlRenderer(state, onBackendChanged) }
+  var glFailed by remember { mutableStateOf(false) }
+
+  if (glFailed) {
+    Pev3dComposeShadedViewport(
+      archetype = archetype,
+      renderMode = renderMode,
+      lightingPreset = lightingPreset,
+      yawDeg = yawDeg,
+      pitchDeg = pitchDeg,
+      zoom = zoom,
+      explodePct = explodePct,
+      wheelSpinDeg = wheelSpinDeg,
+      throttlePct = throttlePct,
+      lightsOn = lightsOn,
+      turnSignalMode = turnSignalMode,
+      selectedPartKey = selectedPartKey,
+      accentRgb = accentRgb,
+      bodyRgb = bodyRgb,
+      caliperRgb = caliperRgb,
+      ambientTempC = ambientTempC,
+      modifier = modifier,
+      finish = finish,
+    )
+    return
+  }
+
+  val renderer = remember {
+    PevOpenGlRenderer(
+      state = state,
+      onGlBackendReady = onBackendChanged,
+      onGlFatalError = {
+        glFailed = true
+        onBackendChanged("Studio 3D PBR (Safe Fallback)")
+      },
+    )
+  }
   val glViewHolder = remember { arrayOfNulls<GLSurfaceView>(1) }
   val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -861,11 +914,18 @@ internal fun Pev3dOpenGlViewport(
   AndroidView(
     modifier = modifier,
     factory = { ctx: Context ->
-      GLSurfaceView(ctx).apply {
-        setEGLContextClientVersion(2)
-        setRenderer(renderer)
-        setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY)
-        glViewHolder[0] = this
+      runCatching {
+        GLSurfaceView(ctx).apply {
+          setZOrderMediaOverlay(true)
+          setEGLContextClientVersion(2)
+          setRenderer(renderer)
+          setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY)
+          glViewHolder[0] = this
+        }
+      }.getOrElse {
+        glFailed = true
+        onBackendChanged("Studio 3D PBR (Safe Fallback)")
+        android.view.View(ctx)
       }
     },
   )

@@ -8,7 +8,7 @@
     <a href="https://bradley3398.github.io/Rural-Erides-GO/"><img src="https://img.shields.io/badge/GitHub%20Pages-Live%20Site-10B981?style=for-the-badge&logo=githubpages&logoColor=white" alt="GitHub Pages" /></a>
     <a href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest"><img src="https://img.shields.io/badge/Release-v47.0%20(Build%2047)-6366F1?style=for-the-badge&logo=android&logoColor=white" alt="Release v47.0" /></a>
     <img src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose%20M3-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin & Jetpack Compose" />
-    <img src="https://img.shields.io/badge/3D%20Engine-Filament%20OpenGL%20PBR-06B6D4?style=for-the-badge" alt="Google Filament OpenGL PBR" />
+    <img src="https://img.shields.io/badge/3D%20Engine-Studio%203D%20PBR%20%2B%20OpenGL%20ES-06B6D4?style=for-the-badge" alt="Studio 3D PBR and OpenGL ES" />
     <img src="https://img.shields.io/badge/Backend-Firebase%20%26%20Gemini%20AI-F59E0B?style=for-the-badge&logo=firebase&logoColor=white" alt="Firebase & Gemini AI" />
   </p>
 
@@ -31,10 +31,10 @@
 
 ## ⚡ Core Features
 
-### 1. Google Filament OpenGL ES PBR 3D Rig Lab
-- **Pure OpenGL ES 3.0 PBR Pipeline (`Engine.Backend.OPENGL`)**: Vulkan PBR has been completely removed for rock-solid compatibility across Android GPUs, backed by an automatic OpenGL ES fallback viewport.
-- **Realistic Procedural `.glb` PEV Models**: Full multi-part geometry for **e-Moto**, **Hyper-Scooter**, **Fat-Tire e-Bike**, and **Electric Unicycle** with calibrated metallic/roughness PBR materials, double-sided spoked rims, brake calipers, headlights, taillights, and amber turn signals.
-- **Studio Lighting & Diagnostics**: 7-level roughness-prefiltered Studio Softbox IBL cubemap + 3-band Spherical Harmonics, ACES Filmic tone mapping, FXAA + SSAO, 7 interactive subsystem hotspots, exploded CAD teardown slider, Carbon Showroom gloss, CAD Wireframe, and X-Ray inspection modes.
+### 1. Zero-Crash Studio 3D PBR Rig Lab
+- **3 Switchable 3D Engines**: Default **Studio 3D PBR** (hardware-accelerated Compose shader with 3-point studio lighting, ACES Filmic tone mapping, and softbox sheen) plus hardened **OpenGL ES 3.0 PBR** and **WebGL 2.0 GLB** viewports with automatic safe fallback—zero Filament/Vulkan native crashes across Android GPUs.
+- **Realistic Procedural `.glb` PEV Models**: Full multi-part geometry for **e-Moto**, **Hyper-Scooter**, **Fat-Tire e-Bike**, and **Electric Unicycle** with calibrated metallic/roughness PBR materials, spoked rims, brake calipers, headlights, taillights, and blinking amber turn signals.
+- **Studio Lighting & Diagnostics**: Live lighting presets, 7 interactive subsystem hotspots, exploded CAD teardown slider, Carbon Showroom gloss, CAD Wireframe, and X-Ray inspection modes.
 
 ### 2. Telemetry Studio (11 Fleet Graphs) & Crash-Proof Ride Inspector
 - **11 Independent Fleet Graph Windows**: Speed Profile, Elevation Gain, Efficiency & Voltage, Distance vs Energy, 5-Mode Fleet Pie Slices, Pace vs Efficiency Scatter, Ride Duration Histogram, Motor Watts & Amps, 5-Axis Performance Radar, Gas Savings ROI, and AI Fleet Coach.
@@ -71,7 +71,7 @@
 | Layer | Technology |
 | :--- | :--- |
 | **UI & Navigation** | Kotlin, Jetpack Compose Material 3, Navigation Compose (`@Serializable` type-safe routes), Adaptive Layouts |
-| **3D PBR Graphics** | Google Filament 1.56.0 (`Engine.Backend.OPENGL`, `gltfio`, `filament-utils`), OpenGL ES 3.0 Fallback |
+| **3D PBR Graphics** | Studio 3D PBR Compose Engine (Default), OpenGL ES 3.0 PBR & WebGL 2.0 GLB with Automatic Safe Fallback |
 | **Cloud & Auth** | Firebase Authentication (Google Sign-In via Jetpack `CredentialManager`), Cloud Firestore, Firebase App Check |
 | **Generative AI** | Firebase AI Logic (`Firebase.ai` — Gemini multimodal text, vision, voice, and fleet debriefs) |
 | **Maps & Live Data** | OSMDroid, FusedLocationProvider, Open-Meteo, RainViewer, Nominatim, Overpass OSM, OSRM, Open-Elevation |
@@ -106,7 +106,7 @@ gradle :app:testDebugUnitTest
 
 ## 📜 Release History
 
-- **v47.0 (Latest — Build 47)**: Google Filament 1.56.0 OpenGL ES PBR 3D Rig Lab (Vulkan removed, 7-level Studio Softbox IBL & calibrated glTF materials), crash-proof 5-module Ride Inspector + Personal Records Ribbon + live KPI Graph Window Matrix, all 11 Holiday themes upgraded with visible garlands & hanging ornaments, duplicate button cleanup, updated GitHub links, restored GitHub Pages user website, and automated GitHub Actions release & Pages workflows.
+- **v47.0 (Latest — Build 47)**: Zero-crash Studio 3D PBR Rig Lab (with OpenGL ES 3.0 and WebGL 2.0 automatic fallback), restored Google Sign-In default with Credential Manager + Firebase Google Browser Sign-In backup, global safe-area inset & non-overlapping screen layout overhaul, crash-proof 5-module Ride Inspector + Personal Records Ribbon + live KPI Graph Window Matrix, all 11 Holiday themes upgraded with visible garlands & hanging ornaments, updated GitHub links, restored GitHub Pages user website, and automated GitHub Actions release & Pages workflows.
 - **v44.0**: 50-module Interactive Command Directory, Live 24h Rider Stories, and live HTTP endpoint probes.
 - **v39.0–v43.0**: Compartmentalized architecture, Creator Arcade Hub & Gravel Volt 3D Runner, keyless App Check Firebase AI Logic.
 - **v36.0–v38.0**: Custom Synthesized AI Voice Studio, zero-latency streaming TTS buffer, tri-channel deep-linked notifications, reactive Telemetry Studio.

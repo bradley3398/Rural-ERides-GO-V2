@@ -86,8 +86,8 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
-        "v47.0 Filament OpenGL PBR 3D Lab, Crash-Proof Ride Inspector & Holiday Ornaments" to
-          "• Google Filament 1.56.0 OpenGL ES PBR 3D Rig Lab: Removed Vulkan PBR completely; upgraded realistic procedural .glb PEV models with 7-level roughness-prefiltered Studio Softbox IBL, ACES Filmic tone mapping, FXAA + SSAO, live lighting presets, and automatic OpenGL ES fallback.\n" +
+        "v47.0 Studio 3D PBR Lab, Crash-Proof Ride Inspector & Holiday Ornaments" to
+          "• Zero-Crash Studio 3D PBR Rig Lab: Replaced Filament/Vulkan native crashes with an in-window Studio 3D PBR engine (3-point studio lighting, ACES Filmic tone mapping, softbox specular sheen) plus hardened OpenGL ES PBR and WebGL 2.0 GLB viewports with automatic safe fallback.\n" +
           "• Upgraded Telemetry Studio & Crash-Proof Ride Inspector: Replaced the legacy stacked Per-Ride Deep Dive with a focused 5-module Ride Inspector (Speed Curve, Climb Profile, Energy & Pack, GPS Route, Replay & AI), added a 1-tap Personal Records Ribbon, live KPI subtitles on all 11 Fleet Graph Windows, and NaN/zero-width Canvas crash guards.\n" +
           "• Holiday Themes Ornaments & Decorations: Unlocked all 11 Holiday themes year-round with DP-scaled top-canopy garlands, twinkling string lights, hanging ornaments, foreground card corner emblems, and festive nav bar trim.\n" +
           "• Duplicate Button Cleanup & Official GitHub Links: Removed redundant UI buttons across 3D Lab, Ride Logbook, and Graph modals, updated all links to github.com/bradley3398/Rural-Erides-GO, and restored GitHub Pages & Release Workflows.",
@@ -223,7 +223,7 @@ fun AppInfoAndChangelogScreen(
           }
           Spacer(Modifier.height(8.dp))
           Text(
-            "Package: ${BuildConfig.APPLICATION_ID}\nGitHub: https://github.com/bradley3398/Rural-Erides-GO\nArchitecture: Kotlin • Jetpack Compose Material 3 • Google Filament OpenGL PBR • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • CameraX • OSMDroid",
+            "Package: ${BuildConfig.APPLICATION_ID}\nGitHub: https://github.com/bradley3398/Rural-Erides-GO\nArchitecture: Kotlin • Jetpack Compose Material 3 • Studio 3D PBR / OpenGL ES / WebGL 2.0 • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • CameraX • OSMDroid",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -265,7 +265,7 @@ fun AppInfoAndChangelogScreen(
                     putExtra(Intent.EXTRA_SUBJECT, "Rural ERides GO v${BuildConfig.VERSION_NAME}")
                     putExtra(
                       Intent.EXTRA_TEXT,
-                      "Rural ERides GO v${BuildConfig.VERSION_NAME} — Tactical PEV Telemetry, Filament GL-PBR 3D Lab, 9-DOF AHRS, Radar, Vision AR Mechanic & AI Co-Pilot. Created by Lord Bradley Callison.\nhttps://github.com/bradley3398/Rural-Erides-GO",
+                      "Rural ERides GO v${BuildConfig.VERSION_NAME} — Tactical PEV Telemetry, Studio 3D PBR Lab, 9-DOF AHRS, Radar, Vision AR Mechanic & AI Co-Pilot. Created by Lord Bradley Callison.\nhttps://github.com/bradley3398/Rural-Erides-GO",
                     )
                   }
                 runCatching { ctx.startActivity(Intent.createChooser(shareIntent, "Share Rural ERides GO")) }

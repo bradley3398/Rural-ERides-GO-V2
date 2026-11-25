@@ -45,18 +45,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.example.ui.components.TacticalCard
 import com.example.ui.screens.AAA_PEV_MODELS
 import com.example.ui.screens.Pev3dGarageViewer
 
 /**
- * Dedicated Compartmentalized 3D Lab Pop-up Modal.
- * Opens as a full-screen, hardware-accelerated dialog window isolated from background screens.
- * Contains OpenGL PBR, WebGL 2.0 GLB, and Compose 3D Shaded Mesh engines for 58 PEV rigs.
+ * Dedicated Compartmentalized 3D Lab Full-Screen Overlay.
+ * Renders directly in the main Activity window (zero Dialog window surface conflicts)
+ * with Studio 3D PBR, OpenGL ES PBR, and WebGL 2.0 GLB engines for 88 PEV rigs.
  */
 @Composable
 fun Pev3dLabModal(
@@ -68,118 +67,96 @@ fun Pev3dLabModal(
 ) {
   BackHandler { onDismiss() }
 
-  Dialog(
-    onDismissRequest = onDismiss,
-    properties = DialogProperties(
-      usePlatformDefaultWidth = false,
-      decorFitsSystemWindows = false,
-      dismissOnBackPress = true,
-      dismissOnClickOutside = false,
-    ),
+  Surface(
+    modifier = Modifier
+      .fillMaxSize()
+      .background(Color(0xFF070B0E))
+      .statusBarsPadding()
+      .navigationBarsPadding(),
+    color = Color(0xFF070B0E),
   ) {
-    Surface(
-      modifier = Modifier
-        .fillMaxSize()
-        .statusBarsPadding()
-        .navigationBarsPadding(),
-      color = Color(0xFF070B0E),
-    ) {
-      Column(modifier = Modifier.fillMaxSize()) {
-        // TOP MODAL COMMAND BAR
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .background(
-              Brush.horizontalGradient(
-                listOf(
-                  Color(0xFFA855F7).copy(alpha = 0.28f),
-                  Color(0xFF101720),
-                )
+    Column(modifier = Modifier.fillMaxSize()) {
+      // TOP MODAL COMMAND BAR
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .background(
+            Brush.horizontalGradient(
+              listOf(
+                Color(0xFFA855F7).copy(alpha = 0.28f),
+                Color(0xFF101720),
               )
             )
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-          ) {
-            Box(
-              modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFA855F7).copy(alpha = 0.22f))
-                .border(1.dp, Color(0xFFA855F7), CircleShape),
-              contentAlignment = Alignment.Center,
-            ) {
-              Icon(
-                imageVector = Icons.Default.ViewInAr,
-                contentDescription = null,
-                tint = Color(0xFFA855F7),
-                modifier = Modifier.size(20.dp),
-              )
-            }
-            Column {
-              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                  text = "3D CAD & DYNO LAB",
-                  style = MaterialTheme.typography.titleMedium,
-                  fontWeight = FontWeight.Black,
-                  color = Color.White,
-                )
-                Text(
-                  text = "MODAL POP-UP",
-                  style = MaterialTheme.typography.labelSmall,
-                  fontSize = 8.sp,
-                  fontWeight = FontWeight.Black,
-                  color = Color(0xFFA855F7),
-                  modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFFA855F7).copy(alpha = 0.15f))
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                )
-              }
-              Text(
-                text = "Filament GL-PBR • OpenGL ES • WebGL 2.0 • Compose 3D • $activeVehicleName (${activeVoltage.toInt()}V)",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.Gray,
-              )
-            }
-          }
-
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-          ) {
-            OutlinedButton(
-              onClick = onDismiss,
-              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-              modifier = Modifier.heightIn(min = 48.dp).testTag("exit_3d_lab_btn"),
-            ) {
-              Icon(Icons.Default.Close, contentDescription = "Close 3D Lab", modifier = Modifier.size(16.dp))
-              Spacer(Modifier.width(4.dp))
-              Text("Exit 3D Lab", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            }
-          }
-        }
-
-        HorizontalDivider(thickness = 1.dp, color = Color(0xFFA855F7).copy(alpha = 0.4f))
-
-        // 3D VIEWER CONTAINER (Fills dialog viewport)
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .weight(1f)
-            .background(Color.Black),
-        ) {
-          Pev3dGarageViewer(
-            activeVehicleName = activeVehicleName,
-            activeVoltage = activeVoltage,
-            gpsLat = gpsLat,
-            gpsLng = gpsLng,
           )
+          .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Row(
+          modifier = Modifier.weight(1f),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+          Box(
+            modifier = Modifier
+              .size(38.dp)
+              .clip(CircleShape)
+              .background(Color(0xFFA855F7).copy(alpha = 0.22f))
+              .border(1.dp, Color(0xFFA855F7), CircleShape),
+            contentAlignment = Alignment.Center,
+          ) {
+            Icon(
+              imageVector = Icons.Default.ViewInAr,
+              contentDescription = null,
+              tint = Color(0xFFA855F7),
+              modifier = Modifier.size(20.dp),
+            )
+          }
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = "3D CAD & DYNO LAB",
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.Black,
+              color = Color.White,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+              text = "Studio 3D PBR • OpenGL ES • WebGL 2.0 • $activeVehicleName (${activeVoltage.toInt()}V)",
+              style = MaterialTheme.typography.labelSmall,
+              color = Color(0xFFCBD5E1),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+          }
         }
+
+        OutlinedButton(
+          onClick = onDismiss,
+          contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+          modifier = Modifier.heightIn(min = 48.dp).testTag("exit_3d_lab_btn"),
+        ) {
+          Icon(Icons.Default.Close, contentDescription = "Close 3D Lab", modifier = Modifier.size(16.dp))
+          Spacer(Modifier.width(4.dp))
+          Text("Exit", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+        }
+      }
+
+      HorizontalDivider(thickness = 1.dp, color = Color(0xFFA855F7).copy(alpha = 0.4f))
+
+      // 3D VIEWER CONTAINER
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .weight(1f)
+          .background(Color.Black),
+      ) {
+        Pev3dGarageViewer(
+          activeVehicleName = activeVehicleName,
+          activeVoltage = activeVoltage,
+          gpsLat = gpsLat,
+          gpsLng = gpsLng,
+        )
       }
     }
   }
@@ -233,7 +210,7 @@ fun Pev3dLabLaunchpadCard(
             fontWeight = FontWeight.Bold,
           )
           Text(
-            text = "${AAA_PEV_MODELS.size} realistic PEV rigs on Filament OpenGL PBR (ACES + Studio IBL + Clearcoat), OpenGL ES, WebGL 2.0 & Compose 3D with FLIR Thermal, Gemini Chief AI & Live Dyno Air.",
+            text = "${AAA_PEV_MODELS.size} realistic PEV rigs on crash-proof Studio 3D PBR (ACES + Rim), OpenGL ES PBR, and WebGL 2.0 GLB with FLIR Thermal, Gemini Chief AI & Live Dyno Air.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -249,8 +226,17 @@ fun Pev3dLabLaunchpadCard(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        Text("Paired Rig: $activeVehicleName (${activeVoltage.toInt()}V)", style = MaterialTheme.typography.labelSmall, color = Color(0xFFA855F7), fontWeight = FontWeight.Bold)
-        Text("4 Engines • 3 Cloud Services", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+        Text(
+          "Paired Rig: $activeVehicleName (${activeVoltage.toInt()}V)",
+          style = MaterialTheme.typography.labelSmall,
+          color = Color(0xFFA855F7),
+          fontWeight = FontWeight.Bold,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text("3 Engines • 3 Live Services", style = MaterialTheme.typography.labelSmall, color = Color.Gray, maxLines = 1, softWrap = false)
       }
 
       Button(

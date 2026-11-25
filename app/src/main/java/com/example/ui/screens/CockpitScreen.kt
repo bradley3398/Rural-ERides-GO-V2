@@ -786,7 +786,7 @@ fun CockpitScreen(
     } else {
     LazyColumn(
       modifier = Modifier.fillMaxSize(),
-      contentPadding = PaddingValues(start = dashPadH, end = dashPadH, top = 16.dp, bottom = if (activeVideo != null) 100.dp else 22.dp),
+      contentPadding = PaddingValues(start = dashPadH, end = dashPadH, top = 16.dp, bottom = if (activeVideo != null) 116.dp else 32.dp),
       verticalArrangement = Arrangement.spacedBy(dashGap),
     ) {
       // 1. SPACIOUS TWO-ROW PILOT HEADER + UPGRADED ICON QUICK-ACTION BAR + LIVE READINESS SCORE

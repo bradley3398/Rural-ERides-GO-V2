@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,7 +52,6 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -298,23 +298,27 @@ fun BoardScreen(
 
   Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
-      // 1. ULTRA-COMPACT TOP HEADER (ONLY ~50dp) — MAXIMIZES FEED HEIGHT
+      // 1. CLEAN SPACIOUS TOP HEADER — TITLE NEVER TRUNCATES, ZERO OVERLAP
       Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          modifier = Modifier.weight(1f),
+        ) {
           Box(
             modifier =
               Modifier
-                .size(9.dp)
+                .size(10.dp)
                 .clip(CircleShape)
                 .background(if (cloudSyncReady) Color(0xFF22C55E) else MaterialTheme.colorScheme.primary),
           )
-          Column {
+          Column(modifier = Modifier.weight(1f)) {
             Text(
-              text = "PORCH TALK BOARD",
+              text = "PORCH TALK",
               style = MaterialTheme.typography.titleMedium,
               fontWeight = FontWeight.ExtraBold,
               color = MaterialTheme.colorScheme.onSurface,
@@ -323,7 +327,7 @@ fun BoardScreen(
               overflow = TextOverflow.Ellipsis,
             )
             Text(
-              text = "${posts.size} live posts • ${pilots.size} real riders",
+              text = "${posts.size} live posts • ${pilots.size} riders",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.primary,
               maxLines = 1,
@@ -333,59 +337,23 @@ fun BoardScreen(
           }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-          if (activeSubTab == 0 || activeSubTab == 1 || activeSubTab == 3) {
-            IconButton(
-              onClick = { showSearchBar = !showSearchBar },
-              modifier = Modifier.size(48.dp).testTag("toggle_board_search_button"),
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          Surface(
+            onClick = { launchComposer() },
+            color = MaterialTheme.colorScheme.primary,
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.heightIn(min = 42.dp).testTag("compose_board_post_fab"),
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-              Icon(
-                Icons.Default.Search,
-                contentDescription = "Search Feed",
-                tint = if (showSearchBar || searchQuery.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-              )
-            }
-            Box {
-              IconButton(
-                onClick = { showFilterPanel = !showFilterPanel },
-                modifier = Modifier.size(48.dp).testTag("toggle_board_filters_button"),
-              ) {
-                Icon(
-                  Icons.Default.FilterList,
-                  contentDescription = "Filter & Sort Feed",
-                  tint = if (showFilterPanel || activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                )
-              }
-              if (activeFilterCount > 0) {
-                Box(
-                  modifier =
-                    Modifier
-                      .align(Alignment.TopEnd)
-                      .padding(top = 4.dp, end = 4.dp)
-                      .size(16.dp)
-                      .clip(CircleShape)
-                      .background(MaterialTheme.colorScheme.primary),
-                  contentAlignment = Alignment.Center,
-                ) {
-                  Text("$activeFilterCount", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary)
-                }
-              }
+              Icon(Icons.Default.Add, contentDescription = "New Live Transmission", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(16.dp))
+              Text("Post", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary, maxLines = 1, softWrap = false)
             }
           }
-          IconButton(
-            onClick = { showSlangDecoder = true },
-            modifier = Modifier.size(48.dp).testTag("open_slang_decoder_button"),
-          ) {
-            Icon(Icons.Default.MenuBook, contentDescription = "PEV Slang Decoder", tint = MaterialTheme.colorScheme.onSurface)
-          }
-          IconButton(
-            onClick = {
-              socialVm.refreshSupabaseBoard()
-            },
-            modifier = Modifier.size(48.dp).testTag("refresh_live_board_button"),
-          ) {
-            Icon(Icons.Default.Refresh, contentDescription = "Refresh Live Board", tint = MaterialTheme.colorScheme.onSurface)
-          }
+
           Surface(
             onClick = {
               dmInitialPeer = null
@@ -394,17 +362,69 @@ fun BoardScreen(
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
             shape = RoundedCornerShape(20.dp),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
-            modifier = Modifier.padding(start = 2.dp, end = 4.dp).testTag("open_dms_button"),
+            modifier = Modifier.heightIn(min = 42.dp).testTag("open_dms_button"),
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
               Icon(Icons.Default.Mail, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
-              Text("DMs", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+              Text("DMs", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, maxLines = 1, softWrap = false)
             }
           }
+        }
+      }
+
+      // 1B. CLEAN UTILITY ACTION STRIP (SEARCH, FILTER, SLANG, REFRESH — NO CRUSHING)
+      LazyRow(
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        if (activeSubTab == 0 || activeSubTab == 1 || activeSubTab == 3) {
+          item {
+            FilterChip(
+              selected = showSearchBar || searchQuery.isNotBlank(),
+              onClick = { showSearchBar = !showSearchBar },
+              leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(15.dp)) },
+              label = { Text("Search", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
+              modifier = Modifier.heightIn(min = 40.dp).testTag("toggle_board_search_button"),
+            )
+          }
+          item {
+            FilterChip(
+              selected = showFilterPanel || activeFilterCount > 0,
+              onClick = { showFilterPanel = !showFilterPanel },
+              leadingIcon = { Icon(Icons.Default.FilterList, contentDescription = null, modifier = Modifier.size(15.dp)) },
+              label = {
+                Text(
+                  if (activeFilterCount > 0) "Filters ($activeFilterCount)" else "Filters",
+                  style = MaterialTheme.typography.labelSmall,
+                  maxLines = 1,
+                  softWrap = false,
+                )
+              },
+              modifier = Modifier.heightIn(min = 40.dp).testTag("toggle_board_filters_button"),
+            )
+          }
+        }
+        item {
+          FilterChip(
+            selected = showSlangDecoder,
+            onClick = { showSlangDecoder = true },
+            leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(15.dp)) },
+            label = { Text("PEV Slang", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
+            modifier = Modifier.heightIn(min = 40.dp).testTag("open_slang_decoder_button"),
+          )
+        }
+        item {
+          FilterChip(
+            selected = false,
+            onClick = { socialVm.refreshSupabaseBoard() },
+            leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(15.dp)) },
+            label = { Text("Refresh", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
+            modifier = Modifier.heightIn(min = 40.dp).testTag("refresh_live_board_button"),
+          )
         }
       }
 
@@ -675,8 +695,8 @@ fun BoardScreen(
           LazyColumn(
             state = feedListState,
             modifier = Modifier.fillMaxSize().testTag("board_post_feed_list"),
-            contentPadding = PaddingValues(top = 10.dp, bottom = if (activeVideo != null) 160.dp else 104.dp),
-            verticalArrangement = Arrangement.spacedBy(if (settings.spaciousLayoutMode) 14.dp else 10.dp),
+            contentPadding = PaddingValues(top = 10.dp, bottom = if (activeVideo != null) 120.dp else 36.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
           ) {
             // NOTICE BANNER (SCROLLS WITH FEED)
             val bannerMsg = socialNotice.ifBlank { localNotice }
@@ -1184,18 +1204,6 @@ fun BoardScreen(
       }
     }
 
-    // SMART EXTENDED FAB (SHRINKS ON SCROLL SO FEED REMAINS UNOBSTRUCTED)
-    ExtendedFloatingActionButton(
-      onClick = { launchComposer() },
-      expanded = fabExpanded && activeSubTab == 0,
-      icon = { Icon(Icons.Default.Add, contentDescription = "New Live Transmission") },
-      text = { Text("New Post", fontWeight = FontWeight.Bold) },
-      modifier =
-        Modifier
-          .align(Alignment.BottomEnd)
-          .padding(end = 16.dp, bottom = if (activeVideo != null) 96.dp else 16.dp)
-          .testTag("compose_board_post_fab"),
-    )
   }
 
   // DIALOGS & SHEETS

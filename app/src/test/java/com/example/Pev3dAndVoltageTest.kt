@@ -171,10 +171,11 @@ class Pev3dAndVoltageTest {
   }
 
   @Test
-  fun pev3dTechEngineUsesFilamentOpenGlAndExcludesVulkan() {
+  fun pev3dTechEngineUsesStudio3dPbrAndExcludesFilamentAndVulkan() {
     val names = Pev3dTechEngine.entries.map { it.name }
-    assertEquals("FILAMENT_GL", names.first())
+    assertEquals("STUDIO_3D", names.first())
     assertFalse("Vulkan PBR must be completely removed", names.any { it.contains("VULKAN", ignoreCase = true) })
+    assertFalse("Filament native engine must be removed", names.any { it.contains("FILAMENT", ignoreCase = true) })
   }
 
   @Test

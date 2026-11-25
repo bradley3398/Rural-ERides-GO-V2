@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -114,6 +115,7 @@ fun AuthLoginScreen(
   statusMessage: String,
   supabaseConfigured: Boolean,
   onSignInGoogle: () -> Unit,
+  onSignInGoogleBrowser: () -> Unit = {},
   onSupabaseSignIn: (email: String, password: String) -> Unit,
   onSupabaseSignUp: (email: String, password: String, callsign: String) -> Unit,
   onSupabaseResetPassword: (email: String) -> Unit,
@@ -123,7 +125,8 @@ fun AuthLoginScreen(
   val ctx = LocalContext.current
   val loginPrefs = remember(ctx) { ctx.getSharedPreferences("rural_erides_login_prefs", Context.MODE_PRIVATE) }
 
-  var selectedProvider by remember(supabaseConfigured) { mutableIntStateOf(if (supabaseConfigured) 0 else 1) } // 0 = Supabase GoTrue, 1 = Firebase Google
+  // Default to original Google + Firebase Sign-In gateway
+  var selectedProvider by remember { mutableIntStateOf(1) } // 0 = Supabase GoTrue, 1 = Firebase Google
   var authMode by remember { mutableIntStateOf(0) } // 0 = Sign In, 1 = Register
   var rememberEmail by remember { mutableStateOf(loginPrefs.getBoolean("remember_email", true)) }
   var email by remember { mutableStateOf(if (rememberEmail) loginPrefs.getString("saved_email", "").orEmpty() else "") }
@@ -225,11 +228,13 @@ fun AuthLoginScreen(
     Column(
       modifier =
         Modifier
+          .align(Alignment.TopCenter)
           .fillMaxSize()
+          .widthIn(max = 560.dp)
           .systemBarsPadding()
           .verticalScroll(rememberScrollState())
-          .padding(horizontal = 18.dp, vertical = 14.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
+          .padding(horizontal = 18.dp, vertical = 16.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
       // TOP WELCOMING DATE & SCENIC BACKDROP SWITCHER BAR
@@ -604,8 +609,18 @@ fun AuthLoginScreen(
             } else {
               Icon(Icons.Default.Login, contentDescription = null)
               Spacer(Modifier.width(8.dp))
-              Text("Continue with Google (Firebase)")
+              Text("Sign in with Google")
             }
+          }
+          Spacer(Modifier.height(8.dp))
+          OutlinedButton(
+            onClick = onSignInGoogleBrowser,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("google_browser_sign_in_button"),
+          ) {
+            Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Google Browser Sign-In (Backup)")
           }
         }
 

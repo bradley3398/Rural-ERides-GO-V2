@@ -569,7 +569,7 @@ fun TacticalBackgroundCanvas(
           .align(Alignment.TopCenter)
           .statusBarsPadding()
           .fillMaxWidth()
-          .height(58.dp),
+          .height(30.dp),
       ) {
         drawHolidayTopCanopy(mode = style, twinklePhase = holidayTwinklePhase)
       }

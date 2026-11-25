@@ -345,8 +345,8 @@ fun Pev3dGarageViewer(
   var selectedModelIdx by remember { mutableIntStateOf(0) }
   var motorThrottlePct by remember { mutableFloatStateOf(0.35f) }
 
-  // Technology & Method Selection States (Filament OpenGL ES PBR default — zero Vulkan)
-  var activeTechEngine by remember { mutableStateOf(Pev3dTechEngine.FILAMENT_GL) }
+  // Technology & Method Selection States (Zero-Crash Studio 3D PBR default)
+  var activeTechEngine by remember { mutableStateOf(Pev3dTechEngine.STUDIO_3D) }
   var inspectMethod by remember { mutableStateOf(Pev3dInspectMethod.ORBIT_TOUCH) }
 
   // 3D Interactive Camera & Animation States
@@ -363,7 +363,7 @@ fun Pev3dGarageViewer(
   var yawVelocityDegPerSec by remember { mutableFloatStateOf(0f) }
   var targetCameraPreset by remember { mutableStateOf<Pair<Float, Float>?>(null) }
   var viewportSize by remember { mutableStateOf(IntSize.Zero) }
-  var gpuBackendLabel by remember { mutableStateOf("Filament GL-PBR • ACES + IBL") }
+  var gpuBackendLabel by remember { mutableStateOf("Studio 3D PBR • ACES + Rim") }
 
   // Live Service Results (Zero Mocks — 100% Real API / AI / Weather Calls)
   var aiDiagBusy by remember { mutableStateOf(false) }
@@ -528,11 +528,11 @@ fun Pev3dGarageViewer(
   val primaryCol = MaterialTheme.colorScheme.primary
 
   Column(
-    verticalArrangement = Arrangement.spacedBy(10.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
     modifier = Modifier
       .fillMaxSize()
       .verticalScroll(rememberScrollState())
-      .padding(horizontal = 10.dp, vertical = 8.dp),
+      .padding(horizontal = 14.dp, vertical = 12.dp),
   ) {
     TacticalCard(highlight = true, title = "MULTI-TECH 3D RIG LAB (${AAA_PEV_MODELS.size} MODELS)") {
       // 1. 3D RENDERING TECHNOLOGY SWITCHER
@@ -550,10 +550,9 @@ fun Pev3dGarageViewer(
             onClick = {
               activeTechEngine = tech
               gpuBackendLabel = when (tech) {
-                Pev3dTechEngine.FILAMENT_GL -> "Filament GL-PBR • ACES + IBL"
+                Pev3dTechEngine.STUDIO_3D -> "Studio 3D PBR • ACES + Rim"
                 Pev3dTechEngine.OPENGL_ES3 -> "OPENGL ES • GGX PBR"
                 Pev3dTechEngine.WEBGL_2 -> "WEBGL 2.0 • GLB PBR"
-                Pev3dTechEngine.VECTOR_CAD -> "COMPOSE 3D • GPU MESH"
               }
             },
             label = {
@@ -795,8 +794,8 @@ fun Pev3dGarageViewer(
             .testTag("aaa_pev_photo_viewport"),
       ) {
         when (activeTechEngine) {
-          Pev3dTechEngine.FILAMENT_GL -> {
-            Pev3dFilamentViewport(
+          Pev3dTechEngine.STUDIO_3D -> {
+            Pev3dComposeShadedViewport(
               archetype = archetype,
               renderMode = renderMode,
               lightingPreset = lightingPreset,
@@ -812,8 +811,7 @@ fun Pev3dGarageViewer(
               accentRgb = finish.accentRgb,
               bodyRgb = finish.bodyRgb,
               caliperRgb = finish.caliperRgb,
-              ambientTempC = ambientTempC.toDouble(),
-              onBackendChanged = { gpuBackendLabel = it },
+              ambientTempC = ambientTempC,
               modifier = Modifier.fillMaxSize().testTag("pev_3d_interactive_canvas"),
               finish = finish,
             )
@@ -860,28 +858,6 @@ fun Pev3dGarageViewer(
               caliperRgb = finish.caliperRgb,
               ambientTempC = ambientTempC,
               onBackendChanged = { gpuBackendLabel = it },
-              modifier = Modifier.fillMaxSize().testTag("pev_3d_interactive_canvas"),
-              finish = finish,
-            )
-          }
-          Pev3dTechEngine.VECTOR_CAD -> {
-            Pev3dComposeShadedViewport(
-              archetype = archetype,
-              renderMode = renderMode,
-              lightingPreset = lightingPreset,
-              yawDeg = modelYawDeg,
-              pitchDeg = modelPitchDeg,
-              zoom = modelZoomScale,
-              explodePct = explodePct,
-              wheelSpinDeg = wheelSpinDeg,
-              throttlePct = motorThrottlePct,
-              lightsOn = lightsOn,
-              turnSignalMode = turnSignalMode,
-              selectedPartKey = selectedPart?.key,
-              accentRgb = finish.accentRgb,
-              bodyRgb = finish.bodyRgb,
-              caliperRgb = finish.caliperRgb,
-              ambientTempC = ambientTempC,
               modifier = Modifier.fillMaxSize().testTag("pev_3d_interactive_canvas"),
               finish = finish,
             )
@@ -1332,6 +1308,7 @@ fun Pev3dGarageViewer(
         }
       }
     }
+    Spacer(Modifier.height(24.dp))
   }
 }
 

@@ -166,6 +166,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
   private var publicListenersJob: Job? = null
   private var lastWeatherCoords: Pair<Double, Double>? = null
   private var lastRoadLookupMs = 0L
+  private var silentGoogleAttempted = false
 
   init {
     viewModelScope.launch {
@@ -208,11 +209,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
       }
     }
 
-    viewModelScope.launch {
-      if (auth.currentUser == null) {
-        authRepo.trySilentGoogleSignIn(ctx)
-      }
-    }
+    // Silent Google Sign-In runs from Activity context in AuthAndOnboardingCompartmentHost
 
     viewModelScope.launch {
       settings.collect { s ->
@@ -301,6 +298,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     _authStatusMessage.value = ""
   }
 
+  fun attemptSilentGoogleSignIn(activity: Activity) {
+    if (silentGoogleAttempted || auth.currentUser != null) return
+    silentGoogleAttempted = true
+    viewModelScope.launch {
+      authRepo.trySilentGoogleSignIn(activity)
+    }
+  }
+
   fun signInWithGoogle(activity: Activity) {
     viewModelScope.launch {
       _authBusy.value = true
@@ -309,9 +314,23 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         is SignInResult.Success -> _authStatusMessage.value = ""
         is SignInResult.Cancelled ->
           _authStatusMessage.value =
-            "Google Sign-In cancelled. Ensure SHA-1/SHA-256 is registered or use Supabase Login."
+            "Google Sign-In dismissed. Tap Continue with Google again or use Google Browser Sign-In below."
         is SignInResult.NoSavedCredential ->
-          _authStatusMessage.value = "No Google account found on device. Add one or sign in with Supabase."
+          _authStatusMessage.value = "No Google account found on device. Try Google Browser Sign-In below."
+        is SignInResult.Error -> _authStatusMessage.value = res.message
+      }
+      _authBusy.value = false
+    }
+  }
+
+  fun signInWithGoogleBrowser(activity: Activity) {
+    viewModelScope.launch {
+      _authBusy.value = true
+      _authStatusMessage.value = "Opening secure Google Sign-In..."
+      when (val res = authRepo.signInWithGoogleWebOAuth(activity)) {
+        is SignInResult.Success -> _authStatusMessage.value = ""
+        is SignInResult.Cancelled -> _authStatusMessage.value = "Google Browser Sign-In dismissed."
+        is SignInResult.NoSavedCredential -> _authStatusMessage.value = "Could not retrieve Google account."
         is SignInResult.Error -> _authStatusMessage.value = res.message
       }
       _authBusy.value = false

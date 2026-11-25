@@ -17,8 +17,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -199,8 +201,10 @@ fun GraphInspectModal(
       modifier = Modifier
         .fillMaxWidth(0.95f)
         .widthIn(max = 700.dp)
+        .statusBarsPadding()
+        .navigationBarsPadding()
         .heightIn(max = 820.dp)
-        .padding(vertical = 14.dp)
+        .padding(vertical = 12.dp)
         .clip(RoundedCornerShape(20.dp))
         .border(1.5.dp, data.primaryColor.copy(alpha = 0.55f), RoundedCornerShape(20.dp)),
       color = MaterialTheme.colorScheme.surface,

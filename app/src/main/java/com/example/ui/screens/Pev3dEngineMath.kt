@@ -50,10 +50,9 @@ enum class Pev3dRenderMode(val label: String, val shaderId: Int) {
 }
 
 enum class Pev3dTechEngine(val label: String, val subtitle: String) {
-  FILAMENT_GL("Filament GL-PBR", "OpenGL ES PBR + IBL + Clearcoat"),
-  OPENGL_ES3("OpenGL ES", "Custom GGX + Normal Maps"),
+  STUDIO_3D("Studio 3D PBR", "Zero-Crash GPU Mesh + Rim"),
+  OPENGL_ES3("OpenGL ES PBR", "Custom GGX + Normal Maps"),
   WEBGL_2("WebGL 2.0 GLB", "Chromium PBR + Clearcoat"),
-  VECTOR_CAD("Compose 3D", "GPU Shaded Triangle Mesh"),
 }
 
 internal sealed interface Pev3dAssetLoadState {
