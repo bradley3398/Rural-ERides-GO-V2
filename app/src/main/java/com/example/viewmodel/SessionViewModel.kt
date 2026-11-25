@@ -381,6 +381,19 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             _authBusy.value = false
           }
         }
+        is SignInResult.FallbackToWebOAuth -> {
+          _authStatusMessage.value = "${res.reason} — switching to secure Google Browser Sign-In..."
+          val webRes = authRepo.signInWithGoogleWebOAuth(activity)
+          val shaHint = res.appSha1?.let { " (APK SHA-1: $it)" }.orEmpty()
+          _authStatusMessage.value =
+            when (webRes) {
+              is SignInResult.Success -> ""
+              is SignInResult.Cancelled -> "Google Browser Sign-In dismissed.$shaHint"
+              is SignInResult.Error -> "${webRes.message}$shaHint"
+              else -> "Could not retrieve Google account.$shaHint"
+            }
+          _authBusy.value = false
+        }
         is SignInResult.Error -> {
           _authStatusMessage.value = res.message
           _authBusy.value = false
@@ -411,14 +424,37 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  fun handleLegacyGoogleSignInResult(resultCode: Int, data: Intent?) {
+  fun handleLegacyGoogleSignInResult(
+    resultCode: Int,
+    data: Intent?,
+    activity: Activity? = null,
+  ) {
     viewModelScope.launch {
       _authBusy.value = true
-      when (val res = authRepo.handleGoogleSignInActivityResult(resultCode, data)) {
+      when (val res = authRepo.handleGoogleSignInActivityResult(resultCode, data, activity)) {
         is SignInResult.Success -> _authStatusMessage.value = ""
         is SignInResult.Cancelled ->
           _authStatusMessage.value =
             "Google Account Picker dismissed. Try again or use Google Browser Sign-In below."
+        is SignInResult.FallbackToWebOAuth -> {
+          val shaHint = res.appSha1?.let { " (APK SHA-1: $it)" }.orEmpty()
+          if (activity != null) {
+            _authStatusMessage.value = "${res.reason} — switching to secure Google Browser Sign-In..."
+            when (val webRes = authRepo.signInWithGoogleWebOAuth(activity)) {
+              is SignInResult.Success -> _authStatusMessage.value = ""
+              is SignInResult.Cancelled ->
+                _authStatusMessage.value =
+                  "Google Browser Sign-In dismissed.$shaHint"
+              is SignInResult.Error ->
+                _authStatusMessage.value = "${webRes.message}$shaHint"
+              else ->
+                _authStatusMessage.value = "${res.reason}$shaHint"
+            }
+          } else {
+            _authStatusMessage.value =
+              "${res.reason}$shaHint. Use Google Browser Sign-In (Backup) below."
+          }
+        }
         is SignInResult.Error -> _authStatusMessage.value = res.message
         else -> _authStatusMessage.value = ""
       }
@@ -438,7 +474,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
           _authStatusMessage.value =
             "Google Browser Sign-In dismissed. Try Google Account Picker above."
         is SignInResult.NoSavedCredential,
-        is SignInResult.FallbackToLegacyPicker ->
+        is SignInResult.FallbackToLegacyPicker,
+        is SignInResult.FallbackToWebOAuth ->
           _authStatusMessage.value = "Could not retrieve Google account."
         is SignInResult.Error -> _authStatusMessage.value = res.message
       }

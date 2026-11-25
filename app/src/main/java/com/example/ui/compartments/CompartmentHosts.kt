@@ -97,7 +97,7 @@ fun AuthAndOnboardingCompartmentHost(
         rememberLauncherForActivityResult(
           contract = ActivityResultContracts.StartActivityForResult(),
         ) { result ->
-          sessionVm.handleLegacyGoogleSignInResult(result.resultCode, result.data)
+          sessionVm.handleLegacyGoogleSignInResult(result.resultCode, result.data, activity)
         }
 
       DisposableEffect(lifecycleOwner) {

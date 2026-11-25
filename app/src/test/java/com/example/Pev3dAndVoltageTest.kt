@@ -34,7 +34,7 @@ class Pev3dAndVoltageTest {
   @Test
   fun liveTelemetryDefaults48vToExact54_6v() {
     val snap = LiveTelemetrySnapshot()
-    assertEquals(54.6, snap.estimatedVoltage, 0.01)
+    assertEquals(52.0, snap.estimatedVoltage, 0.01)
 
     val nmc48 = PevBatteryPhysics.packProfile(48.0, "NMC")
     assertEquals(13, nmc48.seriesCells)

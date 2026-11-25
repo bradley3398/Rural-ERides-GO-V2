@@ -5,9 +5,12 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.MutableContextWrapper
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import java.security.MessageDigest
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -55,6 +58,7 @@ sealed interface SignInResult {
   data object Cancelled : SignInResult
   data object NoSavedCredential : SignInResult
   data class FallbackToLegacyPicker(val reason: String) : SignInResult
+  data class FallbackToWebOAuth(val reason: String, val appSha1: String? = null) : SignInResult
   data class Error(val message: String) : SignInResult
 }
 
@@ -206,15 +210,43 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
   }
 
   @Suppress("DEPRECATION")
-  suspend fun handleGoogleSignInActivityResult(resultCode: Int, data: Intent?): SignInResult {
+  fun readAppSigningSha1(context: Context): String? {
+    return runCatching {
+      val pm = context.packageManager
+      val pkgName = context.packageName
+      val signatures =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+          val info = pm.getPackageInfo(pkgName, PackageManager.GET_SIGNING_CERTIFICATES)
+          val signingInfo = info.signingInfo ?: return@runCatching null
+          if (signingInfo.hasMultipleSigners()) signingInfo.apkContentsSigners
+          else signingInfo.signingCertificateHistory
+        } else {
+          pm.getPackageInfo(pkgName, PackageManager.GET_SIGNATURES).signatures
+        }
+      val cert = signatures?.firstOrNull() ?: return@runCatching null
+      val digest = MessageDigest.getInstance("SHA-1").digest(cert.toByteArray())
+      digest.joinToString(":") { "%02X".format(it) }
+    }.getOrNull()
+  }
+
+  @Suppress("DEPRECATION")
+  suspend fun handleGoogleSignInActivityResult(
+    resultCode: Int,
+    data: Intent?,
+    context: Context? = null,
+  ): SignInResult {
     if (data == null && resultCode == Activity.RESULT_CANCELED) {
       return SignInResult.Cancelled
     }
+    val runtimeSha1 = context?.let(::readAppSigningSha1)
     return try {
       val account = GoogleSignIn.getSignedInAccountFromIntent(data).await()
       val idToken = account.idToken
       if (idToken.isNullOrBlank()) {
-        SignInResult.Error("Google Account Picker succeeded without returning an ID token. Try Google Browser Sign-In below.")
+        SignInResult.FallbackToWebOAuth(
+          reason = "Google Account Picker returned no ID token.",
+          appSha1 = runtimeSha1,
+        )
       } else {
         val firebaseCred = GoogleAuthProvider.getCredential(idToken, null)
         val authResult = auth.signInWithCredential(firebaseCred).await()
@@ -230,9 +262,15 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
         GoogleSignInStatusCodes.SIGN_IN_CANCELLED -> SignInResult.Cancelled
         CommonStatusCodes.CANCELED -> SignInResult.Cancelled
         CommonStatusCodes.DEVELOPER_ERROR ->
-          SignInResult.Error("Play Services OAuth SHA-1 mismatch [10]. Use Google Browser Sign-In (Backup) below.")
+          SignInResult.FallbackToWebOAuth(
+            reason = "Play Services OAuth SHA-1 mismatch [10]",
+            appSha1 = runtimeSha1,
+          )
         GoogleSignInStatusCodes.SIGN_IN_FAILED ->
-          SignInResult.Error("Google Play Services Sign-In failed [12500]. Use Google Browser Sign-In (Backup) below.")
+          SignInResult.FallbackToWebOAuth(
+            reason = "Google Play Services Sign-In failed [12500]",
+            appSha1 = runtimeSha1,
+          )
         CommonStatusCodes.NETWORK_ERROR ->
           SignInResult.Error("Network error during Google Sign-In [7]. Check connection and try again.")
         GoogleSignInStatusCodes.SIGN_IN_CURRENTLY_IN_PROGRESS ->

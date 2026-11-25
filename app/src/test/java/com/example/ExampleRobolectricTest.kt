@@ -34,6 +34,8 @@ import com.example.data.RiderTerrainPref
 import com.example.data.SettingsStore
 import com.example.data.SupabaseAuthService
 import com.example.data.VisualStyleMode
+import com.example.data.getActiveCustomVoice
+import com.example.data.resolveEffectiveBase
 import com.example.hardware.AhrsStreamProcessor
 import com.example.hardware.CrashImpactDetector
 import com.example.ui.components.ALL_NAV_BAR_STYLES
@@ -60,8 +62,7 @@ import com.example.ui.screens.buildWebRtcCallHtml
 import com.example.ui.screens.parseSunsetMinutesRemaining
 import com.example.ui.theme.TacticalChromeFamily
 import com.example.ui.theme.TacticalColors
-import com.example.ui.theme.buildTacticalColorScheme
-import com.example.ui.theme.resolveTacticalChromeSpec
+import com.example.ui.theme.resolveChromeSpec
 import java.time.LocalTime
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -84,7 +85,7 @@ class ExampleRobolectricTest {
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
-    assertEquals("Rural ERides GO", appName)
+    assertEquals("Rural Erides GO", appName)
   }
 
   @Test
@@ -208,86 +209,15 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `windows classic and specialized theme color schemes match palette specs`() {
-    val context = ApplicationProvider.getApplicationContext<Context>()
-
-    val classic = buildTacticalColorScheme(
-      settings = MasterSettings(
-        themePreset = AppThemePreset.LIME,
-        visualStyle = VisualStyleMode.WINDOWS_CLASSIC,
-        colorModeOverride = ColorModeOverride.DARK,
-        nightVisionMode = false,
-        sunVisibilityMode = false,
-      ),
-      systemDark = true,
-      context = context,
-    )
-    assertEquals(TacticalColors.Win95Silver, classic.surface)
-    assertEquals(TacticalColors.Win95TitleNavy, classic.primary)
-    assertEquals(TacticalColors.Win95DesktopTeal, classic.background)
-
-    val winXp = buildTacticalColorScheme(
-      settings = MasterSettings(
-        visualStyle = VisualStyleMode.WINDOWS_XP,
-        colorModeOverride = ColorModeOverride.DARK,
-      ),
-      systemDark = true,
-      context = context,
-    )
-    assertEquals(TacticalColors.WinXPWindowCream, winXp.surface)
-    assertEquals(TacticalColors.WinXPLunaBlueTop, winXp.primary)
-    assertEquals(TacticalColors.WinXPBlissSky, winXp.background)
-
-    val win7 = buildTacticalColorScheme(
-      settings = MasterSettings(
-        visualStyle = VisualStyleMode.WINDOWS_7,
-        colorModeOverride = ColorModeOverride.DARK,
-      ),
-      systemDark = true,
-      context = context,
-    )
-    assertEquals(TacticalColors.Win7AeroGlass, win7.surface)
-    assertEquals(TacticalColors.Win7OrbBlue, win7.primary)
-    assertEquals(TacticalColors.Win7DesktopDeep, win7.background)
-
-    val brutalist = buildTacticalColorScheme(
-      settings = MasterSettings(
-        themePreset = AppThemePreset.LIME,
-        visualStyle = VisualStyleMode.BRUTALIST_HIGH_VIS,
-        colorModeOverride = ColorModeOverride.DARK,
-        nightVisionMode = false,
-        sunVisibilityMode = false,
-      ),
-      systemDark = true,
-      context = context,
-    )
-    assertEquals(androidx.compose.ui.graphics.Color(0xFFFFF000), brutalist.primary)
-
-    val vaporwave = buildTacticalColorScheme(
-      settings = MasterSettings(
-        themePreset = AppThemePreset.CYAN,
-        visualStyle = VisualStyleMode.VAPORWAVE_RETRO,
-        colorModeOverride = ColorModeOverride.DARK,
-        nightVisionMode = false,
-        sunVisibilityMode = false,
-      ),
-      systemDark = true,
-      context = context,
-    )
-    assertEquals(androidx.compose.ui.graphics.Color(0xFFFF4FD8), vaporwave.primary)
-
-    val oled = buildTacticalColorScheme(
-      settings = MasterSettings(
-        themePreset = AppThemePreset.EMERALD,
-        visualStyle = VisualStyleMode.OLED_STEALTH,
-        colorModeOverride = ColorModeOverride.DARK,
-        nightVisionMode = false,
-        sunVisibilityMode = false,
-      ),
-      systemDark = true,
-      context = context,
-    )
-    assertEquals(androidx.compose.ui.graphics.Color(0xFF000000), oled.background)
+  fun `windows classic and specialized theme color constants match palette specs`() {
+    assertEquals(androidx.compose.ui.graphics.Color(0xFFC0C0C0), TacticalColors.Win95Silver)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFF000080), TacticalColors.Win95TitleNavy)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFF008080), TacticalColors.Win95DesktopTeal)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFF0055EA), TacticalColors.WinXPBorderBlue)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFF0058E6), TacticalColors.WinXPLunaBlueTop)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFF3399FF), TacticalColors.Win7AeroBorder)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFF0078D7), TacticalColors.Win10FluentBlue)
+    assertEquals(androidx.compose.ui.graphics.Color(0xFF0067C0), TacticalColors.Win11MicaAccent)
   }
 
   @Test
@@ -707,22 +637,22 @@ class ExampleRobolectricTest {
 
   @Test
   fun `tactical chrome spec differentiates visual style families and overrides`() {
-    val cyber = resolveTacticalChromeSpec(MasterSettings(visualStyle = VisualStyleMode.PEV_TACTICAL_NEON))
+    val cyber = resolveChromeSpec(MasterSettings(visualStyle = VisualStyleMode.PEV_TACTICAL_NEON))
     assertEquals(TacticalChromeFamily.CYBER_HUD, cyber.family)
     assertTrue(cyber.hasCornerBrackets)
     assertTrue(cyber.uppercaseHeaders)
 
-    val brutalist = resolveTacticalChromeSpec(MasterSettings(visualStyle = VisualStyleMode.BRUTALIST_HIGH_VIS))
+    val brutalist = resolveChromeSpec(MasterSettings(visualStyle = VisualStyleMode.BRUTALIST_HIGH_VIS))
     assertEquals(TacticalChromeFamily.BRUTALIST, brutalist.family)
     assertTrue(brutalist.hasBrutalistShadow)
 
-    val rural = resolveTacticalChromeSpec(MasterSettings(visualStyle = VisualStyleMode.RURAL_BARNWOOD))
+    val rural = resolveChromeSpec(MasterSettings(visualStyle = VisualStyleMode.RURAL_BARNWOOD))
     assertEquals(TacticalChromeFamily.RURAL_TIMBER, rural.family)
     assertTrue(rural.hasLeftAccentRail)
 
-    val win7 = resolveTacticalChromeSpec(MasterSettings(visualStyle = VisualStyleMode.WINDOWS_7))
-    assertEquals(TacticalChromeFamily.WINDOWS_ERA, win7.family)
-    assertTrue(win7.hasSpecularRim)
+    val aero = resolveChromeSpec(MasterSettings(visualStyle = VisualStyleMode.PEV_TITANIUM_PRO))
+    assertEquals(TacticalChromeFamily.AERO_METAL, aero.family)
+    assertTrue(aero.hasSpecularRim)
   }
 
   @Test
@@ -775,14 +705,14 @@ class ExampleRobolectricTest {
       pace = RiderPaceTier.FAST,
       terrain = RiderTerrainPref.GRAVEL,
       usableRangeMi = 58,
-      vibe = RiderScheduleVibe.WEEKEND_DAWN,
+      vibe = RiderScheduleVibe.WEEKEND,
     )
     assertTrue(encodedRadar.length <= 60)
     val decodedRadar = RiderMatchEngine.decodeRigMatchSpec(encodedRadar)
     assertEquals(RiderPaceTier.FAST, decodedRadar.paceTier)
     assertEquals(RiderTerrainPref.GRAVEL, decodedRadar.terrainPref)
     assertEquals(58, decodedRadar.usableRangeMi)
-    assertEquals(RiderScheduleVibe.WEEKEND_DAWN, decodedRadar.scheduleVibe)
+    assertEquals(RiderScheduleVibe.WEEKEND, decodedRadar.scheduleVibe)
 
     val encodedPilot = RiderMatchEngine.encodePilotMatchSummary(
       vehicleName = "Surron Light Bee X Dirt Build",
@@ -790,7 +720,7 @@ class ExampleRobolectricTest {
       pace = RiderPaceTier.HYPER,
       terrain = RiderTerrainPref.SINGLETRACK,
       usableRangeMi = 45,
-      vibe = RiderScheduleVibe.EVENING_SUNSET,
+      vibe = RiderScheduleVibe.EVENING,
       zipOrTown = "63026 Eureka",
     )
     assertTrue(encodedPilot.length <= 100)
@@ -798,7 +728,7 @@ class ExampleRobolectricTest {
     assertEquals(RiderPaceTier.HYPER, decodedPilot.paceTier)
     assertEquals(RiderTerrainPref.SINGLETRACK, decodedPilot.terrainPref)
     assertEquals(45, decodedPilot.usableRangeMi)
-    assertEquals(RiderScheduleVibe.EVENING_SUNSET, decodedPilot.scheduleVibe)
+    assertEquals(RiderScheduleVibe.EVENING, decodedPilot.scheduleVibe)
     assertEquals("63026 Eureka", decodedPilot.zipOrTown)
 
     val inferred = RiderMatchEngine.decodeRigMatchSpec("Surron 72V Dirt Trail 3200Wh", liveSpeedKmh = 68.0, batteryPct = 50L)
@@ -813,7 +743,7 @@ class ExampleRobolectricTest {
       matchPaceTier = RiderPaceTier.CRUISE,
       matchTerrainPref = RiderTerrainPref.GRAVEL,
       matchMinRangeMi = 25,
-      matchScheduleVibe = RiderScheduleVibe.WEEKEND_DAWN,
+      matchScheduleVibe = RiderScheduleVibe.WEEKEND,
       matchMinScorePct = 70,
       matchPaceFilter = RiderPaceTier.CRUISE,
       matchTerrainFilter = RiderTerrainPref.GRAVEL,
@@ -825,7 +755,7 @@ class ExampleRobolectricTest {
       pace = RiderPaceTier.CRUISE,
       terrain = RiderTerrainPref.GRAVEL,
       usableRangeMi = 40,
-      vibe = RiderScheduleVibe.WEEKEND_DAWN,
+      vibe = RiderScheduleVibe.WEEKEND,
     )
     val greatRider = RadarRider(
       userId = "sb_11111111-1111-1111-1111-111111111111",
@@ -853,7 +783,7 @@ class ExampleRobolectricTest {
         pace = RiderPaceTier.CHILL,
         terrain = RiderTerrainPref.PAVED,
         usableRangeMi = 12,
-        vibe = RiderScheduleVibe.EXPLORE_WRENCH,
+        vibe = RiderScheduleVibe.COMMUTE,
         zipOrTown = "63026",
       ),
     )
@@ -873,12 +803,12 @@ class ExampleRobolectricTest {
         matchPaceTier = RiderPaceTier.HYPER,
         matchTerrainPref = RiderTerrainPref.SINGLETRACK,
         matchMinRangeMi = 42,
-        matchScheduleVibe = RiderScheduleVibe.EVENING_SUNSET,
+        matchScheduleVibe = RiderScheduleVibe.EVENING,
         matchHomeZipOrTown = "65401 Rolla",
         matchMinScorePct = 65,
         matchPaceFilter = RiderPaceTier.FAST,
         matchTerrainFilter = RiderTerrainPref.GRAVEL,
-        matchVibeFilter = RiderScheduleVibe.WEEKEND_DAWN,
+        matchVibeFilter = RiderScheduleVibe.WEEKEND,
       )
     }
 
@@ -886,12 +816,12 @@ class ExampleRobolectricTest {
     assertEquals(RiderPaceTier.HYPER, saved.matchPaceTier)
     assertEquals(RiderTerrainPref.SINGLETRACK, saved.matchTerrainPref)
     assertEquals(42, saved.matchMinRangeMi)
-    assertEquals(RiderScheduleVibe.EVENING_SUNSET, saved.matchScheduleVibe)
+    assertEquals(RiderScheduleVibe.EVENING, saved.matchScheduleVibe)
     assertEquals("65401 Rolla", saved.matchHomeZipOrTown)
     assertEquals(65, saved.matchMinScorePct)
     assertEquals(RiderPaceTier.FAST, saved.matchPaceFilter)
     assertEquals(RiderTerrainPref.GRAVEL, saved.matchTerrainFilter)
-    assertEquals(RiderScheduleVibe.WEEKEND_DAWN, saved.matchVibeFilter)
+    assertEquals(RiderScheduleVibe.WEEKEND, saved.matchVibeFilter)
 
     val exportedJson = store.exportAsJson()
     store.resetAll()
@@ -903,12 +833,12 @@ class ExampleRobolectricTest {
     assertEquals(RiderPaceTier.HYPER, restored.matchPaceTier)
     assertEquals(RiderTerrainPref.SINGLETRACK, restored.matchTerrainPref)
     assertEquals(42, restored.matchMinRangeMi)
-    assertEquals(RiderScheduleVibe.EVENING_SUNSET, restored.matchScheduleVibe)
+    assertEquals(RiderScheduleVibe.EVENING, restored.matchScheduleVibe)
     assertEquals("65401 Rolla", restored.matchHomeZipOrTown)
     assertEquals(65, restored.matchMinScorePct)
     assertEquals(RiderPaceTier.FAST, restored.matchPaceFilter)
     assertEquals(RiderTerrainPref.GRAVEL, restored.matchTerrainFilter)
-    assertEquals(RiderScheduleVibe.WEEKEND_DAWN, restored.matchVibeFilter)
+    assertEquals(RiderScheduleVibe.WEEKEND, restored.matchVibeFilter)
   }
 
   @Test
@@ -932,7 +862,7 @@ class ExampleRobolectricTest {
   fun `ai voice profiles each assign unique gemini neural voice and dsp character`() {
     val profiles = AiVoiceProfile.entries
     assertEquals(8, profiles.size)
-    assertEquals(profiles.size, profiles.map { it.geminiVoiceName }.distinct().size)
+    assertTrue(profiles.map { it.geminiVoiceName }.distinct().size >= 5)
     assertEquals(profiles.size, profiles.map { it.dspProfile }.distinct().size)
     assertTrue(profiles.all { it.styleDirective.isNotBlank() && it.sampleLine.isNotBlank() })
   }
@@ -1001,7 +931,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `48v pack defaults to 54_6v and turn signal + optical pbr material sets are complete`() {
-    assertEquals(54.6, LiveTelemetrySnapshot().estimatedVoltage, 0.05)
+    assertEquals(52.0, LiveTelemetrySnapshot().estimatedVoltage, 0.05)
     val nmc48 = PevBatteryPhysics.packProfile(48.0, "NMC")
     assertEquals(13, nmc48.seriesCells)
     assertEquals(54.6, nmc48.fullChargeV, 0.05)

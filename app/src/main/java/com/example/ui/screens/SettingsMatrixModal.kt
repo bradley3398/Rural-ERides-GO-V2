@@ -319,7 +319,7 @@ fun SettingsMatrixScreen(
       rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
       ) { result ->
-        sessionVm.handleLegacyGoogleSignInResult(result.resultCode, result.data)
+        sessionVm.handleLegacyGoogleSignInResult(result.resultCode, result.data, activity)
       }
     when (cat) {
       AndroidSettingsCategory.DISPLAY_THEMES ->
