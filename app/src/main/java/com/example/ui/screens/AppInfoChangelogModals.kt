@@ -86,6 +86,13 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
+        "v46.0 Direct Signed GitHub Releases, Seasonal Holiday Engine & Live Update Check" to
+          "• Live GitHub Release Update Checker: Built-in release status check in About App comparing your installed build against the latest signed public GitHub Release with 1-tap access to the official download hub.\n" +
+          "• Universal Seasonal Holiday Theme Engine: Automatic ornaments, badges & seasonal banners across all screens for 11 holidays (New Year's, Valentine's, St. Patrick's, Easter, Memorial Day, 4th of July, Labor Day, Halloween, Veterans Day, Thanksgiving & Christmas).\n" +
+          "• Mission-Locked GPS HUD & YouTube Music Deck: Speedometer and live speed-limit telemetry stay locked during active ride missions without accidental scrolling.\n" +
+          "• Multi-Engine 3D Rig Lab & Barn Spec Engine (50 Rigs): OpenGL ES 3.0 PBR, WebGL 2.0 GLB, Blueprint CAD, 100% Compose Vector ride maps & verified in-stock tire/parts store links.\n" +
+          "• Porch Talk Community & Zero-Bot Rider Comms: 35 rural post templates, live trail condition tags, Active Trail Crew & verified Zero-Bot DMs/WebRTC calls.\n" +
+          "• Automated GitHub Actions Signed Release Pipeline: Cryptographically signed APK/AAB artifacts with SHA-256 verification checksums and public GitHub Pages showcase.",
         "v14.0 Rural Heritage, Live Bench Vision, Brand Logos & Ride Analytics" to
           "• Original Rural ERides GO Launcher Icon Restored: Authentic olive-hill pine & electric scooter adaptive icon across all Android densities.\n" +
           "• Live Maintenance Bench Camera ('Bench Eyes') in AI Mechanic: Embedded live CameraX workbench viewer with optical reticle and 1-tap 'Inspect What I'm Working On' Gemini Vision AI diagnosis, plus 6 new rural/roadside workshop presets.\n" +
@@ -267,6 +274,11 @@ fun AppInfoAndChangelogScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
         }
+      }
+
+      // 1B. LIVE GITHUB RELEASE UPDATE CHECK (PLAY-COMPLIANT BROWSER REDIRECT)
+      item(key = "live_release_update_card") {
+        ReleaseUpdateStatusCard(onStatusNotice = { notice = it })
       }
 
       // 2. LIVE 9-DOF AHRS & TELEMETRY PROBE

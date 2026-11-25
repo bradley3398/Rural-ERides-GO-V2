@@ -15,9 +15,9 @@ on:
         type: boolean
         default: true
       deploy_to_play:
-        description: 'Upload signed App Bundle (.aab) to Google Play Console'
+        description: 'Upload signed App Bundle (.aab) to Google Play Console (optional)'
         type: boolean
-        default: true
+        default: false
       play_track:
         description: 'Google Play release track'
         type: choice
@@ -74,16 +74,23 @@ jobs:
           done
 
           should_deploy_play="false"
-          if [ "$IS_TAG_PUSH" = "true" ] || [ "$MANUAL_PLAY_DEPLOY" = "true" ]; then
-            should_deploy_play="true"
+          if [ "$MANUAL_PLAY_DEPLOY" = "true" ]; then
             if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
-              echo "::error::Missing required GitHub Actions secret: PLAY_SERVICE_ACCOUNT_JSON for automatic Google Play upload."
+              echo "::error::Missing required GitHub Actions secret: PLAY_SERVICE_ACCOUNT_JSON because deploy_to_play was enabled."
               missing=1
+            else
+              should_deploy_play="true"
+            fi
+          elif [ "$IS_TAG_PUSH" = "true" ]; then
+            if [ -n "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
+              should_deploy_play="true"
+            else
+              echo "::notice::PLAY_SERVICE_ACCOUNT_JSON is not set; skipping Google Play upload and publishing public GitHub Release only."
             fi
           fi
 
           if [ "$missing" -ne 0 ]; then
-            echo "Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD, and PLAY_SERVICE_ACCOUNT_JSON in Settings -> Secrets and variables -> Actions."
+            echo "Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD in Settings -> Secrets and variables -> Actions."
             exit 1
           fi
 
@@ -202,6 +209,13 @@ jobs:
             echo "SIGNED_APK_PATH=$APK_FILE" >> "$GITHUB_ENV"
           fi
 
+          # Generate SHA-256 verification checksums for rider trust
+          {
+            [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ] && sha256sum "$APK_FILE"
+            sha256sum "$AAB_FILE"
+          } > app/build/outputs/SHA256SUMS.txt
+          cat app/build/outputs/SHA256SUMS.txt
+
       - name: Upload signed release artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -209,10 +223,11 @@ jobs:
           path: |
             app/build/outputs/bundle/release/*.aab
             app/build/outputs/apk/release/*.apk
+            app/build/outputs/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish public GitHub Release with signed APK & AAB
+      - name: Publish public GitHub Release with signed APK, AAB & SHA-256 Checksums
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_github_release == true)
         uses: softprops/action-gh-release@v2
         with:
@@ -224,8 +239,9 @@ jobs:
           files: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/*.aab
+            app/build/outputs/SHA256SUMS.txt
 
-      - name: Deploy signed AAB to Google Play Console (Auto on v* tags)
+      - name: Deploy signed AAB to Google Play Console (When Enabled)
         if: steps.validate_secrets.outputs.should_deploy_play == 'true'
         uses: r0adkll/upload-google-play@v1
         with:

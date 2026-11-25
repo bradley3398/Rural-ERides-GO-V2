@@ -88,31 +88,52 @@ Visit the public Rural Erides GO landing page at [https://bradley3398.github.io/
 
 This repository includes two GitHub Actions workflows:
 
-### 1. Signed Android Release & Automatic Google Play Upload
+### 1. Signed Android Release (GitHub-First + Optional Google Play Upload)
 Workflow: [`.github/workflows/android-release-sign.yml`](.github/workflows/android-release-sign.yml)
 
-Trigger a public release to **both GitHub Releases and Google Play Console** either by pushing a version tag (`git tag v46.0 && git push origin v46.0`) or by clicking **Actions → Android Signed Release (Google Play) → Run workflow** (`v46.0`). The workflow automatically:
-1. Decodes your production upload keystore from GitHub Secrets (never committed to the repo).
+Trigger a public release by clicking **Actions → Android Signed Release (Google Play) → Run workflow** (`v46.0`) or pushing a `v*` tag (`git tag v46.0 && git push origin v46.0`). Google Play upload is optional (`deploy_to_play: false` by default on manual runs), so you can ship signed APKs to riders via GitHub Releases and GitHub Pages even when Google Play Console is temporarily unavailable. The workflow automatically:
+1. Decodes your production release keystore from GitHub Secrets (never committed to the repo).
 2. Builds and signs both the release **App Bundle (`.aab`)** and **APK (`.apk`)**.
-3. Verifies signatures with `jarsigner` and `apksigner` and blocks debug-signed builds.
-4. Publishes a **public GitHub Release** with the signed `.apk` and `.aab` attached (automatically updating the GitHub Pages download button).
-5. Uploads the signed `.aab` automatically to **Google Play Console** (`com.aistudio.volttrail.kqrmvx`, `production` track).
+3. Verifies signatures with `jarsigner` and `apksigner`, blocks debug-signed builds, and generates `SHA256SUMS.txt`.
+4. Publishes a **public GitHub Release** with the signed `.apk`, `.aab`, and `SHA256SUMS.txt` attached (automatically updating the GitHub Pages download hub and the in-app **Live Release & Update Check**).
+5. Optionally uploads the signed `.aab` to **Google Play Console** (`com.aistudio.volttrail.kqrmvx`) whenever `deploy_to_play` is enabled and `PLAY_SERVICE_ACCOUNT_JSON` is configured.
 
 #### Required GitHub Actions Secrets
 Configure these under **Settings → Secrets and variables → Actions**:
 
-| Secret Name | Description |
-| :--- | :--- |
-| `KEYSTORE_BASE64` | Base64-encoded production upload `.jks` / `.keystore` file |
-| `KEYSTORE_PASSWORD` | Keystore password |
-| `KEY_ALIAS` | Upload key alias inside the keystore |
-| `KEY_PASSWORD` | Private key password for `KEY_ALIAS` |
-| `PLAY_SERVICE_ACCOUNT_JSON` | Google Play Console API Service Account JSON key |
+| Secret Name | Required For | Description |
+| :--- | :--- | :--- |
+| `KEYSTORE_BASE64` | GitHub + Play | Base64-encoded production `.jks` / `.keystore` file |
+| `KEYSTORE_PASSWORD` | GitHub + Play | Keystore password |
+| `KEY_ALIAS` | GitHub + Play | Release key alias inside the keystore |
+| `KEY_PASSWORD` | GitHub + Play | Private key password for `KEY_ALIAS` |
+| `PLAY_SERVICE_ACCOUNT_JSON` | Play only (optional) | Google Play Console API Service Account JSON key |
 
 ### 2. Public Rural Landing Page (GitHub Pages)
 Workflow: [`.github/workflows/deploy-github-pages.yml`](.github/workflows/deploy-github-pages.yml)
 
 Automatically publishes [`public/`](public/) to your public GitHub Pages site whenever commits are pushed to `main`/`master` or a `v*` release tag is created.
+
+---
+
+## Google Play Console Access & Upload Key Recovery Checklist
+
+If Google Play Console will not let you sign in or rejects uploads with a signing key mismatch (`expected SHA1: 73:6E:C7:F1:...`):
+
+1. **Resolve Play Console Login Blocks**:
+   - Open an **Incognito / Private browser window** and sign in at [play.google.com/console](https://play.google.com/console/) using the **exact Google Account Owner email** that originally registered `com.aistudio.volttrail.kqrmvx` (multiple signed-in Google accounts frequently cause Play Console redirect/permission errors).
+   - Check your inbox and the Play Console top banner for any pending **Developer Identity / Organization verification** or **Policy / Account hold** notifications, which lock Console tabs until completed.
+   - If you access the Console as a team member rather than Account Owner, ask the Account Owner to grant **Release Manager / App Signing** permissions under **Users and permissions**.
+2. **Reset the Upload Key (If Original `73:6E:C7:F1:...` Keystore Is Lost)**:
+   - Generate a fresh private upload keystore locally (keep the `.jks` file private—never commit it to GitHub):
+     ```bash
+     keytool -genkeypair -v -keystore rural-erides-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+     keytool -export -rfc -keystore rural-erides-upload.jks -alias upload -file upload_certificate.pem
+     ```
+   - In Play Console go to **Rural Erides GO → Test and release → Setup → App signing → Request upload key reset** and upload `upload_certificate.pem` (Google activates the new key within 24–48 hours).
+3. **Resume Automatic Play Publishing**:
+   - Base64-encode `rural-erides-upload.jks` into GitHub Secret `KEYSTORE_BASE64` (along with `KEYSTORE_PASSWORD`, `KEY_ALIAS=upload`, `KEY_PASSWORD`, and `PLAY_SERVICE_ACCOUNT_JSON`).
+   - Run **Actions → Android Signed Release (Google Play) → Run workflow** with `deploy_to_play: true`.
 
 ---
 

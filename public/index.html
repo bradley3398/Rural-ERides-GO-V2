@@ -990,6 +990,308 @@
         grid-template-columns: 1fr;
       }
     }
+
+    /* Changelog Version Comparison Matrix */
+    .version-diff-card {
+      margin-top: 28px;
+      background: linear-gradient(165deg, rgba(23, 33, 25, 0.96) 0%, rgba(31, 24, 19, 0.96) 100%);
+      border: 1px solid rgba(224, 162, 59, 0.28);
+      border-radius: 26px;
+      padding: 32px;
+      box-shadow: var(--shadow-deep);
+    }
+
+    .version-diff-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .version-diff-head h3 {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: clamp(1.5rem, 2.8vw, 2.05rem);
+      font-weight: 800;
+      color: var(--cream);
+      line-height: 1.15;
+      margin: 6px 0 8px;
+    }
+
+    .version-diff-head p {
+      color: var(--parchment-muted);
+      font-size: 14px;
+      max-width: 640px;
+      margin: 0;
+    }
+
+    .diff-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .diff-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .diff-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .diff-filter-btn {
+      background: rgba(16, 24, 18, 0.9);
+      border: 1px solid var(--pine-border);
+      color: var(--parchment-muted);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .diff-filter-btn:hover,
+    .diff-filter-btn.active {
+      background: rgba(224, 162, 59, 0.18);
+      border-color: var(--harvest-gold);
+      color: var(--cream);
+    }
+
+    .diff-count {
+      font-size: 12px;
+      color: var(--trail-dust);
+    }
+
+    .diff-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 18px;
+      border: 1px solid rgba(244, 237, 224, 0.11);
+      background: rgba(13, 19, 15, 0.84);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .diff-table {
+      width: 100%;
+      min-width: 780px;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    .diff-table thead th {
+      padding: 16px 16px 14px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--parchment-muted);
+      background: rgba(21, 31, 23, 0.96);
+      border-bottom: 1px solid rgba(244, 237, 224, 0.12);
+      vertical-align: bottom;
+    }
+
+    .diff-table thead th .ver-title {
+      display: block;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      text-transform: none;
+      color: var(--cream);
+      margin-bottom: 3px;
+    }
+
+    .diff-table thead th .ver-sub {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: 0.02em;
+      color: var(--trail-dust);
+    }
+
+    .diff-table thead th.col-current {
+      background: linear-gradient(180deg, rgba(224, 162, 59, 0.22) 0%, rgba(130, 165, 39, 0.14) 100%);
+      border-bottom: 2px solid var(--harvest-gold);
+      border-left: 1px solid rgba(224, 162, 59, 0.34);
+      border-right: 1px solid rgba(224, 162, 59, 0.34);
+    }
+
+    .diff-table thead th.col-current .ver-title {
+      color: var(--harvest-gold);
+    }
+
+    .diff-table tbody tr {
+      border-bottom: 1px solid rgba(244, 237, 224, 0.08);
+      transition: background 0.16s ease;
+    }
+
+    .diff-table tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    .diff-table tbody tr:hover {
+      background: rgba(224, 162, 59, 0.05);
+    }
+
+    .diff-table tbody tr.hidden-row {
+      display: none;
+    }
+
+    .diff-table th[scope="row"],
+    .diff-table td {
+      padding: 15px 16px;
+      vertical-align: top;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .diff-table th[scope="row"] {
+      width: 26%;
+      font-weight: 700;
+      color: var(--cream);
+      background: rgba(16, 23, 18, 0.94);
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      border-right: 1px solid rgba(244, 237, 224, 0.08);
+    }
+
+    .diff-table thead th:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      border-right: 1px solid rgba(244, 237, 224, 0.12);
+    }
+
+    .diff-feature-cat {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--pasture-bright);
+      margin-bottom: 4px;
+    }
+
+    .diff-feature-name {
+      display: block;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--cream);
+    }
+
+    .diff-table td.col-current {
+      background: rgba(224, 162, 59, 0.07);
+      border-left: 1px solid rgba(224, 162, 59, 0.24);
+      border-right: 1px solid rgba(224, 162, 59, 0.24);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .status-pill.is-new {
+      background: rgba(224, 162, 59, 0.2);
+      border: 1px solid rgba(224, 162, 59, 0.65);
+      color: #ffd57a;
+    }
+
+    .status-pill.is-upgraded {
+      background: rgba(130, 165, 39, 0.2);
+      border: 1px solid rgba(163, 204, 56, 0.58);
+      color: var(--pasture-bright);
+    }
+
+    .status-pill.is-included {
+      background: rgba(244, 237, 224, 0.08);
+      border: 1px solid rgba(244, 237, 224, 0.2);
+      color: var(--parchment-muted);
+    }
+
+    .status-pill.is-none {
+      background: rgba(244, 237, 224, 0.03);
+      border: 1px solid rgba(244, 237, 224, 0.1);
+      color: var(--trail-dust);
+    }
+
+    .diff-cell-detail {
+      display: block;
+      color: var(--parchment-muted);
+      font-size: 12.5px;
+    }
+
+    .diff-table td.col-current .diff-cell-detail {
+      color: var(--cream);
+    }
+
+    .live-releases-bar {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px dashed rgba(224, 162, 59, 0.22);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--trail-dust);
+    }
+
+    .live-releases-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .release-tag-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      background: rgba(20, 29, 22, 0.92);
+      border: 1px solid var(--pine-border);
+      color: var(--cream);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 700;
+      transition: border-color 0.16s ease, background 0.16s ease;
+    }
+
+    .release-tag-pill:hover {
+      border-color: var(--harvest-gold);
+      background: rgba(224, 162, 59, 0.16);
+    }
+
+    .release-tag-pill.is-latest {
+      border-color: rgba(224, 162, 59, 0.6);
+      color: var(--harvest-gold);
+    }
+
+    @media (max-width: 640px) {
+      .version-diff-card {
+        padding: 22px 16px;
+      }
+    }
   </style>
 </head>
 <body class="topo-surface">
@@ -1658,6 +1960,302 @@
             </ul>
           </div>
         </div>
+
+        <!-- Visual Version Comparison Table -->
+        <div class="version-diff-card" id="version-comparison" aria-labelledby="version-diff-heading">
+          <div class="version-diff-head">
+            <div>
+              <span class="section-kicker">Release Evolution Matrix</span>
+              <h3 id="version-diff-heading">What Changed Across Rural Erides GO Releases</h3>
+              <p>
+                Compare the live release side-by-side against earlier milestones to see every new cockpit HUD,
+                AI workshop tool, community upgrade, and signing pipeline improvement.
+              </p>
+            </div>
+            <div class="diff-legend" aria-label="Change legend">
+              <span class="status-pill is-new">New</span>
+              <span class="status-pill is-upgraded">Upgraded</span>
+              <span class="status-pill is-included">Included</span>
+              <span class="status-pill is-none">— Not in Build</span>
+            </div>
+          </div>
+
+          <div class="diff-controls">
+            <div class="diff-filters" role="tablist" aria-label="Filter version differences by area">
+              <button type="button" class="diff-filter-btn active" data-diff-filter="all">All Changes (10)</button>
+              <button type="button" class="diff-filter-btn" data-diff-filter="cockpit">Cockpit &amp; Maps (2)</button>
+              <button type="button" class="diff-filter-btn" data-diff-filter="ai-shop">AI &amp; Barn Shop (3)</button>
+              <button type="button" class="diff-filter-btn" data-diff-filter="community">Community &amp; Auth (2)</button>
+              <button type="button" class="diff-filter-btn" data-diff-filter="release">Themes &amp; Release (3)</button>
+            </div>
+            <span class="diff-count font-mono-tech" id="diff-visible-count">Showing 10 of 10 capabilities</span>
+          </div>
+
+          <div class="diff-table-wrap" role="region" aria-label="Version feature comparison table" tabindex="0">
+            <table class="diff-table">
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <span class="ver-title">Capability</span>
+                    <span class="ver-sub">Module &amp; Feature</span>
+                  </th>
+                  <th scope="col" class="col-current">
+                    <span class="ver-title" id="diff-current-version-title">v46.0 (Current)</span>
+                    <span class="ver-sub" id="diff-current-version-sub">Build 46 • Signed Live Release</span>
+                  </th>
+                  <th scope="col">
+                    <span class="ver-title">v14.0</span>
+                    <span class="ver-sub">Rural Heritage &amp; Bench Vision</span>
+                  </th>
+                  <th scope="col">
+                    <span class="ver-title">v12.0</span>
+                    <span class="ver-sub">Tactical Neon &amp; 9-DOF AHRS</span>
+                  </th>
+                  <th scope="col">
+                    <span class="ver-title">v10.0 – v11.0</span>
+                    <span class="ver-sub">Retro Themes &amp; Core Nav</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="diff-row" data-diff-category="cockpit">
+                  <th scope="row">
+                    <span class="diff-feature-cat">Cockpit &amp; Maps</span>
+                    <span class="diff-feature-name">Mission-Locked GPS HUD &amp; Speed Limits</span>
+                  </th>
+                  <td class="col-current">
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">Scroll-locked active mission HUD, live road speed-limit sign, and thumb-ready YouTube Music deck.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">14 live HUDs with smooth-panning breadcrumb map and ETA battery-at-arrival.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">9-DOF AHRS Pitch/Roll/Yaw gauges with peak lean hold and 1Hz–5Hz GPS speed.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Integrated Magnetic/GPS Compass rose and TomTom/OSM road limits.</span>
+                  </td>
+                </tr>
+
+                <tr class="diff-row" data-diff-category="cockpit">
+                  <th scope="row">
+                    <span class="diff-feature-cat">Cockpit &amp; Maps</span>
+                    <span class="diff-feature-name">3D Rig Lab &amp; Vector Ride Analytics</span>
+                  </th>
+                  <td class="col-current">
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">Multi-engine OpenGL ES 3.0 PBR, WebGL 2.0 GLB, Blueprint CAD &amp; 100% Compose Vector track maps.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">Ride Records Canvas Pie/Donut charts, speed/Wh graphs &amp; 2-ride comparison.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Expanded 9-DOF IMU, SoC thermal, and shareable hardware diagnostics.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Turn-by-turn PEV GPS routing (Mapbox/ORS/OSRM) &amp; Doppler storm radar.</span>
+                  </td>
+                </tr>
+
+                <tr class="diff-row" data-diff-category="ai-shop">
+                  <th scope="row">
+                    <span class="diff-feature-cat">AI &amp; Barn Shop</span>
+                    <span class="diff-feature-name">Barn Spec Engine &amp; Live Parts Finder</span>
+                  </th>
+                  <td class="col-current">
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">50 PEV rigs, 6-photo rig galleries, 13S/cell pack breakdowns, and verified in-stock tire &amp; parts store links.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">Automatic real PEV photo and official brand logo fetching across Garage &amp; Specs.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">4-model spec comparator and 48+ store BOM parts lookup.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">17-Bay engineering calculator lab and initial vehicle profiles.</span>
+                  </td>
+                </tr>
+
+                <tr class="diff-row" data-diff-category="ai-shop">
+                  <th scope="row">
+                    <span class="diff-feature-cat">AI &amp; Barn Shop</span>
+                    <span class="diff-feature-name">Barn &amp; Bench AR Mechanic AI</span>
+                  </th>
+                  <td class="col-current">
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">Live Bench Cam, MOSFET/phase thermal diagnosis, voltmeter tools &amp; interactive 6-step Action Checklists.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">Embedded CameraX "Bench Eyes" optical reticle with 1-tap Gemini Vision inspect &amp; 6 workshop presets.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Full-screen mechanic viewport with voice dictation &amp; instant diagnostic presets.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Photo Picker Vision AR scans, FLIR filter &amp; OEM E-Code decoder.</span>
+                  </td>
+                </tr>
+
+                <tr class="diff-row" data-diff-category="ai-shop">
+                  <th scope="row">
+                    <span class="diff-feature-cat">AI &amp; Barn Shop</span>
+                    <span class="diff-feature-name">Backroad Co-Pilot &amp; Trail Chaplain</span>
+                  </th>
+                  <td class="col-current">
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">Live 6-point AI Pre-Ride Flight Check using real battery &amp; weather, Web Grounding ON, Camera &amp; AR Eye.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">20 Rural/PEV personas, Warm Rural Hospitality mode, photo upload &amp; 8 TTS voice profiles.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Auto-scrolling full-screen chat with collapsible toolbar &amp; voice dictation.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">12 PEV personas, live web grounding &amp; offline Saved Briefings Vault.</span>
+                  </td>
+                </tr>
+
+                <tr class="diff-row" data-diff-category="community">
+                  <th scope="row">
+                    <span class="diff-feature-cat">Community &amp; Auth</span>
+                    <span class="diff-feature-name">Porch Talk Community &amp; Zero-Bot Comms</span>
+                  </th>
+                  <td class="col-current">
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">35 rural post templates, live trail condition tags, Active Trail Crew &amp; Zero-Bot DMs / WebRTC Rider Calls.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">Hardened authentic-pilot checks stripping synthetic IDs &amp; Rural Trail Condition tags.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Zero Fake Data policy enforced across the community feed.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Community board with polls, SOS triage, PTT Walkie-Talkie &amp; WebRTC calls.</span>
+                  </td>
+                </tr>
+
+                <tr class="diff-row" data-diff-category="community">
+                  <th scope="row">
+                    <span class="diff-feature-cat">Community &amp; Auth</span>
+                    <span class="diff-feature-name">Golden Trail Gateway &amp; Dual Cloud Auth</span>
+                  </th>
+                  <td class="col-current">
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">Golden Trail welcome screen with Google Firebase + Supabase GoTrue sign-in &amp; Rider's Prayer blessing.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Verified real-pilot cloud profiles synced across devices via Firestore.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Settings Category Matrix with instant search &amp; cloud health checks.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Initial Google Credential Manager &amp; Supabase GoTrue login gate.</span>
+                  </td>
+                </tr>
+
+                <tr class="diff-row" data-diff-category="release">
+                  <th scope="row">
+                    <span class="diff-feature-cat">Themes &amp; Release</span>
+                    <span class="diff-feature-name">Universal Seasonal Holiday Theme Engine</span>
+                  </th>
+                  <td class="col-current">
+                    <span class="status-pill is-new">New</span>
+                    <span class="diff-cell-detail">11 automatic seasonal themes (4th of July, Memorial Day, Veterans Day, Thanksgiving, Christmas &amp; more).</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-none">—</span>
+                    <span class="diff-cell-detail">Not included in v14.0.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-none">—</span>
+                    <span class="diff-cell-detail">Not included in v12.0.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-none">—</span>
+                    <span class="diff-cell-detail">Not included in v10.0–v11.0.</span>
+                  </td>
+                </tr>
+
+                <tr class="diff-row" data-diff-category="release">
+                  <th scope="row">
+                    <span class="diff-feature-cat">Themes &amp; Release</span>
+                    <span class="diff-feature-name">Visual Themes, Nav Layouts &amp; App Icon</span>
+                  </th>
+                  <td class="col-current">
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">26 rural/tactical/retro themes, 8 nav layouts &amp; verified olive-hill adaptive launcher icon across all densities.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-upgraded">Upgraded</span>
+                    <span class="diff-cell-detail">6 new rural themes (Barnwood, Pine Holler, Prairie Gold) &amp; 8 navigation panel layouts.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">6 Tactical Neon themes, 4 HD wallpapers &amp; Material You monochrome icon.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-included">Included</span>
+                    <span class="diff-cell-detail">Authentic Windows XP Luna &amp; Windows 7 Aero Glass engines.</span>
+                  </td>
+                </tr>
+
+                <tr class="diff-row" data-diff-category="release">
+                  <th scope="row">
+                    <span class="diff-feature-cat">Themes &amp; Release</span>
+                    <span class="diff-feature-name">Signed GitHub Releases &amp; Play CI/CD</span>
+                  </th>
+                  <td class="col-current">
+                    <span class="status-pill is-new">New</span>
+                    <span class="diff-cell-detail">Automated GitHub Actions signed APK/AAB builds, Google Play deployment &amp; live GitHub Pages showcase.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-none">—</span>
+                    <span class="diff-cell-detail">Manual local builds only.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-none">—</span>
+                    <span class="diff-cell-detail">Manual local builds only.</span>
+                  </td>
+                  <td>
+                    <span class="status-pill is-none">—</span>
+                    <span class="diff-cell-detail">Manual local builds only.</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="live-releases-bar">
+            <span class="font-mono-tech" id="live-releases-summary">Syncing published release tags from GitHub…</span>
+            <div class="live-releases-pills" id="live-releases-pills"></div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -1907,6 +2505,9 @@
             var apkAsset = assets.find(function (a) {
               return a.name && a.name.toLowerCase().endsWith('.apk');
             });
+            var shaAsset = assets.find(function (a) {
+              return a.name && a.name.toLowerCase().indexOf('sha256') !== -1;
+            });
             var downloadUrl = apkAsset ? apkAsset.browser_download_url : (rel.html_url || ('https://github.com/' + slug + '/releases/latest'));
 
             var navBtn = document.getElementById('nav-download-btn');
@@ -1919,6 +2520,8 @@
             var metaSize = document.getElementById('meta-size');
             var changelogTitle = document.getElementById('changelog-version-title');
             var changelogDate = document.getElementById('changelog-date');
+            var diffVerTitle = document.getElementById('diff-current-version-title');
+            var diffVerSub = document.getElementById('diff-current-version-sub');
 
             if (navBtn) navBtn.textContent = 'Download ' + tag;
             if (heroPill) heroPill.textContent = 'Release ' + tag + ' • Signed Android APK • Live on GitHub';
@@ -1928,6 +2531,8 @@
             if (primaryLabel) primaryLabel.textContent = 'Download APK (' + tag + ')';
             if (statBuild) statBuild.textContent = tag;
             if (changelogTitle) changelogTitle.textContent = 'Changelog • ' + tag;
+            if (diffVerTitle) diffVerTitle.textContent = tag + ' (Current)';
+            if (diffVerSub) diffVerSub.textContent = 'Live Signed GitHub Release';
 
             if (rel.published_at && changelogDate) {
               var dt = new Date(rel.published_at);
@@ -1964,13 +2569,90 @@
             }
 
             if (statusEl) {
-              statusEl.textContent = 'Live release synced from github.com/' + repoSlug + ' (' + tag + ').';
+              statusEl.textContent = '';
+              statusEl.appendChild(document.createTextNode('Live signed release synced from github.com/' + slug + ' (' + tag + '). '));
+              if (shaAsset && shaAsset.browser_download_url) {
+                var shaLink = document.createElement('a');
+                shaLink.href = shaAsset.browser_download_url;
+                shaLink.target = '_blank';
+                shaLink.rel = 'noopener noreferrer';
+                shaLink.style.color = 'var(--harvest-gold)';
+                shaLink.style.textDecoration = 'underline';
+                shaLink.textContent = 'Verify SHA-256 Checksums';
+                statusEl.appendChild(shaLink);
+              }
             }
           })
           .catch(function () {
             if (statusEl) {
-              statusEl.textContent = 'Latest signed APK will appear here once a GitHub Release tag (e.g. v46.0) is published.';
+              statusEl.textContent = 'Direct signed APK downloads from GitHub Releases will appear here once a release tag (e.g. v46.0) is published.';
             }
+          });
+      }
+
+      // 4. Interactive Version Comparison Filter + Live GitHub Releases History Bar
+      function initVersionDiffTable(repoSlug) {
+        var slug = repoSlug || DEFAULT_REPO_SLUG;
+        var diffFilterBtns = document.querySelectorAll('.diff-filter-btn');
+        var diffRows = Array.prototype.slice.call(document.querySelectorAll('.diff-row'));
+        var diffCountEl = document.getElementById('diff-visible-count');
+
+        diffFilterBtns.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var filter = btn.getAttribute('data-diff-filter') || 'all';
+            diffFilterBtns.forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            var visible = 0;
+            diffRows.forEach(function (row) {
+              var cat = row.getAttribute('data-diff-category');
+              if (filter === 'all' || cat === filter) {
+                row.classList.remove('hidden-row');
+                visible += 1;
+              } else {
+                row.classList.add('hidden-row');
+              }
+            });
+            if (diffCountEl) {
+              diffCountEl.textContent = 'Showing ' + visible + ' of ' + diffRows.length + ' capabilities';
+            }
+          });
+        });
+
+        var summaryEl = document.getElementById('live-releases-summary');
+        var pillsEl = document.getElementById('live-releases-pills');
+        if (!summaryEl || !pillsEl) return;
+
+        fetch('https://api.github.com/repos/' + slug + '/releases?per_page=5', {
+          headers: { Accept: 'application/vnd.github+json' }
+        })
+          .then(function (res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+          })
+          .then(function (releases) {
+            if (!Array.isArray(releases) || releases.length === 0) {
+              summaryEl.textContent = 'Comparing current v46.0 build against prior Rural Erides GO milestones.';
+              return;
+            }
+            summaryEl.textContent = 'Live GitHub Releases (' + releases.length + ' recent):';
+            pillsEl.textContent = '';
+            releases.forEach(function (rel, idx) {
+              var link = document.createElement('a');
+              link.className = 'release-tag-pill font-mono-tech' + (idx === 0 ? ' is-latest' : '');
+              link.href = rel.html_url || ('https://github.com/' + slug + '/releases');
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              var label = rel.tag_name || ('Release ' + (idx + 1));
+              if (rel.published_at) {
+                var dt = new Date(rel.published_at);
+                label += ' • ' + dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+              }
+              link.textContent = label;
+              pillsEl.appendChild(link);
+            });
+          })
+          .catch(function () {
+            summaryEl.textContent = 'Comparing current v46.0 build against prior Rural Erides GO milestones (GitHub Releases will appear here once tagged).';
           });
       }
 
@@ -1981,6 +2663,7 @@
       var slug = resolveRepoSlug();
       applyRepoLinks(slug);
       hydrateLiveRelease(slug);
+      initVersionDiffTable(slug);
     })();
   </script>
 </body>
