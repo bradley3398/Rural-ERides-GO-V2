@@ -347,6 +347,34 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
               .collect { _savedVideos.value = it }
           }
           launch {
+            riderRepo
+              .observeFollowedPilotIds(cleanUid)
+              .catch { e ->
+                if (e is CancellationException) throw e
+                Log.w(TAG, "Following listener error: ${e.message}")
+              }
+              .collect { cloudFollowed ->
+                val localFollowed = localVault.loadFollowedPilotIds(cleanUid)
+                if (cloudFollowed.isEmpty() && localFollowed.isNotEmpty()) {
+                  // Migrate any previously saved local follows into Firestore once
+                  localFollowed.forEach { targetUid ->
+                    launch {
+                      riderRepo.followPilot(
+                        userId = cleanUid,
+                        myCallsign = "",
+                        targetUid = targetUid,
+                        targetCallsign = "PILOT",
+                      )
+                    }
+                  }
+                  _followedPilotIds.value = localFollowed
+                } else {
+                  _followedPilotIds.value = cloudFollowed
+                  localVault.saveFollowedPilotIds(cleanUid, cloudFollowed)
+                }
+              }
+          }
+          launch {
             var initialDmLoad = true
             val prevThreadMsgs = mutableMapOf<String, String>()
             communityRepo
@@ -363,8 +391,13 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
                 } else {
                   for (th in list) {
                     val oldMsg = prevThreadMsgs[th.id]
-                    if (oldMsg != null && oldMsg != th.lastMessage && th.lastMessage.isNotBlank()) {
-                      val peerCallsign = th.participantCallsigns.firstOrNull { it.isNotBlank() } ?: "Rider"
+                    val isFromMe = th.lastSenderId.isNotBlank() && th.lastSenderId == cleanUid
+                    if (!isFromMe && oldMsg != null && oldMsg != th.lastMessage && th.lastMessage.isNotBlank()) {
+                      val peerIdx = th.participantUids.indexOfFirst { it != cleanUid }
+                      val peerCallsign =
+                        th.participantCallsigns.getOrNull(peerIdx)?.takeIf { it.isNotBlank() }
+                          ?: th.participantCallsigns.firstOrNull { it.isNotBlank() }
+                          ?: "Rider"
                       val settings = SettingsStore(ctx).settingsFlow.first()
                       if (settings.dmNotifsEnabled) {
                         ReminderScheduler.postDmNotification(
@@ -1190,10 +1223,34 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     }
   }
 
-  fun toggleFollowPilot(uid: String, targetUid: String) {
+  fun toggleFollowPilot(
+    uid: String,
+    targetUid: String,
+    myCallsign: String = "",
+    targetCallsign: String = "",
+  ) {
     if (uid.isBlank() || targetUid.isBlank() || uid == targetUid) return
+    val currentlyFollowing = targetUid in _followedPilotIds.value
+    val optimistic =
+      if (currentlyFollowing) _followedPilotIds.value - targetUid
+      else _followedPilotIds.value + targetUid
+    _followedPilotIds.value = optimistic
     viewModelScope.launch {
-      _followedPilotIds.value = localVault.toggleFollowedPilotId(uid, targetUid)
+      localVault.saveFollowedPilotIds(uid, optimistic)
+      if (boundFirebaseAuth) {
+        if (currentlyFollowing) {
+          riderRepo.unfollowPilot(uid, targetUid)
+            .onSuccess { _socialNotice.value = "Unfollowed pilot." }
+            .onFailure { _socialNotice.value = it.message ?: "Unfollow sync pending." }
+        } else {
+          riderRepo.followPilot(uid, myCallsign, targetUid, targetCallsign)
+            .onSuccess {
+              val label = targetCallsign.ifBlank { "pilot" }
+              _socialNotice.value = "Following @$label • Friend request sent!"
+            }
+            .onFailure { _socialNotice.value = it.message ?: "Follow sync pending." }
+        }
+      }
     }
   }
 

@@ -1444,7 +1444,6 @@ private fun VisionArMechanicTab(
   }
 
   if (showHistorySheet) {
-    BackHandler { showHistorySheet = false }
     var historyQuery by remember { mutableStateOf("") }
     val dateFmt = remember { SimpleDateFormat("MMM d • h:mm a", Locale.US) }
     val filteredSessions =
@@ -1744,7 +1743,6 @@ internal fun CameraXCaptureSheet(
   onDismiss: () -> Unit,
   onCaptured: (Bitmap) -> Unit,
 ) {
-  BackHandler(onBack = onDismiss)
   val ctx = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
   val imageCapture = remember { ImageCapture.Builder().build() }

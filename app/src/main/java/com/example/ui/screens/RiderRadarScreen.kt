@@ -1412,37 +1412,43 @@ fun RiderRadarScreen(
                         }
                       }
                     }
-                    Text("${peerSpec.displayRigName} • $spdInfo • BAT ${r.batteryPct}%$distInfo", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                      "${peerSpec.paceTier.label} • ${peerSpec.terrainPref.label} • ~${matchScore.estimatedLiveRangeMi}mi left • ${peerSpec.scheduleVibe.label}",
-                      style = MaterialTheme.typography.labelSmall,
-                      color = MaterialTheme.colorScheme.secondary,
-                    )
-                    if (r.userId != myUid && matchScore.warningText.isNotBlank()) {
-                      Text(matchScore.warningText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                      val rangeLabel =
+                        if (settings.distanceUnit.equals("km", ignoreCase = true)) {
+                          "~${(matchScore.estimatedLiveRangeMi * 1.60934).toInt()}km left"
+                        } else {
+                          "~${matchScore.estimatedLiveRangeMi}mi left"
+                        }
+                      Text("${peerSpec.displayRigName} • $spdInfo • BAT ${r.batteryPct}%$distInfo", style = MaterialTheme.typography.labelSmall)
+                      Text(
+                        "🟢 LIVE ONLINE • ${peerSpec.paceTier.label} • ${peerSpec.terrainPref.label} • $rangeLabel • ${peerSpec.scheduleVibe.label}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                      )
+                      if (r.userId != myUid && matchScore.warningText.isNotBlank()) {
+                        Text(matchScore.warningText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                      }
                     }
                   }
-                }
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                  if (cloudSyncReady && r.userId != myUid && r.userId.isNotBlank()) {
-                    val isFriend = followedPilotIds.contains(r.userId)
-                    TacticalOutlinedButton(
-                      onClick = { socialVm.toggleFollowPilot(myUid, r.userId) },
-                      contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                      modifier = Modifier.testTag("radar_friend_${r.userId}"),
-                    ) {
-                      Text(
-                        if (isFriend) "✓ Crew Friend" else "+ Friend",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false,
-                      )
-                    }
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                  ) {
+                    if (cloudSyncReady && r.userId != myUid && r.userId.isNotBlank()) {
+                      val isFriend = followedPilotIds.contains(r.userId)
+                      TacticalOutlinedButton(
+                        onClick = { socialVm.toggleFollowPilot(myUid, r.userId, callsign, r.callsign) },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.testTag("radar_friend_${r.userId}"),
+                      ) {
+                        Text(
+                          if (isFriend) "✓ Crew Friend" else "+ Friend",
+                          style = MaterialTheme.typography.labelSmall,
+                          fontWeight = FontWeight.Bold,
+                          maxLines = 1,
+                          softWrap = false,
+                        )
+                      }
                     TacticalIconButton(
                       onClick = { dmPeer = PublicPilotProfile(userId = r.userId, callsign = r.callsign, vehicleSummary = r.vehicleName) },
                       modifier = Modifier.testTag("radar_dm_${r.userId}"),

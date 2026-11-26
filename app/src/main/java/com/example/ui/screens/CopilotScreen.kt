@@ -1149,7 +1149,6 @@ fun CopilotScreen(
   }
 
   if (showSkillsModal) {
-    BackHandler { showSkillsModal = false }
     val filteredSkills = remember(skillCategoryFilter, skillSearch, skills100) {
       skills100.filter { sk ->
         (skillCategoryFilter == "All" || sk.category == skillCategoryFilter) &&
@@ -1194,7 +1193,6 @@ fun CopilotScreen(
   }
 
   if (showBriefingsVault) {
-    BackHandler { showBriefingsVault = false }
     ModalBottomSheet(onDismissRequest = { showBriefingsVault = false }) {
       Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -1256,7 +1254,6 @@ fun CopilotScreen(
   }
 
   if (showSessionsSheet) {
-    BackHandler { showSessionsSheet = false }
     var sessionSearch by remember { mutableStateOf("") }
     val filteredSessions =
       remember(sessions, sessionSearch) {

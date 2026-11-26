@@ -1,547 +1,394 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rural ERides GO v56.0 — 88-Model 3D PBR Rig Lab, PEV Knowledge Test &amp; Rider Radar</title>
-  <meta name="description" content="Rural ERides GO v56.0 by Lord Bradley Callison. Native Android PEV companion featuring an 88-Model Multi-Tech 3D PBR Rig Lab with 3D Knobby Tires, Interactive PEV Knowledge &amp; Certification Test, Upgraded Gravel Volt Runner 3D Game, 11-Window Telemetry Studio, 9-DOF AHRS Cockpit, Multi-Device Rider Radar &amp; Audio/Video Calling, and Gemini AI Mechanic." />
-  <meta name="keywords" content="Rural ERides GO, PEV app, electric unicycle, Sur-Ron, Dualtron, hyper-scooter, e-bike telemetry, Studio 3D PBR, OpenGL ES, WebGL 2.0, 3D Rig Lab, PEV Knowledge Test, Gravel Volt Runner 3D, Ride Inspector, Rider Radar, Firebase Firestore, Gemini AI Mechanic, Lord Bradley Callison" />
-  <meta name="author" content="Lord Bradley Callison" />
-
-  <!-- Open Graph -->
-  <meta property="og:title" content="Rural ERides GO v56.0 — 88-Model 3D Rig Lab, PEV Knowledge Test &amp; Avionics" />
-  <meta property="og:description" content="88 Realistic 3D PEV Models with 3D Knobby Tires, PEV Knowledge &amp; Certification Test, Upgraded 3D Gravel Volt Runner Game, 11-Window Telemetry Studio, Multi-Device Rider Radar &amp; Calling, and Gemini AI Mechanic." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://bradley3398.github.io/Rural-Erides-GO/" />
-  <meta property="og:image" content="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/splash.png" />
-
-  <link rel="icon" type="image/png" href="./assets/icon.png" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <meta name="theme-color" content="#070B14" />
+  <title>Rural ERides GO — Universal PEV Avionics, 3D PBR Rig Lab &amp; Rider Radar (v58.0)</title>
+  <meta name="description" content="Rural ERides GO (v58.0 / Build 58) — Native Android avionics, authentic OEM PEV LCD/LED/TFT HUDs, photorealistic 3D PEV Rig Lab, Gravel Volt Runner 3D, live video calling, Rider Radar, and Gemini AI Mechanic." />
   <style>
-    body { font-family: 'Inter', sans-serif; background-color: #070B0E; color: #F1F5F9; }
-    .font-mono-tech { font-family: 'JetBrains Mono', monospace; }
-    .hero-glow { background: radial-gradient(circle at 20% 15%, rgba(16, 185, 129, 0.16), transparent 45%), radial-gradient(circle at 80% 25%, rgba(99, 102, 241, 0.18), transparent 48%); }
-    .card-glass { background: rgba(15, 23, 34, 0.78); backdrop-filter: blur(12px); }
-    .tab-btn-active { background: linear-gradient(135deg, #10B981, #06B6D4); color: #041014; border-color: transparent; box-shadow: 0 0 24px rgba(16, 185, 129, 0.35); }
+    :root {
+      --bg: #070B14;
+      --bg-2: #0C1324;
+      --card: #111A2E;
+      --card-2: #16223A;
+      --border: rgba(148, 163, 184, 0.18);
+      --text: #F1F5F9;
+      --muted: #94A3B8;
+      --accent: #10B981;
+      --accent-2: #06B6D4;
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; background: var(--bg); color: var(--text); }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+      background:
+        radial-gradient(900px 520px at 15% -10%, rgba(16, 185, 129, 0.18), transparent 60%),
+        radial-gradient(800px 500px at 90% 5%, rgba(6, 182, 212, 0.16), transparent 60%),
+        linear-gradient(180deg, #070B14 0%, #0A1020 55%, #070B14 100%);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    a { color: inherit; text-decoration: none; }
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 20px; }
+    header {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(7, 11, 20, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 70px; flex-wrap: wrap; padding: 10px 0; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: 0.3px; }
+    .brand img { width: 42px; height: 42px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.45); background: #0F172A; object-fit: cover; }
+    .brand-sub { display: block; font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+    .nav-links { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; font-size: 14px; color: var(--muted); font-weight: 600; }
+    .nav-links a:hover { color: var(--text); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; border: 1px solid transparent; cursor: pointer; transition: transform .15s ease, filter .15s ease; }
+    .btn:hover { transform: translateY(-1px); filter: brightness(1.07); }
+    .btn-primary { background: linear-gradient(135deg, #10B981, #06B6D4); color: #041218; box-shadow: 0 10px 28px rgba(16, 185, 129, 0.25); }
+    .btn-secondary { background: rgba(99, 102, 241, 0.16); color: #C7D2FE; border-color: rgba(99, 102, 241, 0.45); }
+    .btn-ghost { background: rgba(148, 163, 184, 0.08); color: var(--text); border-color: var(--border); }
+    .hero { padding: 56px 0 36px; }
+    .hero-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 36px; align-items: center; }
+    @media (max-width: 880px) { .hero-grid { grid-template-columns: 1fr; } }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 800; letter-spacing: 0.6px; background: rgba(16, 185, 129, 0.14); color: #6EE7B7; border: 1px solid rgba(16, 185, 129, 0.35); margin-bottom: 18px; }
+    .dot-live { width: 8px; height: 8px; border-radius: 50%; background: #10B981; box-shadow: 0 0 10px #10B981; display: inline-block; }
+    h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.08; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 16px; }
+    .grad { background: linear-gradient(90deg, #34D399, #22D3EE, #A5B4FC); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lead { font-size: 17px; color: #CBD5E1; margin-bottom: 24px; max-width: 620px; }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+    @media (max-width: 600px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .stat { background: rgba(17, 26, 46, 0.85); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+    .stat-val { font-size: 20px; font-weight: 900; color: #FFFFFF; }
+    .stat-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; font-weight: 700; }
+    .preview-card { background: linear-gradient(160deg, #13203B, #0B1222); border: 1px solid rgba(34, 211, 238, 0.28); border-radius: 24px; padding: 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); }
+    .preview-media { position: relative; border-radius: 16px; overflow: hidden; background: #070B14; border: 1px solid var(--border); aspect-ratio: 16 / 10; display: flex; align-items: center; justify-content: center; }
+    .preview-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .preview-badge { position: absolute; bottom: 12px; left: 12px; right: 12px; background: rgba(7, 11, 20, 0.86); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; flex-wrap: wrap; }
+    .release-box { margin-top: 14px; padding: 14px; border-radius: 14px; background: rgba(7, 11, 20, 0.65); border: 1px solid var(--border); font-size: 13px; color: #CBD5E1; }
+    .release-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px dashed rgba(148,163,184,0.14); }
+    .release-row:last-child { border-bottom: none; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; color: #67E8F9; }
+    section { padding: 48px 0; }
+    .section-head { margin-bottom: 24px; }
+    .eyebrow { color: var(--accent-2); font-size: 12px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; margin-bottom: 6px; }
+    h2 { font-size: clamp(24px, 3.4vw, 34px); font-weight: 900; letter-spacing: -0.01em; margin-bottom: 8px; }
+    .sub { color: var(--muted); max-width: 720px; font-size: 15px; }
+    .carousel-shell { background: linear-gradient(160deg, rgba(17, 26, 46, 0.96), rgba(9, 15, 30, 0.96)); border: 1px solid rgba(34, 211, 238, 0.25); border-radius: 24px; padding: 24px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.48); }
+    .carousel-stage { display: grid; grid-template-columns: 320px 1fr; gap: 28px; align-items: center; }
+    @media (max-width: 820px) { .carousel-stage { grid-template-columns: 1fr; justify-items: center; } }
+    .phone-frame { position: relative; width: 100%; max-width: 310px; aspect-ratio: 9 / 16; border-radius: 28px; padding: 8px; background: linear-gradient(145deg, #1E293B, #0B1222); border: 2px solid rgba(56, 189, 248, 0.35); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65); overflow: hidden; }
+    .phone-screen { position: relative; width: 100%; height: 100%; border-radius: 20px; overflow: hidden; background: #050811; cursor: zoom-in; }
+    .carousel-slide-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity .25s ease, transform .3s ease; }
+    .carousel-slide-img:hover { transform: scale(1.02); }
+    .carousel-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(7, 11, 20, 0.78); color: #FFFFFF; font-size: 20px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 4; }
+    .carousel-nav-btn:hover { background: rgba(16, 185, 129, 0.85); color: #041218; border-color: #10B981; }
+    .carousel-prev { left: 10px; }
+    .carousel-next { right: 10px; }
+    .carousel-counter { position: absolute; top: 12px; right: 12px; background: rgba(7, 11, 20, 0.82); border: 1px solid rgba(16, 185, 129, 0.4); color: #6EE7B7; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; z-index: 4; }
+    .carousel-info { display: flex; flex-direction: column; gap: 14px; width: 100%; }
+    .carousel-kicker { display: inline-block; align-self: flex-start; padding: 5px 12px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.9px; text-transform: uppercase; background: rgba(16, 185, 129, 0.16); color: #6EE7B7; border: 1px solid rgba(16, 185, 129, 0.38); }
+    .carousel-title { font-size: clamp(22px, 3vw, 30px); font-weight: 900; color: #FFFFFF; line-height: 1.15; }
+    .carousel-desc { font-size: 15px; color: #CBD5E1; line-height: 1.65; }
+    .carousel-bullets { list-style: none; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; background: rgba(7, 11, 20, 0.55); border: 1px solid var(--border); font-size: 13.5px; color: #E2E8F0; }
+    .carousel-bullets li::before { content: "⚡ "; color: #34D399; }
+    .carousel-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .carousel-thumbs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+    @media (max-width: 640px) { .carousel-thumbs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    .thumb-btn { background: #0B1222; border: 2px solid rgba(148, 163, 184, 0.2); border-radius: 14px; padding: 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; }
+    .thumb-btn:hover { transform: translateY(-2px); color: #FFFFFF; }
+    .thumb-btn.active { border-color: #10B981; background: rgba(16, 185, 129, 0.14); color: #6EE7B7; }
+    .thumb-btn img { width: 100%; aspect-ratio: 9 / 12; object-fit: cover; border-radius: 8px; display: block; }
+    .lightbox { position: fixed; inset: 0; z-index: 200; background: rgba(3, 6, 14, 0.92); backdrop-filter: blur(10px); display: none; align-items: center; justify-content: center; padding: 20px; flex-direction: column; gap: 14px; }
+    .lightbox.open { display: flex; }
+    .lightbox img { max-height: 82vh; max-width: 92vw; border-radius: 18px; border: 2px solid rgba(56, 189, 248, 0.45); }
+    .lightbox-bar { display: flex; align-items: center; gap: 14px; color: #E2E8F0; font-size: 14px; font-weight: 700; }
+    .tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+    .tab-btn { background: var(--card); color: var(--muted); border: 1px solid var(--border); padding: 10px 16px; border-radius: 12px; font-weight: 700; font-size: 13px; cursor: pointer; }
+    .tab-btn.active { background: rgba(16, 185, 129, 0.16); color: #6EE7B7; border-color: rgba(16, 185, 129, 0.55); }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    @media (max-width: 900px) { .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } }
+    .card { background: linear-gradient(180deg, rgba(17, 26, 46, 0.94), rgba(12, 19, 36, 0.94)); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+    .card-tag { display: inline-block; align-self: flex-start; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.6px; background: rgba(6, 182, 212, 0.14); color: #67E8F9; border: 1px solid rgba(6, 182, 212, 0.3); }
+    .card h3 { font-size: 18px; font-weight: 800; color: #FFFFFF; }
+    .card p { font-size: 14px; color: #CBD5E1; }
+    .changelog { display: flex; flex-direction: column; gap: 14px; }
+    .cl-item { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 14px; padding: 18px 20px; }
+    .cl-title { font-weight: 800; font-size: 16px; margin-bottom: 6px; color: #FFFFFF; }
+    .cl-list { padding-left: 18px; color: #CBD5E1; font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+    footer { border-top: 1px solid var(--border); padding: 36px 0 48px; margin-top: 32px; color: var(--muted); font-size: 13px; }
+    .footer-flex { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
   </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between selection:bg-emerald-500 selection:text-slate-950 hero-glow">
-
-  <!-- Sticky Navigation -->
-  <header class="border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-md sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-5 sm:px-6 h-20 flex items-center justify-between gap-4">
-      <a href="#top" class="flex items-center gap-3 group">
-        <img
-          src="./assets/icon.png"
-          alt="Rural ERides GO Icon"
-          class="w-11 h-11 rounded-xl border border-emerald-400/40 shadow-lg shadow-emerald-500/20 object-cover group-hover:scale-105 transition"
-        />
-        <div>
-          <span class="text-lg sm:text-xl font-black tracking-wider text-white block leading-none">
-            RURAL ERIDES <span class="text-emerald-400">GO</span>
-          </span>
-          <span class="text-[11px] font-mono-tech text-slate-400 tracking-widest uppercase">v57.0 • Build 57 • Keep It Rural Yall</span>
-        </div>
+<body>
+  <header>
+    <div class="container nav">
+      <a class="brand" href="#top">
+        <img src="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/icon.png" alt="Rural ERides GO Icon" />
+        <span>
+          Rural ERides GO
+          <span class="brand-sub">v58.0 &bull; Build 58 &bull; Keep It Rural Y'all</span>
+        </span>
       </a>
-
-      <nav class="hidden lg:flex items-center gap-7 text-sm font-semibold text-slate-300">
-        <a href="#explorer" class="hover:text-emerald-400 transition">Feature Lab</a>
-        <a href="#specs" class="hover:text-emerald-400 transition">PEV Physics</a>
-        <a href="#themes" class="hover:text-emerald-400 transition">Holiday &amp; Themes</a>
-        <a href="#changelog" class="hover:text-emerald-400 transition">Changelog</a>
-        <a href="#download" class="hover:text-emerald-400 transition">Get APK</a>
+      <nav class="nav-links">
+        <a href="#screenshots">App Gallery</a>
+        <a href="#whats-new">What's New</a>
+        <a href="#features">Features</a>
+        <a href="#download">Download &amp; Play Store</a>
+        <a class="btn btn-primary" id="nav-apk-btn" href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest" target="_blank" rel="noopener">Get Latest Build</a>
       </nav>
-
-      <div class="flex items-center gap-2.5">
-        <a
-          href="https://github.com/bradley3398/Rural-Erides-GO"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="hidden sm:inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition"
-        >
-          GitHub
-        </a>
-        <a
-          href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm transition shadow-lg shadow-emerald-500/25"
-        >
-          Download v57
-        </a>
-      </div>
     </div>
   </header>
 
-  <main id="top" class="flex-grow">
-    <!-- Hero Section -->
-    <section class="max-w-7xl mx-auto px-5 sm:px-6 pt-16 pb-20 lg:py-24 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-      <div class="lg:col-span-7 space-y-7">
-        <div class="inline-flex items-center gap-2.5 bg-emerald-950/80 border border-emerald-500/40 px-4 py-1.5 rounded-full text-emerald-300 text-xs font-bold tracking-wide uppercase">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>v57.0 Release (Build 57) • Authentic OEM PEV HUDs • Realistic Dirt Trail &amp; Wildflower 3D Game • Live 2-Way Calls</span>
-        </div>
-
-        <h1 class="text-4xl sm:text-6xl font-black tracking-tight text-white leading-[1.05]">
-          Universal Avionics for
-          <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-300 to-indigo-400">
-            Personal Electric Vehicles
-          </span>
-        </h1>
-
-        <p class="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
-          Built for riders on rural backroads, trails, and highways. Rural ERides GO unites
-          <strong class="text-white">Authentic OEM PEV Hardware HUDs (Minimotors EYE3, QS-S4, S866, DPC-18, EUC PWM)</strong>, an
-          <strong class="text-white">88-Model Multi-Tech 3D PBR Rig Lab with 3D Knobby Tires</strong>, an interactive
-          <strong class="text-white">PEV Knowledge &amp; Certification Test</strong>, a realistic
-          <strong class="text-white">Gravel Volt Runner 3D Dirt Trail &amp; Procedural Wildflower Game</strong>,
-          <strong class="text-white">11-Window Telemetry Studio</strong>,
-          <strong class="text-white">Multi-Device Rider Radar &amp; Live Audio/Video Calling</strong>, and
-          <strong class="text-white">Gemini AI Vision Diagnostics</strong>—with app-wide MPH/KM/H &amp; °F/°C unit sync.
-        </p>
-
-        <div class="flex flex-wrap gap-3.5 pt-2">
-          <a
-            href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-7 py-4 rounded-2xl transition shadow-xl shadow-emerald-500/25 flex items-center gap-2.5"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-            <span>Download Latest APK</span>
-          </a>
-          <a
-            href="https://github.com/bradley3398/Rural-Erides-GO"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-bold px-7 py-4 rounded-2xl transition flex items-center gap-2.5"
-          >
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-            <span>Source on GitHub</span>
-          </a>
-        </div>
-
-        <!-- Quick Highlights Strip -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
-          <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
-            <div class="text-xl font-black text-emerald-400">88 Models</div>
-            <div class="text-xs text-slate-400 font-semibold">3D Knobby Tire Rig Lab</div>
-          </div>
-          <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
-            <div class="text-xl font-black text-cyan-400">PEV Test</div>
-            <div class="text-xs text-slate-400 font-semibold">Quiz + AI Cert Exam</div>
-          </div>
-          <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
-            <div class="text-xl font-black text-indigo-400">3D Game</div>
-            <div class="text-xs text-slate-400 font-semibold">Gravel Volt Runner 3D</div>
-          </div>
-          <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
-            <div class="text-xl font-black text-amber-400">Live Mesh</div>
-            <div class="text-xs text-slate-400 font-semibold">Radar + 1-Tap Calls</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right Hero Brand Card -->
-      <div class="lg:col-span-5 relative">
-        <div class="absolute -inset-1 rounded-3xl bg-gradient-to-tr from-emerald-500/30 via-cyan-500/20 to-indigo-500/30 blur-2xl"></div>
-        <div class="relative card-glass border border-slate-700/80 rounded-3xl overflow-hidden shadow-2xl">
-          <img
-            src="./assets/splash.png"
-            alt="Rural ERides GO Splash Artwork"
-            class="w-full h-56 object-cover border-b border-slate-800"
-          />
-          <div class="p-6 space-y-4">
-            <div class="flex items-center justify-between">
-              <div>
-                <span class="text-[11px] font-mono-tech uppercase tracking-widest text-emerald-400 font-bold block">Architecture Summary</span>
-                <h2 class="text-lg font-black text-white">Rural ERides GO • Build 57</h2>
-              </div>
-              <span class="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold">Zero Mockups</span>
-            </div>
-            <div class="grid grid-cols-2 gap-3 text-xs">
-              <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
-                <span class="text-slate-500 font-bold block uppercase text-[10px]">3D Rendering</span>
-                <span class="text-cyan-300 font-bold">Studio 3D + OpenGL + WebGL</span>
-              </div>
-              <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
-                <span class="text-slate-500 font-bold block uppercase text-[10px]">PEV Exam &amp; Game</span>
-                <span class="text-indigo-300 font-bold">PEV Test + 3D Volt Runner</span>
-              </div>
-              <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
-                <span class="text-slate-500 font-bold block uppercase text-[10px]">Cloud &amp; AI</span>
-                <span class="text-amber-300 font-bold">Firestore + Gemini AI</span>
-              </div>
-              <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
-                <span class="text-slate-500 font-bold block uppercase text-[10px]">Squad Comms</span>
-                <span class="text-emerald-300 font-bold">1-Tap Friend + Audio/Video Call</span>
-              </div>
-            </div>
-            <div class="text-xs text-slate-400 pt-1 flex items-center justify-between border-t border-slate-800">
-              <span>Creator: <strong class="text-slate-200">Lord Bradley Callison</strong></span>
-              <span class="font-mono-tech text-emerald-400">Kotlin • Compose M3</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Interactive Feature Lab Explorer -->
-    <section id="explorer" class="max-w-7xl mx-auto px-5 sm:px-6 py-20 border-t border-slate-800/80">
-      <div class="max-w-3xl space-y-3 mb-10">
-        <span class="text-xs font-mono-tech uppercase tracking-widest text-emerald-400 font-bold">Interactive Module Explorer</span>
-        <h2 class="text-3xl sm:text-4xl font-black text-white">Explore Every Core Subsystem in v56.0</h2>
-        <p class="text-slate-400">Select any subsystem below to inspect how Rural ERides GO powers real rides from trailhead to workbench.</p>
-      </div>
-
-      <div class="flex flex-wrap gap-2.5 mb-8" role="tablist" aria-label="Rural ERides GO Subsystems">
-        <button type="button" data-tab="riglab" class="feature-tab tab-btn-active px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
-          88-Model 3D Rig Lab
-        </button>
-        <button type="button" data-tab="quizgame" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
-          PEV Knowledge Test &amp; 3D Game
-        </button>
-        <button type="button" data-tab="graphs" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
-          Graphs &amp; Ride Inspector
-        </button>
-        <button type="button" data-tab="cockpit" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
-          9-DOF AHRS Cockpit
-        </button>
-        <button type="button" data-tab="radar" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
-          Rider Radar &amp; Live Calls
-        </button>
-        <button type="button" data-tab="ai" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
-          AI Mechanic &amp; Co-Pilot
-        </button>
-        <button type="button" data-tab="community" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
-          Porch Board &amp; Crew
-        </button>
-      </div>
-
-      <div id="feature-panel" class="card-glass border border-slate-700/80 rounded-3xl p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div class="lg:col-span-7 space-y-4">
-          <div id="fp-badge" class="inline-flex px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-bold uppercase tracking-wider"></div>
-          <h3 id="fp-title" class="text-2xl sm:text-3xl font-black text-white"></h3>
-          <p id="fp-desc" class="text-slate-300 leading-relaxed"></p>
-          <ul id="fp-bullets" class="space-y-2.5 pt-2 text-sm text-slate-300"></ul>
-        </div>
-        <div class="lg:col-span-5 bg-slate-950/90 border border-slate-800 rounded-2xl p-6 space-y-4">
-          <span class="text-[11px] font-mono-tech uppercase tracking-widest text-slate-400 font-bold block">Technical Specs</span>
-          <div id="fp-specs" class="space-y-3 text-sm"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- PEV Physics & Voltage Reference -->
-    <section id="specs" class="max-w-7xl mx-auto px-5 sm:px-6 py-20 border-t border-slate-800/80">
-      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
-        <div class="space-y-2">
-          <span class="text-xs font-mono-tech uppercase tracking-widest text-amber-400 font-bold">Real Pack Physics Engine</span>
-          <h2 class="text-3xl sm:text-4xl font-black text-white">Exact Voltage, Sag &amp; Archetype Support</h2>
-        </div>
-        <p class="text-sm text-slate-400 max-w-md">
-          Live resting OCV and under-load voltage sag calculations calibrated across NMC and LiFePO4 battery packs from 36V to 134V.
-        </p>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div class="card-glass border border-slate-800 rounded-2xl p-6 space-y-2">
-          <span class="text-xs font-mono-tech text-emerald-400 font-bold">48V • 13S NMC</span>
-          <div class="text-2xl font-black text-white">54.6V Full</div>
-          <p class="text-xs text-slate-400">Fat-Tire e-Bikes, commuter cruisers, and trail rigs. Cutoff 39.0V, storage 49.4V.</p>
-        </div>
-        <div class="card-glass border border-slate-800 rounded-2xl p-6 space-y-2">
-          <span class="text-xs font-mono-tech text-cyan-400 font-bold">52V • 14S NMC</span>
-          <div class="text-2xl font-black text-white">58.8V Full</div>
-          <p class="text-xs text-slate-400">Dual-motor scooters and high-torque rural e-bikes. Cutoff 42.0V, storage 53.2V.</p>
-        </div>
-        <div class="card-glass border border-slate-800 rounded-2xl p-6 space-y-2">
-          <span class="text-xs font-mono-tech text-indigo-400 font-bold">72V • 20S NMC</span>
-          <div class="text-2xl font-black text-white">84.0V Full</div>
-          <p class="text-xs text-slate-400">Sur-Ron Ultra Bee eMotos &amp; Hyper-Scooters. Live sag alerts under heavy climb amps.</p>
-        </div>
-        <div class="card-glass border border-slate-800 rounded-2xl p-6 space-y-2">
-          <span class="text-xs font-mono-tech text-pink-400 font-bold">100V–134V • EUC</span>
-          <div class="text-2xl font-black text-white">24S–32S Packs</div>
-          <p class="text-xs text-slate-400">High-voltage Electric Unicycles with PWM headroom warnings &amp; Wh/mi range learning.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Holiday Themes & Ornaments Showcase -->
-    <section id="themes" class="max-w-7xl mx-auto px-5 sm:px-6 py-20 border-t border-slate-800/80">
-      <div class="max-w-3xl space-y-3 mb-10">
-        <span class="text-xs font-mono-tech uppercase tracking-widest text-pink-400 font-bold">Visual Customization • Always Unlocked</span>
-        <h2 class="text-3xl sm:text-4xl font-black text-white">26+ Visual Themes &amp; 11 Ornamented Holiday Themes</h2>
-        <p class="text-slate-400">
-          Every Holiday theme renders DP-scaled top-of-screen garlands, glowing twinkling string lights, hanging ornaments, full-screen backdrop motifs, foreground card corner emblems, and festive navigation bar trim—available year-round in Settings.
-        </p>
-      </div>
-
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        <div class="card-glass border border-red-500/30 rounded-2xl p-4"><div class="font-bold text-white">Christmas Evergreen</div><div class="text-xs text-slate-400 mt-1">Pine garland, glass baubles, holly berries &amp; warm string lights</div></div>
-        <div class="card-glass border border-orange-500/30 rounded-2xl p-4"><div class="font-bold text-white">Halloween Jack-O'-Lantern</div><div class="text-xs text-slate-400 mt-1">Cobweb drape, hanging carved pumpkins &amp; gliding bats</div></div>
-        <div class="card-glass border border-amber-500/30 rounded-2xl p-4"><div class="font-bold text-white">Thanksgiving Harvest</div><div class="text-xs text-slate-400 mt-1">Autumn vine canopy &amp; golden-crimson maple leaves</div></div>
-        <div class="card-glass border border-blue-500/30 rounded-2xl p-4"><div class="font-bold text-white">4th of July Liberty</div><div class="text-xs text-slate-400 mt-1">Red/white/blue bunting, liberty stars &amp; firework bursts</div></div>
-        <div class="card-glass border border-yellow-500/30 rounded-2xl p-4"><div class="font-bold text-white">New Year's Midnight</div><div class="text-xs text-slate-400 mt-1">Champagne sparkle garlands &amp; midnight starbursts</div></div>
-        <div class="card-glass border border-pink-500/30 rounded-2xl p-4"><div class="font-bold text-white">Valentine's Ribbon</div><div class="text-xs text-slate-400 mt-1">Crimson hanging hearts &amp; rose-gold ribbon trim</div></div>
-        <div class="card-glass border border-emerald-500/30 rounded-2xl p-4"><div class="font-bold text-white">St. Patrick's Clover</div><div class="text-xs text-slate-400 mt-1">Emerald shamrock ornaments &amp; gold coin sparkles</div></div>
-        <div class="card-glass border border-purple-500/30 rounded-2xl p-4"><div class="font-bold text-white">Easter Spring Pastel</div><div class="text-xs text-slate-400 mt-1">Painted pastel egg garlands &amp; blossom accents</div></div>
-        <div class="card-glass border border-rose-500/30 rounded-2xl p-4"><div class="font-bold text-white">Memorial Day Poppy</div><div class="text-xs text-slate-400 mt-1">Remembrance poppy emblems &amp; honor stars</div></div>
-        <div class="card-glass border border-cyan-500/30 rounded-2xl p-4"><div class="font-bold text-white">Labor Day Heritage</div><div class="text-xs text-slate-400 mt-1">Forged mechanical gears &amp; workshop steel trim</div></div>
-        <div class="card-glass border border-sky-500/30 rounded-2xl p-4"><div class="font-bold text-white">Veterans Day Valor</div><div class="text-xs text-slate-400 mt-1">Gold valor chevrons &amp; ceremonial star banners</div></div>
-        <div class="card-glass border border-emerald-400/40 rounded-2xl p-4"><div class="font-bold text-emerald-300">+ 15 Rural &amp; Retro OS</div><div class="text-xs text-slate-400 mt-1">Barnwood, Pine Holler, Tactical Neon, Win95, XP Luna &amp; Win7 Aero</div></div>
-      </div>
-    </section>
-
-    <!-- Release History -->
-    <section id="changelog" class="max-w-7xl mx-auto px-5 sm:px-6 py-20 border-t border-slate-800/80">
-      <div class="max-w-3xl space-y-2 mb-10">
-        <span class="text-xs font-mono-tech uppercase tracking-widest text-indigo-400 font-bold">Version History</span>
-        <h2 class="text-3xl sm:text-4xl font-black text-white">What's New in Rural ERides GO</h2>
-      </div>
-      <div class="space-y-4">
-        <div class="card-glass border border-emerald-500/40 rounded-2xl p-6">
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <h3 class="text-lg font-black text-emerald-300">v57.0 (Build 57) — Live Two-Way Audio/Video Calling + Speakerphone Boost, Zero Bot Pilots &amp; Long-Range Telephoto Optical Morse</h3>
-            <span class="font-mono-tech text-xs px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300">CURRENT</span>
-          </div>
-          <p class="text-sm text-slate-300 leading-relaxed">
-            Upgraded cross-device Audio &amp; Video calling with a full-screen transparent video stage, default Speakerphone routing (MODIFY_AUDIO_SETTINGS + 2.4x WebAudio GainNode boost), race-free WebRTC P2P negotiation, and automatic Live Cloud Audio &amp; Video Relay across strict NAT. Eliminated all auto-generated PILOT_XXXXX / bot accounts while auto-deriving real human callsigns from Google identity, and upgraded the Long-Range Optical Morse Transceiver with 1x–6x Telephoto CameraX zoom, 3x3 point-source hotspot peak tracking, Schmitt-trigger temporal contrast for 150m+ distance, aiming lock beam preamble, and synchronized dual LED + screen strobe.
+  <main id="top">
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <div class="pill"><span class="dot-live"></span> LIVE RELEASE: v58.0 (BUILD 58) &bull; GITHUB &amp; GOOGLE PLAY READY</div>
+          <h1>Universal PEV Avionics, <span class="grad">Authentic Hardware HUDs</span> &amp; 3D Rig Lab</h1>
+          <p class="lead">
+            Built in Kotlin &amp; Jetpack Compose Material 3 for high-performance e-Motos, Hyper-Scooters, EUCs, and Fat-Tire e-Bikes.
+            Real GPS + 9-DOF telemetry, authentic monochrome LCD / LED / IPS TFT displays, photorealistic 3D PEV CAD models, Gravel Volt Runner 3D, live video calling, real-pilot Rider Radar, and Firebase AI Logic Gemini diagnostics.
           </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" id="hero-apk-btn" href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest" target="_blank" rel="noopener">Download Signed APK (v58.0)</a>
+            <a class="btn btn-secondary" href="#screenshots">Tour App Screenshots</a>
+            <a class="btn btn-ghost" href="https://github.com/bradley3398/Rural-Erides-GO" target="_blank" rel="noopener">GitHub Repo</a>
+          </div>
+          <div class="stats">
+            <div class="stat"><div class="stat-val">88+</div><div class="stat-lbl">3D PEV Models</div></div>
+            <div class="stat"><div class="stat-val">14</div><div class="stat-lbl">OEM LCD/TFT HUDs</div></div>
+            <div class="stat"><div class="stat-val">100%</div><div class="stat-lbl">Real Pilots Only</div></div>
+            <div class="stat"><div class="stat-val">v58.0</div><div class="stat-lbl">Build 58 Live</div></div>
+          </div>
         </div>
-        <div class="card-glass border border-slate-800 rounded-2xl p-6">
-          <h3 class="text-base font-bold text-white mb-1">v56.0 (Build 56) — Massive 3D Rig Lab Upgrade, PEV Knowledge Test, 3D Game &amp; Multi-Device Radar</h3>
-          <p class="text-sm text-slate-400">Upgraded all 88 3D PEV models with 24 raised 3D knobby tire tread lugs, dark vulcanized rubber, cross-drilled brake rotors, copper stator cores, PEV Knowledge &amp; Certification Test tab, and Gravel Volt Runner 3D player models.</p>
-        </div>
-        <div class="card-glass border border-slate-800 rounded-2xl p-6">
-          <h3 class="text-base font-bold text-white mb-1">v51.0 (Build 51) — Direct Repo Build Notifications &amp; Play-Compliant Update Center</h3>
-          <p class="text-sm text-slate-400">New-build notifications open the GitHub repository release page directly in your browser with zero restricted install permissions (100% Google Play Creator Program compliant).</p>
-        </div>
-        <div class="card-glass border border-slate-800 rounded-2xl p-6">
-          <h3 class="text-base font-bold text-white mb-1">v36.0–v49.0 — Compartmentalized Architecture, Voice Studio &amp; Crash-Proof Ride Inspector</h3>
-          <p class="text-sm text-slate-400">Isolated Cockpit, Radar, Mechanic, Co-Pilot, Community, 3D CAD Lab, and Telemetry Studio compartments; added Custom Synthesized AI Voice Studio, 5-module Ride Inspector, and 11 Holiday themes.</p>
+
+        <div class="preview-card">
+          <div class="preview-media">
+            <img src="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/splash.png" alt="Rural ERides GO Trail Preview" />
+            <div class="preview-badge">
+              <span><strong>Package:</strong> <span class="mono">com.aistudio.volttrail.kqrmvx</span></span>
+              <span style="color:#6EE7B7;font-weight:800;">Android 7.0+ (API 24&ndash;36)</span>
+            </div>
+          </div>
+          <div class="release-box" id="live-release-card">
+            <div class="release-row"><span>Latest Version</span><strong id="rel-tag">v58.0 (Build 58)</strong></div>
+            <div class="release-row"><span>Direct APK Asset</span><span id="rel-apk" class="mono">Fetching GitHub Release...</span></div>
+            <div class="release-row"><span>Play Store Bundle (.aab)</span><span id="rel-aab" class="mono">Ready via Release Workflow</span></div>
+            <div class="release-row"><span>Creator</span><strong>Lord Bradley Callison</strong></div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Download & Build CTA -->
-    <section id="download" class="max-w-5xl mx-auto px-5 sm:px-6 py-20">
-      <div class="bg-gradient-to-br from-emerald-950/70 via-slate-900 to-indigo-950/70 border border-emerald-500/30 rounded-3xl p-8 sm:p-14 text-center space-y-6 shadow-2xl">
-        <h2 class="text-3xl sm:text-5xl font-black text-white">Ready to Ride?</h2>
-        <p class="text-slate-300 max-w-2xl mx-auto text-base">
-          Download the latest Android release directly from GitHub Releases or clone the repository to build locally with Gradle and your Firebase configuration.
-        </p>
-        <div class="flex flex-wrap justify-center gap-4 pt-2">
-          <a
-            href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-8 py-4 rounded-2xl transition shadow-xl shadow-emerald-500/30 flex items-center gap-2.5"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-            <span>Download v57.0 Release</span>
-          </a>
-          <a
-            href="https://github.com/bradley3398/Rural-Erides-GO"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-bold px-8 py-4 rounded-2xl transition"
-          >
-            View GitHub Repository
-          </a>
-          <a
-            href="https://github.com/bradley3398/Rural-Erides-GO/issues"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="bg-slate-900/70 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold px-6 py-4 rounded-2xl transition"
-          >
-            Report Bug / Feature
-          </a>
+    <section id="screenshots">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">INSIDE RURAL ERIDES GO</div>
+          <h2>Interactive App Screenshot Carousel</h2>
+          <p class="sub">Swipe, click arrows, or pick a screen below to preview the real Android interface — tap any screenshot to zoom full-screen.</p>
         </div>
-        <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 max-w-xl mx-auto text-left font-mono-tech text-xs text-emerald-300 overflow-x-auto">
-          <div># Build from source</div>
-          <div>git clone https://github.com/bradley3398/Rural-Erides-GO.git</div>
-          <div>gradle assembleDebug &amp;&amp; gradle :app:testDebugUnitTest</div>
+        <div class="carousel-shell" id="app-carousel">
+          <div class="carousel-stage">
+            <div class="phone-frame" id="carousel-swipe-area">
+              <div class="carousel-counter" id="carousel-counter">1 / 5</div>
+              <button class="carousel-nav-btn carousel-prev" id="carousel-prev" type="button" aria-label="Previous screenshot">&#8249;</button>
+              <button class="carousel-nav-btn carousel-next" id="carousel-next" type="button" aria-label="Next screenshot">&#8250;</button>
+              <div class="phone-screen" id="carousel-zoom-trigger" title="Tap to view full screen">
+                <img class="carousel-slide-img" id="carousel-main-img" src="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/screenshots/cockpit_hud.jpg" alt="Rural ERides GO Cockpit OEM HUD" />
+              </div>
+            </div>
+            <div class="carousel-info">
+              <span class="carousel-kicker" id="carousel-kicker">COCKPIT &amp; OEM HARDWARE HUDS</span>
+              <h3 class="carousel-title" id="carousel-title">Authentic Monochrome LCD, LED &amp; IPS TFT Speedometers</h3>
+              <p class="carousel-desc" id="carousel-desc"></p>
+              <ul class="carousel-bullets" id="carousel-bullets"></ul>
+              <div class="carousel-controls">
+                <button class="btn btn-primary" id="carousel-btn-next" type="button">Next Screen &rarr;</button>
+                <button class="btn btn-ghost" id="carousel-btn-zoom" type="button">Zoom Full Screen</button>
+                <button class="btn btn-ghost" id="carousel-btn-play" type="button">Pause Autoplay</button>
+              </div>
+            </div>
+          </div>
+          <div class="carousel-thumbs" id="carousel-thumbs" role="tablist" aria-label="App screenshot selector"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="whats-new">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">BUILD 58 RELEASE NOTES</div>
+          <h2>What's New in Rural ERides GO v58.0</h2>
+          <p class="sub">Major stability, social, visual hardware HUD, live video calling, and 3D realism upgrades across every module.</p>
+        </div>
+        <div class="changelog">
+          <div class="cl-item">
+            <div class="cl-title">Zero-Crash Back Navigation &amp; Direct Messages Overhaul</div>
+            <ul class="cl-list">
+              <li>Eliminated the crash when pressing Back inside Direct Messages by migrating DMs to a dedicated full-screen dialog with clean keyboard/focus teardown and composite message keys.</li>
+              <li>Unified hierarchical Back button handling across every tab, overlay, live call PiP, and modal sheet — removing conflicting parent BackHandlers app-wide.</li>
+              <li>Replaced adaptive launcher notification icons with a dedicated monochrome status vector icon for rock-solid Android 8&ndash;16 DM and social notifications.</li>
+            </ul>
+          </div>
+          <div class="cl-item">
+            <div class="cl-title">Live Video Calling + Real-Pilot Cloud Discovery, Online Status &amp; Friend Request Pop-Ups</div>
+            <ul class="cl-list">
+              <li>Fixed blank/placeholder video poster on two-way video calls and upgraded automatic cloud video + speakerphone audio relay across phones and tablets.</li>
+              <li>Purged all auto-generated bot pilots, expanded Firestore rules for cross-Gmail pilot discovery, and added live green <strong>ONLINE NOW</strong> presence badges on Boards, DMs, and Rider Radar.</li>
+              <li>Persisted pilot following directly to Cloud Firestore with instant in-app and Android pop-up <strong>Friend Request Notifications</strong> (with 1-tap Follow Back &amp; Message).</li>
+            </ul>
+          </div>
+          <div class="cl-item">
+            <div class="cl-title">Authentic OEM LCD / LED / TFT HUDs, High-Poly 3D PEVs &amp; Upgraded AI Labs</div>
+            <ul class="cl-list">
+              <li>True vector 7-segment hardware renderer with ghosted crystal shadows for reflective monochrome S866, backlit blue SW900, green Minimotors EYE3, smoked acrylic Ninebot stem LED, round QS-S4 trigger LCD, Bafang DPC-18 IPS TFT, and rugged Nami/Kaabo Matrix TFT.</li>
+              <li>Upgraded 3D Rig Lab with batched triangle rendering + ambient occlusion and mounted sculpted high-poly 3D PEVs directly onto the dirt road with sky, trees, and procedural wildflowers in Gravel Volt Runner 3D.</li>
+              <li>Upgraded all Firebase AI Logic Gemini 3.x/4.x labs with automatic multi-model fallback and strict MPH/KM/H &amp; &deg;F/&deg;C unit sync.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">COMPLETE PEV COMMAND SUITE</div>
+          <h2>Explore Every Subsystem</h2>
+          <p class="sub">Switch tabs to inspect the engineering, telemetry, social, and AI tools included in Build 58.</p>
+        </div>
+        <div class="tabs" role="tablist">
+          <button class="tab-btn active" data-tab="all" type="button">All Modules</button>
+          <button class="tab-btn" data-tab="cockpit" type="button">HUDs &amp; Telemetry</button>
+          <button class="tab-btn" data-tab="3d" type="button">3D Lab &amp; Game</button>
+          <button class="tab-btn" data-tab="social" type="button">Radar, Calls &amp; Boards</button>
+          <button class="tab-btn" data-tab="ai" type="button">AI Mechanic &amp; Co-Pilot</button>
+        </div>
+        <div class="grid-3" id="feature-grid">
+          <article class="card" data-cat="cockpit"><span class="card-tag">OEM HARDWARE HUDS</span><h3>Authentic LCD, LED &amp; IPS TFT Displays</h3><p>Physical S866 reflective monochrome STN LCD, backlit cobalt SW900, emerald Minimotors EYE3, Ninebot smoked stem LED, QS-S4 trigger LCD, Bafang DPC-18 TFT, and Nami/Kaabo Matrix TFT with live voltage sag and global MPH/KM/H sync.</p></article>
+          <article class="card" data-cat="3d"><span class="card-tag">3D CAD &amp; DYNO LAB</span><h3>88 Photorealistic 3D PEV Models</h3><p>Studio 3D PBR, OpenGL ES 3.0 GGX PBR, and WebGL 2.0 Clearcoat viewports with 3D knobby tires, cross-drilled rotors, copper stator cores, ambient occlusion, Explode CAD teardown, and live Dyno sweep.</p></article>
+          <article class="card" data-cat="3d"><span class="card-tag">3D ARCADE RUNNER</span><h3>Gravel Volt Runner 3D</h3><p>Ride your sculpted high-poly 3D Garage PEV down a rural sienna dirt &amp; gravel trail with golden-hour skies, mountain ridges, pine/oak forests, swaying wildflowers, and rear-tire dust trails.</p></article>
+          <article class="card" data-cat="social"><span class="card-tag">REAL PILOTS ONLY</span><h3>Rider Radar, Live Video Calls &amp; Boards</h3><p>Zero bot accounts. Discover real Gmail pilots with live ONLINE badges, persistent cloud following, instant Friend Request pop-ups, crash-free DMs, Push-to-Talk Walkie-Talkie, and two-way live Video &amp; Speakerphone calling.</p></article>
+          <article class="card" data-cat="ai"><span class="card-tag">FIREBASE AI LOGIC</span><h3>Gemini Bench Eyes Mechanic &amp; Co-Pilot</h3><p>Point your camera at brakes, controllers, or packs for live AI hardware diagnosis, 17-bay engineering calculators, 4-model Spec &amp; Parts Engine, 20 riding personas, Custom Voice Studio, and Image/Music AI Labs.</p></article>
+          <article class="card" data-cat="cockpit"><span class="card-tag">FIELD SURVIVAL</span><h3>Long-Range Optical Morse &amp; 11 Fleet Graphs</h3><p>1x&ndash;6x telephoto point-source Optical Morse flashlight transceiver for 150m+ distance, RainViewer Doppler storm radar, OSMDroid trail routing, and 11 interactive Telemetry Studio graphs.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="download">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">INSTALL &amp; DEPLOY</div>
+          <h2>GitHub Release &amp; Google Play Distribution</h2>
+          <p class="sub">Install the signed Android APK directly from GitHub Releases or deploy the signed Android App Bundle (.aab) to Google Play Console.</p>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <span class="card-tag">DIRECT ANDROID APK</span>
+            <h3>Download from GitHub Releases</h3>
+            <p>Every tagged release (<span class="mono">v58.0</span>) automatically builds, signs, verifies, and publishes <span class="mono">app-release.apk</span>, <span class="mono">app-release.aab</span>, and <span class="mono">SHA256SUMS.txt</span> via GitHub Actions.</p>
+            <div style="margin-top:8px;"><a class="btn btn-primary" id="card-apk-btn" href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest" target="_blank" rel="noopener">Open Latest Release</a></div>
+          </div>
+          <div class="card">
+            <span class="card-tag">GOOGLE PLAY CONSOLE</span>
+            <h3>Play Store Compliant Build 58</h3>
+            <p>Built with <span class="mono">versionCode = 58</span>, <span class="mono">targetSdk = 36</span>, zero restricted storage or install permissions, Android Photo Picker, and signed App Bundle (<span class="mono">.aab</span>) ready for Google Play production or testing tracks.</p>
+            <div style="margin-top:8px;"><a class="btn btn-secondary" href="https://github.com/bradley3398/Rural-Erides-GO/actions" target="_blank" rel="noopener">Open GitHub Actions CI</a></div>
+          </div>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- Footer -->
-  <footer class="border-t border-slate-800 bg-slate-950 py-10 px-5">
-    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-400">
-      <div>
-        <strong class="text-white">Rural ERides GO</strong> • Created by <strong class="text-emerald-400">Lord Bradley Callison</strong> • KEEP IT RURAL YALL
-      </div>
-      <div class="flex items-center gap-5 text-xs font-semibold">
-        <a href="https://github.com/bradley3398/Rural-Erides-GO" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition">Repository</a>
-        <a href="https://github.com/bradley3398/Rural-Erides-GO/releases" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition">Releases</a>
-        <a href="https://github.com/bradley3398/Rural-Erides-GO/issues" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition">Issues</a>
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Full screen app screenshot">
+    <img id="lightbox-img" src="" alt="Full screen preview" />
+    <div class="lightbox-bar">
+      <span id="lightbox-caption"></span>
+      <button class="btn btn-primary" id="lightbox-close" type="button">Close</button>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container footer-flex">
+      <div><strong>Rural ERides GO</strong> &mdash; Created &amp; Architected by <strong>Lord Bradley Callison</strong><br /><span>"KEEP IT RURAL Y'ALL" &bull; Package <span class="mono">com.aistudio.volttrail.kqrmvx</span></span></div>
+      <div class="nav-links">
+        <a href="https://github.com/bradley3398/Rural-Erides-GO" target="_blank" rel="noopener">GitHub Repo</a>
+        <a href="https://github.com/bradley3398/Rural-Erides-GO/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/bradley3398/Rural-Erides-GO/issues" target="_blank" rel="noopener">Report Issue</a>
       </div>
     </div>
   </footer>
 
   <script>
-    const FEATURES = {
-      riglab: {
-        badge: '88 Curated PEVs • Studio 3D PBR + OpenGL ES 3.0 + WebGL 2.0',
-        title: 'Massive 88-Model Multi-Tech 3D Rig Lab with 3D Knobby Tires',
-        desc: 'Inspect 88 real-world PEV models across 3 zero-blank-screen 3D rendering technologies with authentic 24-lug 3D off-road knobby tires, deep vulcanized rubber, wave-slotted cross-drilled rotors, copper stator cores, and 7 interactive subsystem hotspots.',
-        bullets: [
-          '3 Zero-Blank-Viewport 3D Engines: Studio 3D PBR, OpenGL ES 3.0 GGX PBR, and WebGL 2.0 GLB Clearcoat',
-          'Realistic 3D Wheel Geometry: 24 raised 3D knobby center & shoulder tread lugs, 20 cross-laced spokes, and copper stator hubs',
-          '88 Models across 5 Categories: e-Moto & Dirt (23), Hyper-Scooter (26), EUC (19), e-Bike & Moped (17), and Specialty (3)',
-          '4 Inspection Modes: Touch Orbit, Gyro Tilt (live IMU tilt), Dyno Sweep (5–65 MPH + Thermal IR), and Explode CAD Teardown'
-        ],
-        specs: [
-          ['3D Pipelines', 'Studio 3D PBR • OpenGL ES 3.0 GGX • WebGL 2.0 Clearcoat'],
-          ['Wheel Detail', '24 3D Knobby Lugs + 6-Arm Floating Wave Rotors'],
-          ['Materials', 'Vulcanized Rubber, Woven Carbon & Copper Stator'],
-          ['Reliability', '100% Zero Blank Viewports on Tablets & Phones']
-        ]
-      },
-      quizgame: {
-        badge: 'PEV Certification Exam + OpenGL ES 3D Trail Runner',
-        title: 'PEV Knowledge & Certification Test + Gravel Volt Runner 3D',
-        desc: 'Test your PEV engineering and safety knowledge with 16+ curated questions and unlimited Gemini AI custom questions, then hit the rural roads in Gravel Volt Runner 3D with realistic multi-part 3D PEV rigs.',
-        bullets: [
-          'PEV Knowledge Test Tab in 3D Lab, Studio Hub & Game: 4 tracks (Battery & BMS, e-Moto & Scooter, EUC Dynamics, Trail Safety)',
-          'Live Gemini AI Custom Question Generator tailored to your exact PEV model and voltage + Certification Rank Badges',
-          'Upgraded Gravel Volt Runner 3D Player Rigs: spinning 3D knobby tires, alloy rims, red 4-piston calipers, USD forks, and glowing TFT dash',
-          'Live Title-Screen 3D Rig Selector, 4-way open-street intersections ("turn on any street"), and rotating Trail Missions'
-        ],
-        specs: [
-          ['Exam Tracks', 'Battery/BMS • e-Moto/Scooter • EUC • Trail Safety'],
-          ['AI Generator', 'Firebase AI Logic (Multi-Model Gemini Custom Questions)'],
-          ['3D Game Engine', 'Native OpenGL ES 3D with Multi-Part PEV Rigs'],
-          ['Social Integration', '1-Tap Share Certification & High Scores to Porch Board']
-        ]
-      },
-      graphs: {
-        badge: 'Telemetry Studio • 11 Fleet Windows + Ride Inspector',
-        title: 'Upgraded Graphs & Crash-Proof Ride Inspector',
-        desc: 'Analyze fleet-wide efficiency and inspect individual rides without memory spikes. The 5-module Ride Inspector replaces the old stacked Per-Ride Deep Dive with fast, crash-proof single-module switching.',
-        bullets: [
-          '11 Fleet Graph Windows with live KPI subtitles (Speed, Climb, Efficiency/Voltage, Distance/Wh, 5-Slice Pie, Scatter, Duration, Watts/Amps, Radar, Gas ROI, AI Coach)',
-          'Personal Records Ribbon: 1-tap jump to Fastest Peak, Longest Trip, Biggest Climb, and Best Efficiency',
-          '5-Module Ride Inspector: Speed Curve, Climb Profile, Energy & Pack, GPS Route, and Replay & AI',
-          'Full-screen Analytics Modal with Simple Moving Average (SMA), Linear Trend, and Z-Score outlier detection'
-        ],
-        specs: [
-          ['GPS Parsing', 'Single-pass polyline parse per ride (5x faster)'],
-          ['NaN / Bounds Safety', 'Finite guards on curves, maps & Canvas clipRect'],
-          ['Export & Review', 'Synchronized timeline replay + Gemini AI debrief'],
-          ['UI Hygiene', 'Zero duplicate window or action buttons']
-        ]
-      },
-      cockpit: {
-        badge: 'Real Hardware Sensors • 1Hz–5Hz GPS + 9-DOF IMU',
-        title: 'Tactical Neon Cockpit & 9-DOF AHRS',
-        desc: 'Turn your Android phone into a high-contrast PEV avionics instrument panel with live sensor fusion, real battery sag physics, and 14 selectable HUD layouts.',
-        bullets: [
-          '9-DOF Sensor Fusion: Pitch, Roll with peak lean hold & lean alert, 360° Yaw compass, and Artificial Horizon',
-          'Exact NMC & LiFePO4 battery voltage curves (36V–151V) with live under-load sag estimation',
-          '10Hz–50Hz IMU crash detection with auto-cancelable SOS SMS dispatch & emergency siren',
-          'Road speed limit alerts, Return-to-Base homing beacon, and Long-Range Telephoto Hotspot Optical Morse Transceiver (1x–6x CameraX zoom + 3x3 point-source hotspot lock for 150m+ distance)'
-        ],
-        specs: [
-          ['HUD Skins', '14 switchable cockpit gauge styles'],
-          ['Location', 'Google FusedLocationProvider (1Hz–5Hz)'],
-          ['Battery Physics', 'Series cell OCV + internal resistance sag'],
-          ['Optical Morse', '1x–6x Telephoto Zoom + 3x3 Hotspot Schmitt Trigger']
-        ]
-      },
-      radar: {
-        badge: 'Multi-Device Mesh • Two-Way Audio/Video Calls + Speakerphone Boost',
-        title: 'Rider Radar, Live Audio/Video Calling & Weather',
-        desc: 'Coordinate rural convoy rides across phones and tablets with symmetric indoor/outdoor beacon sync (100% real human pilots, zero auto-generated bots), two-way audio/video calling with speakerphone boost, live Doppler storm overlays, and PEV turn-by-turn routing.',
-        bullets: [
-          'Symmetric Indoor & Outdoor Beacon Discovery: devices publish when Visible is ON even indoors before a GPS lock (zero PILOT_XXXXX bots)',
-          'Live Two-Way Audio & Video Calling: transparent full-screen video stage, Speakerphone Boost, WebRTC P2P + automatic Cloud Audio/Video Relay',
-          'True Fullscreen Map mode with 1-tap collapsible telemetry & group ride HUD pills',
-          'Live RainViewer Doppler storm radar, Open-Meteo 6-tab PEV weather matrix, and Push-to-Talk Squad Walkie-Talkie'
-        ],
-        specs: [
-          ['Map Engine', 'OSMDroid with True Fullscreen Collapsible HUD'],
-          ['Live Calling', '2-Way WebRTC P2P + Cloud Relay Audio/Video + Speaker Boost'],
-          ['Comms', 'Firestore mesh + real-time PCM Push-to-Talk'],
-          ['Discovery', '100% Real Human Pilots (Zero Auto-Generated Bots)']
-        ]
-      },
-      ai: {
-        badge: 'Firebase AI Logic • Gemini Vision & Voice',
-        title: 'AI Mechanic ("Bench Eyes") & Co-Pilot',
-        desc: 'Point your camera directly at a controller, BMS, brake caliper, or wiring harness for instant live Gemini Vision diagnosis alongside a 17-bay engineering calculator lab.',
-        bullets: [
-          'Live CameraX "Bench Eyes" workbench overlay with 1-tap Gemini visual hardware inspection',
-          '17-Bay Engineering Lab: wire drop, PWM headroom, motor/controller thermal, gearing, and OEM E-code decoder',
-          '20 Rural & PEV Co-Pilot personas + Custom AI Voice Studio with zero-latency streaming TTS buffer',
-          '4-Model PEV Spec Comparison Engine and offline Saved Briefings Vault'
-        ],
-        specs: [
-          ['AI SDK', 'Firebase AI Logic (App Check attested — no hardcoded keys)'],
-          ['Camera', 'CameraX live bench preview + Android Photo Picker'],
-          ['Voice', '10 Gemini neural bases + 8 DSP voice filters'],
-          ['Engineering', '17 live physics & electrical diagnostic bays']
-        ]
-      },
-      community: {
-        badge: 'Zero-Trust Firestore • Instant Multi-Device Crew Friending',
-        title: 'Porch Community Board, 1-Tap Friending, 24h Stories & Trail TV',
-        desc: 'Find and friend your other devices or squad riders immediately on Porch Feed, Trail Crew, and Top Riders—even on brand-new accounts with 0 rides logged.',
-        bullets: [
-          'Instant Crew Discovery: all signed-in accounts and live Rider Radar beacons appear on Porch Feed & Trail Crew with 1-tap + Friend, DM, and Call buttons',
-          'Live 24-Hour Rider Timeline Stories with zero-permission Photo Picker uploads and battery telemetry badges',
-          'Porch Board posts with Rural Trail Condition tags, polls, marketplace pricing, SOS triage, and threaded comments',
-          'Integrated Trail TV YouTube video/music mini-player and live PEV News Wire'
-        ],
-        specs: [
-          ['Auth', 'Google Sign-In via Jetpack Credential Manager'],
-          ['Crew Discovery', 'Combines user_profiles + live radar_riders mesh'],
-          ['Sync', 'Real-time Firestore snapshot listeners'],
-          ['Integrity', 'Strict authentic-pilot verification (no fake users)']
-        ]
+    (function () {
+      var RAW = 'https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/screenshots/';
+      var SLIDES = [
+        { label: 'Cockpit HUD', kicker: 'COCKPIT & OEM HARDWARE HUDS', title: 'Authentic Monochrome LCD, LED & IPS TFT Speedometers', desc: 'Switch between 14 cockpit displays including reflective olive-gray S866 STN LCD, cobalt backlit SW900, emerald Minimotors EYE3, smoked acrylic Ninebot Max LED stem, round QS-S4 trigger LCD, Bafang DPC-18 TFT, and rugged Nami/Kaabo Matrix TFT.', bullets: ['True vector 7-segment crystal digits with ghosted segments & live voltage sag', 'Live 9-DOF pitch/roll inclinometer & global MPH / KM/H + °F / °C unit sync', '1x–6x Telephoto Long-Range Optical Morse flashlight transceiver'], src: RAW + 'cockpit_hud.jpg' },
+        { label: '3D Rig Lab', kicker: '3D CAD & DYNO LAB (88 MODELS)', title: 'Photorealistic 3D PEV Models with 3D Knobby Tires', desc: 'Inspect 88 curated e-Motos, Hyper-Scooters, EUCs, and e-Bikes across Studio 3D PBR, OpenGL ES 3.0 GGX PBR, and WebGL 2.0 Clearcoat pipelines with ground/cavity ambient occlusion and zero blank screens.', bullets: ['24 raised 3D knobby tire lugs, cross-drilled floating rotors & copper stators', 'Touch Orbit, Gyro Tilt, 5–65 MPH Dyno Sweep & 0–100% Explode CAD teardown', 'Interactive PEV Knowledge & Certification Test with Gemini AI question generator'], src: RAW + 'lab_3d.jpg' },
+        { label: '3D Dirt Game', kicker: 'GRAVEL VOLT RUNNER 3D GAME', title: 'Sculpted High-Poly 3D Garage PEVs on Rural Dirt Trails', desc: 'Ride your actual sculpted 3D Garage PEV down a cambered sienna dirt and crushed-gravel backroad surrounded by golden-hour skies, layered Blue Ridge peaks, pine & oak trees, and swaying roadside wildflowers.', bullets: ['Mounts your active 3D PEV rig with spinning axles, turn banking & dirt dust trails', 'Procedural black-eyed Susans, purple lupine spires, daisies, hay bales & creeks', 'Fully synced with your Settings speed & distance units (MPH or KM/H)'], src: RAW + 'gravel_game.jpg' },
+        { label: 'Radar & Calls', kicker: 'REAL-PILOT RADAR, BOARDS & VIDEO CALLS', title: 'Zero Bots, Live ONLINE Badges & Two-Way Video Calling', desc: 'Connect with real Google-authenticated riders across phones and tablets. Discover crew members with live ONLINE NOW badges, persistent Cloud Firestore following, instant Friend Request pop-ups, and crash-free DMs.', bullets: ['Two-way live Video & Speakerphone calling with automatic cloud relay across NAT', '100% real human pilots — all auto-generated bot accounts blocked & purged', 'OSMDroid rural trail maps, RainViewer Doppler storm radar & PTT Walkie-Talkie'], src: RAW + 'radar_social.jpg' },
+        { label: 'AI Mechanic', kicker: 'FIREBASE AI LOGIC • GEMINI 3.8 & 4', title: 'Bench Eyes Camera Mechanic, Spec Engine & AI Co-Pilot', desc: 'Point your camera at brakes, motors, wiring harnesses, or battery packs for live Gemini AI visual inspection, backed by a 17-bay engineering calculator lab, 4-model Spec Comparison Engine, and 20 Co-Pilot personas.', bullets: ['Live CameraX Bench Eyes diagnostics with interactive AR callout boxes', 'Hardened Gemini 3.8 Flash / 3.5 Flash-Lite / 4 Argon & Nano Banana AI labs', 'Custom AI Voice Studio, Trail Soundtrack Composer & Search/Maps Trail Scout'], src: RAW + 'ai_mechanic.jpg' }
+      ];
+      var idx = 0, autoPlay = true, timer = null;
+      var mainImg = document.getElementById('carousel-main-img'), counterEl = document.getElementById('carousel-counter'), kickerEl = document.getElementById('carousel-kicker'), titleEl = document.getElementById('carousel-title'), descEl = document.getElementById('carousel-desc'), bulletsEl = document.getElementById('carousel-bullets'), thumbsEl = document.getElementById('carousel-thumbs'), playBtn = document.getElementById('carousel-btn-play'), lightbox = document.getElementById('lightbox'), lightboxImg = document.getElementById('lightbox-img'), lightboxCap = document.getElementById('lightbox-caption');
+      function buildThumbs() {
+        thumbsEl.innerHTML = '';
+        SLIDES.forEach(function (s, i) {
+          var b = document.createElement('button');
+          b.type = 'button'; b.className = 'thumb-btn' + (i === idx ? ' active' : '');
+          b.innerHTML = '<img src="' + s.src + '" alt="' + s.label + '" /><span>' + s.label + '</span>';
+          b.addEventListener('click', function () { goTo(i); resetAuto(); });
+          thumbsEl.appendChild(b);
+        });
       }
-    };
-
-    function renderFeature(key) {
-      const f = FEATURES[key] || FEATURES.riglab;
-      document.getElementById('fp-badge').textContent = f.badge;
-      document.getElementById('fp-title').textContent = f.title;
-      document.getElementById('fp-desc').textContent = f.desc;
-
-      const ul = document.getElementById('fp-bullets');
-      ul.innerHTML = '';
-      f.bullets.forEach(item => {
-        const li = document.createElement('li');
-        li.className = 'flex items-start gap-2.5';
-        li.innerHTML = '<span class="text-emerald-400 font-black mt-0.5">▸</span><span>' + item + '</span>';
-        ul.appendChild(li);
-      });
-
-      const specs = document.getElementById('fp-specs');
-      specs.innerHTML = '';
-      f.specs.forEach(([k, v]) => {
-        const row = document.createElement('div');
-        row.className = 'flex flex-col border-b border-slate-800/80 pb-2.5 last:border-0 last:pb-0';
-        row.innerHTML = '<span class="text-[11px] font-mono-tech uppercase text-slate-500">' + k + '</span><span class="text-slate-200 font-semibold">' + v + '</span>';
-        specs.appendChild(row);
-      });
-
-      document.querySelectorAll('.feature-tab').forEach(btn => {
-        const active = btn.getAttribute('data-tab') === key;
-        btn.classList.toggle('tab-btn-active', active);
-        btn.classList.toggle('bg-slate-900/90', !active);
-        btn.classList.toggle('text-slate-300', !active);
-      });
-    }
-
-    document.querySelectorAll('.feature-tab').forEach(btn => {
-      btn.addEventListener('click', () => renderFeature(btn.getAttribute('data-tab')));
-    });
-    renderFeature('riglab');
+      function goTo(n) {
+        idx = (n + SLIDES.length) % SLIDES.length;
+        var s = SLIDES[idx];
+        mainImg.src = s.src; mainImg.alt = s.title;
+        counterEl.textContent = (idx + 1) + ' / ' + SLIDES.length;
+        kickerEl.textContent = s.kicker; titleEl.textContent = s.title; descEl.textContent = s.desc;
+        bulletsEl.innerHTML = s.bullets.map(function (b) { return '<li>' + b + '</li>'; }).join('');
+        thumbsEl.querySelectorAll('.thumb-btn').forEach(function (btn, i) { btn.classList.toggle('active', i === idx); });
+      }
+      function resetAuto() { if (timer) clearInterval(timer); if (autoPlay) timer = setInterval(function () { goTo(idx + 1); }, 5500); }
+      buildThumbs(); goTo(0); resetAuto();
+      document.getElementById('carousel-prev').addEventListener('click', function () { goTo(idx - 1); resetAuto(); });
+      document.getElementById('carousel-next').addEventListener('click', function () { goTo(idx + 1); resetAuto(); });
+      document.getElementById('carousel-btn-next').addEventListener('click', function () { goTo(idx + 1); resetAuto(); });
+      playBtn.addEventListener('click', function () { autoPlay = !autoPlay; playBtn.textContent = autoPlay ? 'Pause Autoplay' : 'Resume Autoplay'; resetAuto(); });
+      function openLightbox() { lightboxImg.src = SLIDES[idx].src; lightboxCap.textContent = SLIDES[idx].title; lightbox.classList.add('open'); }
+      document.getElementById('carousel-zoom-trigger').addEventListener('click', openLightbox);
+      document.getElementById('carousel-btn-zoom').addEventListener('click', openLightbox);
+      document.getElementById('lightbox-close').addEventListener('click', function () { lightbox.classList.remove('open'); });
+      lightbox.addEventListener('click', function (e) { if (e.target === lightbox) lightbox.classList.remove('open'); });
+      var touchStartX = 0;
+      document.getElementById('carousel-swipe-area').addEventListener('touchstart', function (e) { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+      document.getElementById('carousel-swipe-area').addEventListener('touchend', function (e) { var dx = e.changedTouches[0].screenX - touchStartX; if (Math.abs(dx) > 40) { goTo(dx < 0 ? idx + 1 : idx - 1); resetAuto(); } }, { passive: true });
+      var tabBtns = document.querySelectorAll('.tab-btn'), cards = document.querySelectorAll('#feature-grid .card');
+      tabBtns.forEach(function (btn) { btn.addEventListener('click', function () { tabBtns.forEach(function (b) { b.classList.remove('active'); }); btn.classList.add('active'); var cat = btn.getAttribute('data-tab'); cards.forEach(function (c) { c.style.display = (cat === 'all' || c.getAttribute('data-cat') === cat) ? 'flex' : 'none'; }); }); });
+      fetch('https://api.github.com/repos/bradley3398/Rural-Erides-GO/releases/latest', { headers: { 'Accept': 'application/vnd.github+json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (rel) {
+          if (!rel) { document.getElementById('rel-apk').textContent = 'View on GitHub Releases'; return; }
+          document.getElementById('rel-tag').textContent = rel.name || rel.tag_name || 'v58.0';
+          var assets = Array.isArray(rel.assets) ? rel.assets : [];
+          var apk = assets.find(function (a) { return a.name && a.name.toLowerCase().endsWith('.apk'); });
+          var aab = assets.find(function (a) { return a.name && a.name.toLowerCase().endsWith('.aab'); });
+          if (apk && apk.browser_download_url) {
+            document.getElementById('rel-apk').innerHTML = '<a href="' + apk.browser_download_url + '" style="text-decoration:underline;color:#6EE7B7;">' + apk.name + '</a>';
+            ['nav-apk-btn', 'hero-apk-btn', 'card-apk-btn'].forEach(function (id) { var el = document.getElementById(id); if (el) el.href = apk.browser_download_url; });
+          } else { document.getElementById('rel-apk').textContent = 'Check Releases Page'; }
+          if (aab && aab.browser_download_url) { document.getElementById('rel-aab').innerHTML = '<a href="' + aab.browser_download_url + '" style="text-decoration:underline;color:#67E8F9;">' + aab.name + '</a>'; }
+        })
+        .catch(function () { document.getElementById('rel-apk').textContent = 'View on GitHub Releases'; });
+    })();
   </script>
 </body>
 </html>

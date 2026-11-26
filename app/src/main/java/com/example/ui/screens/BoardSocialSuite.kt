@@ -423,7 +423,12 @@ fun BoardSocialHubTab(
                     )
                   }
                 }
-                Text("${pilot.rankBadge} • ${pilot.xpPoints} XP • ${rigSpec.displayRigName}", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                  "${if (pilot.isLiveOnline()) "🟢 ONLINE • " else ""}${pilot.rankBadge} • ${pilot.xpPoints} XP • ${rigSpec.displayRigName}",
+                  style = MaterialTheme.typography.labelSmall,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
                 Text(
                   "${rigSpec.paceTier.label} • ${rigSpec.terrainPref.label} • ~${rigSpec.usableRangeMi}mi • ${rigSpec.scheduleVibe.label}",
                   style = MaterialTheme.typography.labelSmall,
@@ -443,7 +448,7 @@ fun BoardSocialHubTab(
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                   OutlinedButton(
-                    onClick = { socialVm.toggleFollowPilot(myUid, pilot.userId) },
+                    onClick = { socialVm.toggleFollowPilot(myUid, pilot.userId, myCallsign, pilot.callsign) },
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                   ) {
                     Icon(if (isFollowing) Icons.Default.PersonRemove else Icons.Default.PersonAdd, null, Modifier.size(14.dp))

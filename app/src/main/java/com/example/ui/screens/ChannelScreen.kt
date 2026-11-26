@@ -543,7 +543,6 @@ fun ChannelScreen(
   }
 
   if (showWatchlist) {
-    BackHandler { showWatchlist = false }
     ModalBottomSheet(onDismissRequest = { showWatchlist = false }) {
       Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -590,7 +589,6 @@ fun ChannelScreen(
   }
 
   if (showRecentHistory) {
-    BackHandler { showRecentHistory = false }
     ModalBottomSheet(onDismissRequest = { showRecentHistory = false }) {
       Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

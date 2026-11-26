@@ -285,12 +285,16 @@ class LocalRiderVault(private val context: Context) {
     }.getOrDefault(emptySet())
   }
 
+  suspend fun saveFollowedPilotIds(uid: String, ids: Set<String>) {
+    val arr = JSONArray()
+    ids.forEach { arr.put(it) }
+    context.localVaultStore.edit { it[followedPilotsKey(uid)] = arr.toString() }
+  }
+
   suspend fun toggleFollowedPilotId(uid: String, targetUid: String): Set<String> {
     val current = loadFollowedPilotIds(uid).toMutableSet()
     if (!current.add(targetUid)) current.remove(targetUid)
-    val arr = JSONArray()
-    current.forEach { arr.put(it) }
-    context.localVaultStore.edit { it[followedPilotsKey(uid)] = arr.toString() }
+    saveFollowedPilotIds(uid, current)
     return current
   }
 

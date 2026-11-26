@@ -128,7 +128,6 @@ fun LiveArHudOverlay(
   onCancelNav: (() -> Unit)? = null,
   onDismiss: () -> Unit,
 ) {
-  BackHandler(onBack = onDismiss)
   val ctx = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
   val haptics = LocalHapticFeedback.current

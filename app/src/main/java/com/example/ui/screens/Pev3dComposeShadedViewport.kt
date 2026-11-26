@@ -131,7 +131,13 @@ internal fun Pev3dComposeShadedViewport(
     )
   }
   val buffers = remember { ComposeTriSortBuffers() }
-  val paint = remember { AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG) }
+  val paint = remember {
+    AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+      color = android.graphics.Color.WHITE
+      style = AndroidPaint.Style.FILL
+      isFilterBitmap = true
+    }
+  }
 
   val isBlueprintMode = renderMode == Pev3dRenderMode.BLUEPRINT
   val bgBrush = remember(lightingPreset, isBlueprintMode, techEngine) {
@@ -610,7 +616,11 @@ internal fun Pev3dComposeShadedViewport(
           }
         }
 
-        val hemi = 0.16f + 0.18f * (0.5f + 0.5f * ny)
+        val hemi = 0.16f + 0.20f * (0.5f + 0.5f * ny)
+        // Ground-contact & under-chassis cavity ambient occlusion for realistic photoreal depth
+        val groundAo = (0.64f + 0.36f * ((wy + 0.52f) / 0.42f).coerceIn(0f, 1f))
+        val cavityAo = (0.76f + 0.24f * (0.5f + 0.5f * ny))
+        val ao = if (isXray || emR + emG + emB > 0.25f) 1f else (groundAo * cavityAo).coerceIn(0.48f, 1f)
         val rimScale = if (isRubberOrLeather) 0.06f else (0.24f + part.metallic * 0.28f + part.clearcoat * 0.20f)
         val rimTerm = fresnel * rimScale
 
@@ -619,19 +629,19 @@ internal fun Pev3dComposeShadedViewport(
         val specTintG = 1f * (1f - part.metallic * 0.55f) + albedoG * (part.metallic * 0.55f)
         val specTintB = 1f * (1f - part.metallic * 0.55f) + albedoB * (part.metallic * 0.55f)
 
-        var r = albedoR * (hemi + diffKey * kr * 0.82f + diffFill * fillRgb[0] * 0.44f) +
-          spec * kr * specTintR + softboxSheen * specTintR + rimTerm * rimRgb[0] + emR * 0.85f
-        var g = albedoG * (hemi + diffKey * kg * 0.82f + diffFill * fillRgb[1] * 0.44f) +
-          spec * kg * specTintG + softboxSheen * specTintG + rimTerm * rimRgb[1] + emG * 0.85f
-        var b = albedoB * (hemi + diffKey * kb * 0.82f + diffFill * fillRgb[2] * 0.44f) +
-          spec * kb * specTintB + softboxSheen * specTintB + rimTerm * rimRgb[2] + emB * 0.85f
+        var r = albedoR * ao * (hemi + diffKey * kr * 0.86f + diffFill * fillRgb[0] * 0.44f) +
+          spec * kr * specTintR + softboxSheen * specTintR + rimTerm * rimRgb[0] + emR * 0.90f
+        var g = albedoG * ao * (hemi + diffKey * kg * 0.86f + diffFill * fillRgb[1] * 0.44f) +
+          spec * kg * specTintG + softboxSheen * specTintG + rimTerm * rimRgb[1] + emG * 0.90f
+        var b = albedoB * ao * (hemi + diffKey * kb * 0.86f + diffFill * fillRgb[2] * 0.44f) +
+          spec * kb * specTintB + softboxSheen * specTintB + rimTerm * rimRgb[2] + emB * 0.90f
 
         if (isSel) {
           r += 0.14f + 0.28f * fresnel
           g += 0.30f + 0.46f * fresnel
           b += 0.48f + 0.62f * fresnel
         }
-        vertColors[vi] = packArgb(alpha, acesTone(r * 1.12f), acesTone(g * 1.12f), acesTone(b * 1.12f))
+        vertColors[vi] = packArgb(alpha, acesTone(r * 1.14f), acesTone(g * 1.14f), acesTone(b * 1.14f))
       }
 
       val indices = part.indices
@@ -683,20 +693,27 @@ internal fun Pev3dComposeShadedViewport(
     }
 
     drawIntoCanvas { canvas ->
-      canvas.nativeCanvas.drawVertices(
-        AndroidCanvas.VertexMode.TRIANGLES,
-        triCount * 6,
-        dstVerts,
-        0,
-        null,
-        0,
-        dstCols,
-        0,
-        null,
-        0,
-        0,
-        paint,
-      )
+      val nc = canvas.nativeCanvas
+      val maxBatchTris = 2400
+      var triOffset = 0
+      while (triOffset < triCount) {
+        val batchTris = min(maxBatchTris, triCount - triOffset)
+        nc.drawVertices(
+          AndroidCanvas.VertexMode.TRIANGLES,
+          batchTris * 6,
+          dstVerts,
+          triOffset * 6,
+          null,
+          0,
+          dstCols,
+          triOffset * 3,
+          null,
+          0,
+          0,
+          paint,
+        )
+        triOffset += batchTris
+      }
     }
 
     if (isBlueprint) {

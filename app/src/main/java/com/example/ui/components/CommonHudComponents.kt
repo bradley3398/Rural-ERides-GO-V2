@@ -125,6 +125,12 @@ fun formatDistValue(km: Double, unit: String): Double =
 
 fun distUnitLabel(unit: String): String = if (unit == "km") "km" else "mi"
 
+fun formatDistanceLabel(km: Double, unit: String, decimals: Int = 1): String =
+  "%.${decimals}f %s".format(formatDistValue(km, unit), distUnitLabel(unit))
+
+fun formatDistLabel(km: Double, unit: String, decimals: Int = 1): String =
+  formatDistanceLabel(km, unit, decimals)
+
 fun formatTempLabel(tempC: Double, tempUnit: String): String =
   if (tempUnit == "c") "${"%.1f".format(tempC)}°C" else "${"%.1f".format(tempC * 9.0 / 5.0 + 32.0)}°F"
 

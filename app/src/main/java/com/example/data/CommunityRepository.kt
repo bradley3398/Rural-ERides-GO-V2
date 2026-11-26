@@ -70,8 +70,8 @@ class CommunityRepository(
             )
           }
 
-      val existingUids = fromProfiles.map { it.userId }.toSet()
-      val fromRadar =
+      val nowMs = System.currentTimeMillis()
+      val radarList =
         radarSnap
           .toObjects(
             RadarRider::class.java,
@@ -79,7 +79,6 @@ class CommunityRepository(
           )
           .filter { r ->
             r.userId.isNotBlank() &&
-              r.userId !in existingUids &&
               isAuthenticPilot(
                 userId = r.userId,
                 callsign = r.callsign,
@@ -87,7 +86,32 @@ class CommunityRepository(
                 requireFirebaseUid = false,
               )
           }
+      val radarByUid = radarList.associateBy { it.userId }
+      val mergedProfiles =
+        fromProfiles.map { p ->
+          val r = radarByUid[p.userId]
+          val radarFresh =
+            r != null &&
+              !r.statusTag.equals("OFFLINE", ignoreCase = true) &&
+              ((r.updatedAt?.seconds ?: 0L) > 0L && (nowSec - (r.updatedAt?.seconds ?: 0L)) <= 360L)
+          val effectiveOnline = p.isLiveOnline(nowMs) || radarFresh || (currentUid != null && p.userId == currentUid)
+          val effectiveSeenMs =
+            maxOf(
+              p.lastSeenMs,
+              (p.updatedAt?.seconds ?: 0L) * 1000L,
+              (r?.updatedAt?.seconds ?: 0L) * 1000L,
+            )
+          p.copy(online = effectiveOnline, lastSeenMs = effectiveSeenMs)
+        }
+
+      val existingUids = mergedProfiles.map { it.userId }.toSet()
+      val fromRadar =
+        radarList
+          .filter { it.userId !in existingUids }
           .map { r ->
+            val radarFresh =
+              !r.statusTag.equals("OFFLINE", ignoreCase = true) &&
+                ((r.updatedAt?.seconds ?: 0L) > 0L && (nowSec - (r.updatedAt?.seconds ?: 0L)) <= 360L)
             PublicPilotProfile(
               id = r.userId,
               userId = r.userId,
@@ -101,14 +125,20 @@ class CommunityRepository(
               trustScore = 100L,
               vehicleSummary = r.vehicleName.ifBlank { "PEV Rig" },
               visibility = "PUBLIC",
+              online = radarFresh,
+              lastSeenMs = (r.updatedAt?.seconds ?: 0L) * 1000L,
               createdAt = r.createdAt,
               updatedAt = r.updatedAt,
             )
           }
 
-      (fromProfiles + fromRadar)
-        .sortedByDescending { it.xpPoints }
+      (mergedProfiles + fromRadar)
         .distinctBy { it.userId }
+        .sortedWith(
+          compareByDescending<PublicPilotProfile> { it.online }
+            .thenByDescending { it.lastSeenMs }
+            .thenByDescending { it.xpPoints }
+        )
     }
 
   // --------------------------------------------------------------------------
@@ -927,6 +957,7 @@ class CommunityRepository(
               "participantUids" to sorted,
               "participantCallsigns" to listOf(myCallsign.take(32), peerCallsign.take(32)),
               "lastMessage" to preview.take(300),
+              "lastSenderId" to uid,
               "selfDestructSec" to selfDestructSec.coerceIn(0L, 604800L),
               "createdAt" to FieldValue.serverTimestamp(),
               "updatedAt" to FieldValue.serverTimestamp(),
@@ -938,6 +969,7 @@ class CommunityRepository(
           .update(
             mapOf(
               "lastMessage" to preview.take(300),
+              "lastSenderId" to uid,
               "selfDestructSec" to selfDestructSec.coerceIn(0L, 604800L),
               "updatedAt" to FieldValue.serverTimestamp(),
             )

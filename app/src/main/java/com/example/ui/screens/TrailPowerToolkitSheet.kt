@@ -122,8 +122,6 @@ fun TrailPowerToolkitSheet(
   voiceAudio: VoiceAudioManager? = null,
   onDismiss: () -> Unit,
 ) {
-  BackHandler { onDismiss() }
-
   val ctx = LocalContext.current
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   var activeTab by remember { mutableIntStateOf(0) }

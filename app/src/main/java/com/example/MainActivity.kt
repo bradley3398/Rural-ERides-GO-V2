@@ -3,11 +3,15 @@ package com.example
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,9 +19,21 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -156,6 +173,7 @@ fun VoltTrailRootApp(
   val appUpdateState by sessionVm.appUpdateState.collectAsStateWithLifecycle()
   val updateModalOpen by sessionVm.updateModalOpen.collectAsStateWithLifecycle()
   val updateBannerDismissed by sessionVm.updateBannerDismissed.collectAsStateWithLifecycle()
+  val activeFriendRequestAlert by sessionVm.activeFriendRequestAlert.collectAsStateWithLifecycle()
 
   val telemetry by cockpitVm.telemetry.collectAsStateWithLifecycle()
   val vehicles by cockpitVm.vehicles.collectAsStateWithLifecycle()
@@ -258,6 +276,28 @@ fun VoltTrailRootApp(
     )
     activeOverlay = OverlayCompartment.NONE
     activeTab = nextTab
+  }
+
+  val hasRootBackTarget =
+    !showSplash &&
+      (startMenuOpen ||
+        updateModalOpen ||
+        prayerOverlayOpen ||
+        dmSheetOpen ||
+        activeFriendRequestAlert != null ||
+        activeOverlay != OverlayCompartment.NONE ||
+        activeTab != PrimaryTabCompartment.COCKPIT)
+
+  BackHandler(enabled = hasRootBackTarget) {
+    when {
+      startMenuOpen -> startMenuOpen = false
+      activeFriendRequestAlert != null -> sessionVm.dismissFriendRequestAlert(markRead = true)
+      dmSheetOpen -> dmSheetOpen = false
+      updateModalOpen -> sessionVm.openUpdateModal(false)
+      prayerOverlayOpen -> sessionVm.openPrayerOverlay(false)
+      activeOverlay != OverlayCompartment.NONE -> activeOverlay = OverlayCompartment.NONE
+      activeTab != PrimaryTabCompartment.COCKPIT -> activeTab = PrimaryTabCompartment.COCKPIT
+    }
   }
 
   RuralERidesTheme(
@@ -603,6 +643,88 @@ fun VoltTrailRootApp(
                 onSkipBuild = { tag -> sessionVm.skipUpdateTag(tag) },
                 onDismiss = { sessionVm.openUpdateModal(false) },
               )
+            }
+
+            activeFriendRequestAlert?.let { fr ->
+              Surface(
+                modifier =
+                  Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .fillMaxWidth()
+                    .widthIn(max = 560.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+                shadowElevation = 10.dp,
+              ) {
+                Column(
+                  modifier = Modifier.padding(14.dp),
+                  verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                  ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                      Icon(
+                        Icons.Default.PersonAdd,
+                        contentDescription = "Friend Request",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                      )
+                      Spacer(Modifier.width(8.dp))
+                      Column {
+                        Text(
+                          fr.title.ifBlank { "Friend Request" },
+                          style = MaterialTheme.typography.titleSmall,
+                          fontWeight = FontWeight.Black,
+                          color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                          fr.body.ifBlank { "Wants to connect and ride with you." },
+                          style = MaterialTheme.typography.bodySmall,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                      }
+                    }
+                    IconButton(onClick = { sessionVm.dismissFriendRequestAlert(markRead = true) }) {
+                      Icon(Icons.Default.Close, contentDescription = "Dismiss Friend Request")
+                    }
+                  }
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                  ) {
+                    val senderUid = fr.senderId.ifBlank { fr.userId }
+                    val senderCs = fr.senderCallsign.ifBlank { "PILOT" }
+                    val myUid = activeUser?.uid.orEmpty()
+                    val myCs = profile?.callsign.orEmpty()
+                    Button(
+                      onClick = {
+                        if (myUid.isNotBlank() && senderUid.isNotBlank() && senderUid != myUid) {
+                          socialVm.toggleFollowPilot(myUid, senderUid, myCs, senderCs)
+                        }
+                        sessionVm.dismissFriendRequestAlert(markRead = true)
+                      },
+                      modifier = Modifier.weight(1f),
+                    ) {
+                      Text("Follow Back", fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                      onClick = {
+                        sessionVm.dismissFriendRequestAlert(markRead = true)
+                        socialVm.requestOpenDmSheet(senderUid)
+                      },
+                      modifier = Modifier.weight(1f),
+                    ) {
+                      Text("Message")
+                    }
+                  }
+                }
+              }
             }
 
             LiveCallOverlayHost(

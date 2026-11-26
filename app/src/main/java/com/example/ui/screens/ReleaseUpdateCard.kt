@@ -50,9 +50,9 @@ import okhttp3.Request
 import org.json.JSONObject
 
 private const val GITHUB_LATEST_RELEASE_API =
-  "https://api.github.com/repos/bradley3398/Rural-ERides-GO-V2/releases/latest"
+  "https://api.github.com/repos/bradley3398/Rural-Erides-GO/releases/latest"
 private const val OFFICIAL_DOWNLOAD_PAGE_URL =
-  "https://bradley3398.github.io/Rural-ERides-GO-V2/"
+  "https://bradley3398.github.io/Rural-Erides-GO/"
 
 sealed class ReleaseUpdateUiState {
   data object Checking : ReleaseUpdateUiState()

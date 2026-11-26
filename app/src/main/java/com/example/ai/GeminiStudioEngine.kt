@@ -82,122 +82,134 @@ class GeminiStudioEngine {
     prompt: String,
     sourceBitmap: Bitmap? = null,
     aspectRatioKey: String = "1:1",
-  ): Result<GeneratedImageResult> =
-    try {
-      val aspect =
-        when (aspectRatioKey) {
-          "16:9" -> AspectRatio.LANDSCAPE_16x9
-          "9:16" -> AspectRatio.PORTRAIT_9x16
-          else -> AspectRatio.SQUARE_1x1
-        }
-      val config =
-        generationConfig {
-          responseModalities = listOf(ResponseModality.IMAGE, ResponseModality.TEXT)
-          imageConfig =
-            ImageConfig.builder()
-              .setAspectRatio(aspect)
-              .setImageSize(ImageSize.SIZE_1K)
-              .build()
-        }
-      val model =
-        Firebase.ai.generativeModel(
-          modelName = GeminiModelCatalog.GEMINI_NANO_BANANA_2_1,
-          generationConfig = config,
-        )
+  ): Result<GeneratedImageResult> {
+    val aspect =
+      when (aspectRatioKey) {
+        "16:9" -> AspectRatio.LANDSCAPE_16x9
+        "9:16" -> AspectRatio.PORTRAIT_9x16
+        else -> AspectRatio.SQUARE_1x1
+      }
+    val config =
+      generationConfig {
+        responseModalities = listOf(ResponseModality.IMAGE, ResponseModality.TEXT)
+        imageConfig =
+          ImageConfig.builder()
+            .setAspectRatio(aspect)
+            .setImageSize(ImageSize.SIZE_1K)
+            .build()
+      }
 
-      val response =
-        withTimeout(60_000L) {
-          if (sourceBitmap != null) {
-            model.generateContent(
-              content {
-                image(sourceBitmap)
-                text(prompt)
-              }
-            )
-          } else {
-            model.generateContent(prompt)
+    var lastError: Exception? = null
+    for (imageModelId in GeminiModelCatalog.imageFallbackChain) {
+      try {
+        val model =
+          Firebase.ai.generativeModel(
+            modelName = imageModelId,
+            generationConfig = config,
+          )
+        val response =
+          withTimeout(60_000L) {
+            if (sourceBitmap != null) {
+              model.generateContent(
+                content {
+                  image(sourceBitmap)
+                  text(prompt)
+                }
+              )
+            } else {
+              model.generateContent(prompt)
+            }
           }
+        val parts = response.candidates.firstOrNull()?.content?.parts.orEmpty()
+        val imagePart = parts.filterIsInstance<ImagePart>().firstOrNull()
+        val bitmap = imagePart?.image
+        if (bitmap != null) {
+          val caption = response.text?.trim().orEmpty()
+          return Result.success(
+            GeneratedImageResult(
+              bitmap = bitmap,
+              captionText = caption,
+              modelUsed = imageModelId,
+            )
+          )
+        } else {
+          lastError = IllegalStateException("Gemini returned text without an image. Try a more descriptive visual prompt.")
         }
-
-      val parts = response.candidates.firstOrNull()?.content?.parts.orEmpty()
-      val imagePart = parts.filterIsInstance<ImagePart>().firstOrNull()
-      val bitmap = imagePart?.image
-        ?: return Result.failure(IllegalStateException("Gemini returned text without an image. Try a more descriptive visual prompt."))
-      val caption = response.text?.trim().orEmpty()
-      Result.success(
-        GeneratedImageResult(
-          bitmap = bitmap,
-          captionText = caption,
-          modelUsed = GeminiModelCatalog.GEMINI_NANO_BANANA_2_1,
-        )
-      )
-    } catch (e: TimeoutCancellationException) {
-      Log.e(STUDIO_TAG, "Image generation timed out", e)
-      Result.failure(Exception("Image generation timed out after 60 seconds. Please try again."))
-    } catch (e: CancellationException) {
-      throw e
-    } catch (e: Exception) {
-      Log.e(STUDIO_TAG, "Image generation failed", e)
-      Result.failure(e)
+      } catch (e: TimeoutCancellationException) {
+        Log.e(STUDIO_TAG, "Image generation timed out on $imageModelId", e)
+        lastError = Exception("Image generation timed out after 60 seconds. Please try again.")
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        Log.w(STUDIO_TAG, "Image generation failed on $imageModelId: ${e.message}")
+        lastError = e
+      }
     }
+    return Result.failure(lastError ?: Exception("Image generation failed."))
+  }
 
   suspend fun transcribeAudioWav(
     wavBytes: ByteArray,
     vehicleContext: String,
-  ): Result<AudioTranscriptionResult> =
-    try {
-      if (wavBytes.size < 256) {
-        throw IllegalArgumentException("Audio clip is too short to transcribe.")
-      }
-      val schema =
-        Schema.obj(
-          properties =
-            mapOf(
-              "transcript" to Schema.string("Verbatim spoken transcription of the audio clip"),
-              "summary" to Schema.string("Concise 1-sentence rural rider note summary"),
-              "actionCategory" to Schema.enumeration(listOf("RIDE_LOG", "TRAIL_HAZARD", "MECHANIC_NOTE", "GENERAL_VOICE")),
-            )
-        )
-      val model =
-        Firebase.ai.generativeModel(
-          modelName = GeminiModelCatalog.GEMINI_3_8_FLASH,
-          generationConfig =
-            generationConfig {
-              responseMimeType = "application/json"
-              responseSchema = schema
-              temperature = 0.1f
-            },
-        )
-      val response =
-        withTimeout(60_000L) {
-          model.generateContent(
-            content {
-              inlineData(wavBytes, "audio/wav")
-              text(
-                "Transcribe this microphone audio from an electric PEV rider accurately verbatim. " +
-                  "Rider context: $vehicleContext. Return JSON with transcript, summary, and actionCategory."
-              )
-            }
-          )
-        }
-      val raw = response.text ?: error("Empty transcription response.")
-      val json = JSONObject(raw)
-      Result.success(
-        AudioTranscriptionResult(
-          transcript = json.optString("transcript").trim(),
-          summary = json.optString("summary").trim(),
-          actionCategory = json.optString("actionCategory", "GENERAL_VOICE"),
-        )
-      )
-    } catch (e: TimeoutCancellationException) {
-      Log.e(STUDIO_TAG, "Audio transcription timed out", e)
-      Result.failure(Exception("Audio transcription timed out after 60 seconds."))
-    } catch (e: CancellationException) {
-      throw e
-    } catch (e: Exception) {
-      Log.e(STUDIO_TAG, "Audio transcription failed", e)
-      Result.failure(e)
+  ): Result<AudioTranscriptionResult> {
+    if (wavBytes.size < 256) {
+      return Result.failure(IllegalArgumentException("Audio clip is too short to transcribe."))
     }
+    val schema =
+      Schema.obj(
+        properties =
+          mapOf(
+            "transcript" to Schema.string("Verbatim spoken transcription of the audio clip"),
+            "summary" to Schema.string("Concise 1-sentence rural rider note summary"),
+            "actionCategory" to Schema.enumeration(listOf("RIDE_LOG", "TRAIL_HAZARD", "MECHANIC_NOTE", "GENERAL_VOICE")),
+          )
+      )
+    var lastError: Exception? = null
+    for (modelId in listOf(GeminiModelCatalog.GEMINI_3_8_FLASH, GeminiModelCatalog.GEMINI_3_5_FLASH_LITE)) {
+      try {
+        val model =
+          Firebase.ai.generativeModel(
+            modelName = modelId,
+            generationConfig =
+              generationConfig {
+                responseMimeType = "application/json"
+                responseSchema = schema
+                temperature = 0.1f
+              },
+          )
+        val response =
+          withTimeout(60_000L) {
+            model.generateContent(
+              content {
+                inlineData(wavBytes, "audio/wav")
+                text(
+                  "Transcribe this microphone audio from an electric PEV rider accurately verbatim. " +
+                    "Rider context: $vehicleContext. Return JSON with transcript, summary, and actionCategory."
+                )
+              }
+            )
+          }
+        val raw = response.text ?: error("Empty transcription response.")
+        val json = JSONObject(raw)
+        return Result.success(
+          AudioTranscriptionResult(
+            transcript = json.optString("transcript").trim(),
+            summary = json.optString("summary").trim(),
+            actionCategory = json.optString("actionCategory", "GENERAL_VOICE"),
+          )
+        )
+      } catch (e: TimeoutCancellationException) {
+        Log.e(STUDIO_TAG, "Audio transcription timed out on $modelId", e)
+        lastError = Exception("Audio transcription timed out after 60 seconds.")
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        Log.w(STUDIO_TAG, "Audio transcription failed on $modelId: ${e.message}")
+        lastError = e
+      }
+    }
+    return Result.failure(lastError ?: Exception("Audio transcription failed."))
+  }
 
   suspend fun runVoiceConversationTurn(
     userMessage: String,
@@ -207,57 +219,63 @@ class GeminiStudioEngine {
     modelId: String,
     vehicleContext: String,
     locationLabel: String,
-  ): Result<Pair<String, String>> =
-    try {
-      val resolvedModel = modelId.ifBlank { GeminiModelCatalog.GEMINI_3_8_FLASH }
-      val sysInstruction =
-        content {
-          text(
-            """
-            You are the Rural ERides GO Live Voice Co-Pilot ($personaRole).
-            Speak naturally, warmly, and concisely in 2 to 4 crisp spoken sentences (no markdown bullets or asterisks) so your reply sounds great read aloud while riding.
-            Active Rig: $vehicleContext | Location: $locationLabel.
-            If audio is attached, answer the spoken question directly.
-            """
-              .trimIndent()
-          )
-        }
-      val model =
-        Firebase.ai.generativeModel(
-          modelName = resolvedModel,
-          systemInstruction = sysInstruction,
-          generationConfig = generationConfig { temperature = 0.7f },
+  ): Result<Pair<String, String>> {
+    val chain = GeminiModelCatalog.fallbackChain(modelId)
+    val sysInstruction =
+      content {
+        text(
+          """
+          You are the Rural ERides GO Live Voice Co-Pilot ($personaRole).
+          Speak naturally, warmly, and concisely in 2 to 4 crisp spoken sentences (no markdown bullets or asterisks) so your reply sounds great read aloud while riding.
+          Active Rig: $vehicleContext | Location: $locationLabel.
+          If audio is attached, answer the spoken question directly.
+          """
+            .trimIndent()
         )
-      val chatHistory =
-        history.takeLast(12).map { turn ->
-          content(if (turn.isUser) "user" else "model") { text(turn.text) }
-        }
-      val chat = model.startChat(history = chatHistory)
-      val response =
-        withTimeout(60_000L) {
-          if (audioWavBytes != null && audioWavBytes.size > 256) {
-            chat.sendMessage(
-              content("user") {
-                inlineData(audioWavBytes, "audio/wav")
-                if (userMessage.isNotBlank()) text(userMessage)
-                else text("Listen to my voice message and answer conversationally as my riding co-pilot.")
-              }
-            )
-          } else {
-            chat.sendMessage(userMessage)
+      }
+    val chatHistory =
+      history.takeLast(12).map { turn ->
+        content(if (turn.isUser) "user" else "model") { text(turn.text) }
+      }
+
+    var lastError: Exception? = null
+    for (activeModel in chain) {
+      try {
+        val model =
+          Firebase.ai.generativeModel(
+            modelName = activeModel,
+            systemInstruction = sysInstruction,
+            generationConfig = generationConfig { temperature = 0.7f },
+          )
+        val chat = model.startChat(history = chatHistory)
+        val response =
+          withTimeout(60_000L) {
+            if (audioWavBytes != null && audioWavBytes.size > 256) {
+              chat.sendMessage(
+                content("user") {
+                  inlineData(audioWavBytes, "audio/wav")
+                  if (userMessage.isNotBlank()) text(userMessage)
+                  else text("Listen to my voice message and answer conversationally as my riding co-pilot.")
+                }
+              )
+            } else {
+              chat.sendMessage(userMessage)
+            }
           }
-        }
-      val reply = response.text?.trim().orEmpty().ifBlank { "Copy that partner — signal was faint, say again?" }
-      Result.success(reply to resolvedModel)
-    } catch (e: TimeoutCancellationException) {
-      Log.e(STUDIO_TAG, "Voice turn timed out", e)
-      Result.failure(Exception("Voice Co-Pilot timed out after 60s."))
-    } catch (e: CancellationException) {
-      throw e
-    } catch (e: Exception) {
-      Log.e(STUDIO_TAG, "Voice turn failed", e)
-      Result.failure(e)
+        val reply = response.text?.trim().orEmpty().ifBlank { "Copy that partner — signal was faint, say again?" }
+        return Result.success(reply to activeModel)
+      } catch (e: TimeoutCancellationException) {
+        Log.e(STUDIO_TAG, "Voice turn timed out on $activeModel", e)
+        lastError = Exception("Voice Co-Pilot timed out after 60s.")
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        Log.w(STUDIO_TAG, "Voice turn failed on $activeModel: ${e.message}")
+        lastError = e
+      }
     }
+    return Result.failure(lastError ?: Exception("Voice Co-Pilot failed."))
+  }
 
   suspend fun exploreWithSearchAndMaps(
     query: String,
@@ -319,12 +337,20 @@ class GeminiStudioEngine {
             } catch (e: CancellationException) {
               throw e
             } catch (toolErr: Exception) {
-              Log.w(STUDIO_TAG, "Google Search tool fallback to standard 3.8-flash: ${toolErr.message}")
+              Log.w(STUDIO_TAG, "Google Search tool fallback: ${toolErr.message}")
               usedSearch = false
-              Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
+              runCatching {
+                Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
+              }.getOrElse {
+                Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
+              }
             }
           } else {
-            Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
+            runCatching {
+              Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
+            }.getOrElse {
+              Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
+            }
           }
         }
 
@@ -360,77 +386,83 @@ class GeminiStudioEngine {
   suspend fun composeTrailSoundtrack(
     vibePrompt: String,
     genre: String,
-  ): Result<AiComposedTrack> =
-    try {
-      val schema =
-        Schema.obj(
-          properties =
-            mapOf(
-              "title" to Schema.string("Original rural PEV trail soundtrack title"),
-              "bpm" to Schema.integer("Tempo in BPM between 84 and 148"),
-              "musicalKey" to Schema.string("Key signature like D Major or A Minor"),
-              "chords" to Schema.array(Schema.string(), "4 chord names e.g. D, A, Bm, G"),
-              "leadNotesMidi" to Schema.array(Schema.integer(), "16 MIDI note numbers between 55 and 84 for the lead melody"),
-              "bassNotesMidi" to Schema.array(Schema.integer(), "8 MIDI note numbers between 36 and 52 for the bassline"),
-              "vibeSummary" to Schema.string("1-sentence production description"),
-              "lyricHook" to Schema.string("Short 2-line rural electric riding chorus hook"),
-            )
-        )
-      val model =
-        Firebase.ai.generativeModel(
-          modelName = GeminiModelCatalog.GEMINI_3_8_FLASH,
-          generationConfig =
-            generationConfig {
-              responseMimeType = "application/json"
-              responseSchema = schema
-              temperature = 0.85f
-            },
-        )
-      val prompt =
-        """
-        Compose an original playable instrumental trail music arrangement for an electric PEV rider.
-        Genre: $genre
-        Prompt / Ride Vibe: "$vibePrompt"
-        Provide musical, harmonious, pentatonic/diatonic MIDI notes (16 lead notes 55..84, 8 bass notes 36..52) that sound great played together in a 4-bar loop!
-        """
-          .trimIndent()
-      val response = withTimeout(45_000L) { model.generateContent(prompt) }
-      val raw = response.text ?: error("Empty music composition response.")
-      val json = JSONObject(raw)
-
-      fun readIntArray(key: String, min: Int, max: Int, fallback: List<Int>): List<Int> {
-        val arr = json.optJSONArray(key) ?: return fallback
-        val out = (0 until arr.length()).mapNotNull { i -> arr.optInt(i, -1).takeIf { it in min..max } }
-        return if (out.size >= 4) out else fallback
-      }
-
-      val chordsArr = json.optJSONArray("chords")
-      val chords =
-        if (chordsArr != null && chordsArr.length() > 0) {
-          (0 until chordsArr.length()).map { chordsArr.optString(it, "G") }
-        } else listOf("G", "D", "Em", "C")
-
-      Result.success(
-        AiComposedTrack(
-          title = json.optString("title", "Backroad Volt Groove").ifBlank { "Backroad Volt Groove" },
-          genre = genre,
-          bpm = json.optInt("bpm", 112).coerceIn(80, 152),
-          musicalKey = json.optString("musicalKey", "G Major"),
-          chords = chords,
-          leadNotesMidi = readIntArray("leadNotesMidi", 50, 88, listOf(67, 69, 71, 74, 71, 69, 67, 64, 67, 71, 74, 76, 74, 71, 69, 67)),
-          bassNotesMidi = readIntArray("bassNotesMidi", 32, 55, listOf(43, 43, 38, 38, 40, 40, 36, 38)),
-          vibeSummary = json.optString("vibeSummary", "Original rural trail groove synthesized at 44.1kHz."),
-          lyricHook = json.optString("lyricHook", "Fifty-four volts down the gravel lane, quiet torque in the sunset rain."),
-        )
+  ): Result<AiComposedTrack> {
+    val schema =
+      Schema.obj(
+        properties =
+          mapOf(
+            "title" to Schema.string("Original rural PEV trail soundtrack title"),
+            "bpm" to Schema.integer("Tempo in BPM between 84 and 148"),
+            "musicalKey" to Schema.string("Key signature like D Major or A Minor"),
+            "chords" to Schema.array(Schema.string(), "4 chord names e.g. D, A, Bm, G"),
+            "leadNotesMidi" to Schema.array(Schema.integer(), "16 MIDI note numbers between 55 and 84 for the lead melody"),
+            "bassNotesMidi" to Schema.array(Schema.integer(), "8 MIDI note numbers between 36 and 52 for the bassline"),
+            "vibeSummary" to Schema.string("1-sentence production description"),
+            "lyricHook" to Schema.string("Short 2-line rural electric riding chorus hook"),
+          )
       )
-    } catch (e: TimeoutCancellationException) {
-      Log.e(STUDIO_TAG, "Soundtrack composition timed out", e)
-      Result.failure(Exception("Music composition timed out after 45 seconds."))
-    } catch (e: CancellationException) {
-      throw e
-    } catch (e: Exception) {
-      Log.e(STUDIO_TAG, "Soundtrack composition failed", e)
-      Result.failure(e)
+    val prompt =
+      """
+      Compose an original playable instrumental trail music arrangement for an electric PEV rider.
+      Genre: $genre
+      Prompt / Ride Vibe: "$vibePrompt"
+      Provide musical, harmonious, pentatonic/diatonic MIDI notes (16 lead notes 55..84, 8 bass notes 36..52) that sound great played together in a 4-bar loop!
+      """
+        .trimIndent()
+
+    var lastError: Exception? = null
+    for (modelId in listOf(GeminiModelCatalog.GEMINI_3_8_FLASH, GeminiModelCatalog.GEMINI_3_5_FLASH_LITE)) {
+      try {
+        val model =
+          Firebase.ai.generativeModel(
+            modelName = modelId,
+            generationConfig =
+              generationConfig {
+                responseMimeType = "application/json"
+                responseSchema = schema
+                temperature = 0.85f
+              },
+          )
+        val response = withTimeout(50_000L) { model.generateContent(prompt) }
+        val raw = response.text ?: error("Empty music composition response.")
+        val json = JSONObject(raw)
+
+        fun readIntArray(key: String, min: Int, max: Int, fallback: List<Int>): List<Int> {
+          val arr = json.optJSONArray(key) ?: return fallback
+          val out = (0 until arr.length()).mapNotNull { i -> arr.optInt(i, -1).takeIf { it in min..max } }
+          return if (out.size >= 4) out else fallback
+        }
+
+        val chordsArr = json.optJSONArray("chords")
+        val chords =
+          if (chordsArr != null && chordsArr.length() > 0) {
+            (0 until chordsArr.length()).map { chordsArr.optString(it, "G") }
+          } else listOf("G", "D", "Em", "C")
+
+        return Result.success(
+          AiComposedTrack(
+            title = json.optString("title", "Backroad Volt Groove").ifBlank { "Backroad Volt Groove" },
+            genre = genre,
+            bpm = json.optInt("bpm", 112).coerceIn(80, 152),
+            musicalKey = json.optString("musicalKey", "G Major"),
+            chords = chords,
+            leadNotesMidi = readIntArray("leadNotesMidi", 50, 88, listOf(67, 69, 71, 74, 71, 69, 67, 64, 67, 71, 74, 76, 74, 71, 69, 67)),
+            bassNotesMidi = readIntArray("bassNotesMidi", 32, 55, listOf(43, 43, 38, 38, 40, 40, 36, 38)),
+            vibeSummary = json.optString("vibeSummary", "Original rural trail groove synthesized at 44.1kHz."),
+            lyricHook = json.optString("lyricHook", "Fifty-four volts down the gravel lane, quiet torque in the sunset rain."),
+          )
+        )
+      } catch (e: TimeoutCancellationException) {
+        Log.e(STUDIO_TAG, "Soundtrack composition timed out on $modelId", e)
+        lastError = Exception("Music composition timed out after 50 seconds.")
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        Log.w(STUDIO_TAG, "Soundtrack composition failed on $modelId: ${e.message}")
+        lastError = e
+      }
     }
+    return Result.failure(lastError ?: Exception("Music composition failed."))
+  }
 }
 

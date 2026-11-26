@@ -206,7 +206,7 @@ object ReminderScheduler {
     )
 
     val notification = NotificationCompat.Builder(context, CHANNEL_AI)
-      .setSmallIcon(R.mipmap.ic_launcher)
+      .setSmallIcon(R.drawable.ic_stat_rural_pev)
       .setContentTitle(title)
       .setContentText(body)
       .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -248,7 +248,7 @@ object ReminderScheduler {
     )
 
     val notification = NotificationCompat.Builder(context, CHANNEL_SOCIAL)
-      .setSmallIcon(R.mipmap.ic_launcher)
+      .setSmallIcon(R.drawable.ic_stat_rural_pev)
       .setContentTitle(title)
       .setContentText(body)
       .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -297,7 +297,7 @@ object ReminderScheduler {
     )
 
     val notification = NotificationCompat.Builder(context, CHANNEL_DM)
-      .setSmallIcon(R.mipmap.ic_launcher)
+      .setSmallIcon(R.drawable.ic_stat_rural_pev)
       .setContentTitle("Direct Message: $senderCallsign")
       .setContentText(body)
       .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -332,7 +332,7 @@ object ReminderScheduler {
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
     val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
-      .setSmallIcon(R.mipmap.ic_launcher)
+      .setSmallIcon(R.drawable.ic_stat_rural_pev)
       .setContentTitle(title)
       .setContentText(body)
       .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -392,7 +392,7 @@ object ReminderScheduler {
       }
 
     val notification = NotificationCompat.Builder(context, CHANNEL_UPDATES)
-      .setSmallIcon(R.mipmap.ic_launcher)
+      .setSmallIcon(R.drawable.ic_stat_rural_pev)
       .setContentTitle(title)
       .setContentText(summary)
       .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))

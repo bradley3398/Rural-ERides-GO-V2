@@ -245,7 +245,6 @@ private fun ActiveWebRtcCallScreen(
   socialVm: CopilotSocialViewModel,
 ) {
   val minimized by socialVm.callMinimized.collectAsStateWithLifecycle()
-  BackHandler(enabled = !minimized) { socialVm.setCallMinimized(true) }
 
   val ctx = LocalContext.current
   val signals by socialVm.callSignals.collectAsStateWithLifecycle()
@@ -381,6 +380,16 @@ private fun ActiveWebRtcCallScreen(
   val timerLabel = "%02d:%02d".format(elapsedSec / 60, elapsedSec % 60)
 
   // Keep WebView mounted as soon as microphone permission is available so live audio/video never drops
+  if (!minimized) {
+    androidx.activity.compose.BackHandler {
+      if (showInCallChat) {
+        showInCallChat = false
+      } else {
+        socialVm.setCallMinimized(true)
+      }
+    }
+  }
+
   Box(
     modifier = if (minimized) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
   ) {
@@ -404,6 +413,10 @@ private fun ActiveWebRtcCallScreen(
               object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest?) {
                   request?.grant(request.resources)
+                }
+
+                override fun getDefaultVideoPoster(): android.graphics.Bitmap {
+                  return android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
                 }
               }
             addJavascriptInterface(
@@ -981,24 +994,27 @@ function startLiveCloudMediaRelay() {
     } catch (e) {}
   }
 
-  // 2. Live Camera Video Relay (compact JPEG frames every 680ms when camOn & P2P video not yet active)
+  // 2. Live Camera Video Relay (compact 160x120 JPEG frames every 420ms whenever camOn & P2P video not actively decoding)
   if (!relayVideoTimer) {
     relayCanvas = document.createElement('canvas');
-    relayCanvas.width = 176;
-    relayCanvas.height = 232;
+    relayCanvas.width = 160;
+    relayCanvas.height = 120;
     relayVideoTimer = setInterval(() => {
-      if (!callActive || !camOn || p2pVideoActive) return;
+      if (!callActive || !camOn) return;
+      const rv = document.getElementById('remoteVideo');
+      const hasDecodedP2pVideo = p2pVideoActive && rv && rv.videoWidth > 0 && rv.readyState >= 2 && !rv.paused;
+      if (hasDecodedP2pVideo) return;
       const lv = document.getElementById('localVideo');
       if (!lv || !lv.videoWidth || !lv.videoHeight) return;
       try {
         const ctx2d = relayCanvas.getContext('2d');
         ctx2d.drawImage(lv, 0, 0, relayCanvas.width, relayCanvas.height);
-        const dataUrl = relayCanvas.toDataURL('image/jpeg', 0.42);
+        const dataUrl = relayCanvas.toDataURL('image/jpeg', 0.34);
         if (dataUrl && dataUrl.length < 18500 && window.CallBridge) {
           window.CallBridge.sendSignal('ICE', JSON.stringify({ __relayVideo: dataUrl }));
         }
       } catch (e) {}
-    }, 680);
+    }, 420);
   }
 }
 
@@ -1029,12 +1045,15 @@ function playRelayPcm(b64, rate) {
 }
 
 function showRelayVideoFrame(dataUrl) {
-  if (p2pVideoActive) return;
+  const rv = document.getElementById('remoteVideo');
+  const hasLiveP2p = p2pVideoActive && rv && rv.videoWidth > 0 && rv.readyState >= 2 && !rv.paused;
+  if (hasLiveP2p) return;
   const rimg = document.getElementById('relayVideo');
   const card = document.getElementById('audioOverlay');
   if (rimg && dataUrl) {
     rimg.src = dataUrl;
     rimg.style.display = 'block';
+    if (rv) rv.style.display = 'none';
     if (card) card.style.display = 'none';
   }
 }
@@ -1051,19 +1070,21 @@ function attachRemoteStream(stream) {
   if (rv) {
     rv.srcObject = stream;
     rv.play().catch(() => {});
+    const checkDecoded = () => {
+      if (rv.videoWidth > 0 && rv.readyState >= 2 && pc && (pc.connectionState === 'connected' || pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed')) {
+        p2pVideoActive = true;
+        rv.style.display = 'block';
+        const rimg = document.getElementById('relayVideo');
+        if (rimg) rimg.style.display = 'none';
+        updateVideoStageVisibility();
+      }
+    };
     rv.onloadedmetadata = () => {
       rv.play().catch(() => {});
-      if (rv.videoWidth > 0) {
-        p2pVideoActive = true;
-        updateVideoStageVisibility();
-      }
+      checkDecoded();
     };
-    rv.onplaying = () => {
-      if (rv.videoWidth > 0 || stream.getVideoTracks().length > 0) {
-        p2pVideoActive = stream.getVideoTracks().length > 0;
-        updateVideoStageVisibility();
-      }
-    };
+    rv.onplaying = checkDecoded;
+    rv.onresize = checkDecoded;
   }
   if (audioCtx && remoteGainNode && stream.getAudioTracks().length > 0) {
     try {
@@ -1111,16 +1132,19 @@ async function ensureReady() {
       pc.ontrack = ev => {
         const stream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
         attachRemoteStream(stream);
-        p2pConnected = true;
-        if (stream.getVideoTracks().length > 0) {
-          p2pVideoActive = true;
-          updateVideoStageVisibility();
+        if (pc && (pc.connectionState === 'connected' || pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed')) {
+          p2pConnected = true;
+          notifyState('Live P2P Connected');
         }
-        notifyState('Live P2P Connected');
       };
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'connected') {
           p2pConnected = true;
+          const rv = document.getElementById('remoteVideo');
+          if (rv && rv.videoWidth > 0 && rv.readyState >= 2) {
+            p2pVideoActive = true;
+            updateVideoStageVisibility();
+          }
           notifyState('Live P2P Connected');
         } else if (pc.connectionState === 'connecting') {
           notifyState('Live Call Active');

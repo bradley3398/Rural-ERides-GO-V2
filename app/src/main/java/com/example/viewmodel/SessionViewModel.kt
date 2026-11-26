@@ -113,6 +113,11 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
   private val _notifications = MutableStateFlow<List<UserNotification>>(emptyList())
   val notifications: StateFlow<List<UserNotification>> = _notifications.asStateFlow()
 
+  private val _activeFriendRequestAlert = MutableStateFlow<UserNotification?>(null)
+  val activeFriendRequestAlert: StateFlow<UserNotification?> = _activeFriendRequestAlert.asStateFlow()
+
+  private val seenNotificationIds = mutableSetOf<String>()
+
   private val _broadcasts = MutableStateFlow<List<EmergencyBroadcast>>(emptyList())
   val broadcasts: StateFlow<List<EmergencyBroadcast>> = _broadcasts.asStateFlow()
 
@@ -239,6 +244,28 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     userListenersJob =
       viewModelScope.launch {
         launch {
+          val fbUser = auth.currentUser
+          riderRepo.touchOnlinePresence(
+            userId = uid,
+            online = true,
+            fallbackDisplayName = fbUser?.displayName.orEmpty(),
+            fallbackEmail = fbUser?.email.orEmpty(),
+            fallbackCallsign = _profile.value?.callsign.orEmpty(),
+          )
+          riderRepo.purgeBotProfilesIfAdmin()
+          while (isActive) {
+            delay(90_000L)
+            val curFb = auth.currentUser
+            riderRepo.touchOnlinePresence(
+              userId = uid,
+              online = true,
+              fallbackDisplayName = curFb?.displayName.orEmpty(),
+              fallbackEmail = curFb?.email.orEmpty(),
+              fallbackCallsign = _profile.value?.callsign.orEmpty(),
+            )
+          }
+        }
+        launch {
           riderRepo
             .observeProfile(uid)
             .catch { e ->
@@ -277,6 +304,17 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 }
               } else {
                 _profile.value = prof
+                if (prof != null) {
+                  launch {
+                    riderRepo.touchOnlinePresence(
+                      userId = uid,
+                      online = true,
+                      fallbackDisplayName = prof.displayName,
+                      fallbackEmail = prof.email,
+                      fallbackCallsign = prof.callsign,
+                    )
+                  }
+                }
               }
             }
         }
@@ -290,15 +328,59 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             .collect { _prayers.value = it }
         }
         launch {
+          var initialNotifLoad = true
           riderRepo
             .observeNotifications(uid)
             .catch { e ->
               if (e is CancellationException) throw e
               Log.w(TAG, "Notifications listener error: ${e.message}")
             }
-            .collect { _notifications.value = it }
+            .collect { list ->
+              _notifications.value = list
+              val nowSec = System.currentTimeMillis() / 1000L
+              if (initialNotifLoad) {
+                initialNotifLoad = false
+                val recentUnreadFr =
+                  list.firstOrNull { n ->
+                    !n.read &&
+                      n.type.equals("FRIEND_REQUEST", ignoreCase = true) &&
+                      ((n.createdAt?.seconds ?: nowSec) >= nowSec - 600L)
+                  }
+                list.forEach { seenNotificationIds.add(it.id) }
+                if (recentUnreadFr != null) {
+                  _activeFriendRequestAlert.value = recentUnreadFr
+                }
+              } else {
+                val freshFr =
+                  list.firstOrNull { n ->
+                    n.id !in seenNotificationIds &&
+                      !n.read &&
+                      n.type.equals("FRIEND_REQUEST", ignoreCase = true)
+                  }
+                list.forEach { seenNotificationIds.add(it.id) }
+                if (freshFr != null) {
+                  _activeFriendRequestAlert.value = freshFr
+                  if (settings.value.socialNotifsEnabled) {
+                    ReminderScheduler.postSocialNotification(
+                      context = ctx,
+                      title = freshFr.title.ifBlank { "New Friend Request" },
+                      body = freshFr.body.ifBlank { "A pilot followed you on Rural ERides GO." },
+                      targetTab = "BOARD",
+                    )
+                  }
+                }
+              }
+            }
         }
       }
+  }
+
+  fun dismissFriendRequestAlert(markRead: Boolean = true) {
+    val cur = _activeFriendRequestAlert.value
+    _activeFriendRequestAlert.value = null
+    if (markRead && cur != null && cur.id.isNotBlank()) {
+      markNotificationRead(cur.id)
+    }
   }
 
   private fun startFirebasePublicCollectors() {
@@ -635,6 +717,11 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
   fun signOut() {
     viewModelScope.launch {
+      val uid = auth.currentUser?.uid
+      if (!uid.isNullOrBlank()) {
+        runCatching { riderRepo.touchOnlinePresence(uid, online = false) }
+      }
+      _activeFriendRequestAlert.value = null
       userListenersJob?.cancel()
       publicListenersJob?.cancel()
       authRepo.signOut(ctx)

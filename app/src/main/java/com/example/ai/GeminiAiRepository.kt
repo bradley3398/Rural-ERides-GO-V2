@@ -29,27 +29,39 @@ object GeminiModelCatalog {
   const val GEMINI_3_5_FLASH_LITE = "gemini-3.5-flash-lite"
   const val GEMINI_4_ARGON = "gemini-4-argon"
   const val GEMINI_NANO_BANANA_2_1 = "gemini-nano-banana-2.1"
-
-  const val GEMINI_2_0_FLASH = "gemini-2.0-flash"
-  const val GEMINI_2_0_FLASH_LITE = "gemini-2.0-flash-lite"
+  const val GEMINI_3_1_FLASH_LITE_IMAGE = "gemini-3.1-flash-lite-image"
+  const val GEMINI_3_PRO_IMAGE = "gemini-3-pro-image"
 
   val availableModels =
     listOf(
       GEMINI_3_8_FLASH to "Gemini 3.8 Flash (Balanced Default)",
       GEMINI_3_5_FLASH_LITE to "Gemini 3.5 Flash-Lite (Ultra Fast)",
       GEMINI_4_ARGON to "Gemini 4 Argon (Deep Reasoning)",
-      GEMINI_2_0_FLASH to "Gemini 2.0 Flash (Universal Key Compatible)",
     )
 
-  fun fallbackChain(preferred: String): List<String> =
-    listOf(
-      preferred.ifBlank { GEMINI_3_8_FLASH }.let { if (it.contains("2.5") || it.contains("3.1-flash-lite")) GEMINI_3_8_FLASH else it },
+  fun fallbackChain(preferred: String): List<String> {
+    val cleanPref =
+      preferred.trim().let {
+        if (it.isBlank() || it.contains("2.5") || it.contains("2.0") || it.contains("1.5") || it.contains("3.1-flash-lite")) {
+          GEMINI_3_8_FLASH
+        } else {
+          it
+        }
+      }
+    return listOf(
+      cleanPref,
       GEMINI_3_8_FLASH,
       GEMINI_3_5_FLASH_LITE,
       GEMINI_4_ARGON,
-      GEMINI_2_0_FLASH,
-      GEMINI_2_0_FLASH_LITE,
     ).distinct()
+  }
+
+  val imageFallbackChain =
+    listOf(
+      GEMINI_NANO_BANANA_2_1,
+      GEMINI_3_1_FLASH_LITE_IMAGE,
+      GEMINI_3_PRO_IMAGE,
+    )
 }
 
 data class DailyPrayerResult(

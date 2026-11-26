@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -96,6 +97,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -272,46 +278,67 @@ fun DirectMessagesSheet(
     )
   }
 
-  val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  val focusManager = LocalFocusManager.current
 
-  ModalBottomSheet(
-    onDismissRequest = {
-      playCue(VoiceAudioManager.TouchCue.BACK_NAV)
-      if (selectedPeer != null) selectedPeer = null else onDismiss()
-    },
-    sheetState = sheetState,
-  ) {
-    BackHandler {
-      playCue(VoiceAudioManager.TouchCue.BACK_NAV)
-      if (selectedPeer != null) selectedPeer = null else onDismiss()
+  fun handleSafeBack() {
+    runCatching { focusManager.clearFocus(force = true) }
+    runCatching { playCue(VoiceAudioManager.TouchCue.BACK_NAV) }
+    if (lightboxImageUrl != null) {
+      lightboxImageUrl = null
+    } else if (selectedPeer != null) {
+      selectedPeer = null
+      replyTarget = null
+      attachedBitmap = null
+      showThreadSearch = false
+      threadSearchQuery = ""
+    } else {
+      onDismiss()
     }
-    Column(
-      Modifier
-        .fillMaxWidth()
-        .fillMaxHeight(0.92f)
-        .navigationBarsPadding()
-        .padding(horizontal = 14.dp, vertical = 6.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp),
+  }
+
+  Dialog(
+    onDismissRequest = { handleSafeBack() },
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      dismissOnBackPress = false,
+      dismissOnClickOutside = false,
+      decorFitsSystemWindows = false,
+    ),
+  ) {
+    BackHandler(enabled = true) {
+      handleSafeBack()
+    }
+    Surface(
+      color = MaterialTheme.colorScheme.background,
+      modifier = Modifier.fillMaxSize(),
     ) {
-      // TOP HEADER WITH ALWAYS-VISIBLE 48DP BACK BUTTON
-      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-          IconButton(
-            onClick = {
-              haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-              playCue(VoiceAudioManager.TouchCue.BACK_NAV)
-              if (selectedPeer != null) selectedPeer = null else onDismiss()
-            },
-            modifier = Modifier.size(48.dp).testTag("dm_back_button"),
-          ) {
-            Icon(
-              Icons.AutoMirrored.Filled.ArrowBack,
-              contentDescription = if (selectedPeer != null) "Back to Inbox" else "Back",
-            )
-          }
-          Column(modifier = Modifier.weight(1f)) {
-            Text(
-              selectedPeer?.let { "@${it.callsign}" } ?: "PORCH DMs & LIVE CALLS",
+      Column(
+        Modifier
+          .fillMaxSize()
+          .statusBarsPadding()
+          .navigationBarsPadding()
+          .imePadding()
+          .padding(horizontal = 14.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        // TOP HEADER WITH ALWAYS-VISIBLE 48DP BACK BUTTON
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            IconButton(
+              onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                handleSafeBack()
+              },
+              modifier = Modifier.size(48.dp).testTag("dm_back_button"),
+            ) {
+              Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = if (selectedPeer != null) "Back to Inbox" else "Back",
+              )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                selectedPeer?.let { "@${it.callsign}" } ?: "PORCH DMs & LIVE CALLS",
               style = MaterialTheme.typography.titleMedium,
               fontWeight = FontWeight.Black,
               color = MaterialTheme.colorScheme.primary,
@@ -507,7 +534,7 @@ fun DirectMessagesSheet(
                   }
                 }
               }
-              items(filteredCalls, key = { it.id }) { call ->
+              itemsIndexed(filteredCalls, key = { idx, c -> "call_${idx}_${c.id}" }) { _, call ->
                 val outgoing = call.callerUid == myUid
                 val peerUid = if (outgoing) call.calleeUid else call.callerUid
                 val peerName = (if (outgoing) call.calleeCallsign else call.callerCallsign).ifBlank { "Pilot" }
@@ -616,7 +643,8 @@ fun DirectMessagesSheet(
                   }
                 }
               }
-              items(filteredRiders, key = { "pilot_${it.first.userId}" }) { (p, spec, score) ->
+              itemsIndexed(filteredRiders, key = { idx, r -> "pilot_${idx}_${r.first.userId}" }) { _, (p, spec, score) ->
+                val isOnlineNow = (System.currentTimeMillis() / 1000L - (p.updatedAt?.seconds ?: p.createdAt?.seconds ?: 0L)) in 0..900
                 TacticalCard(onClick = { selectedPeer = p }) {
                   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
@@ -630,6 +658,20 @@ fun DirectMessagesSheet(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                           )
+                          if (isOnlineNow) {
+                            Surface(
+                              color = Color(0xFF10B981).copy(alpha = 0.2f),
+                              shape = RoundedCornerShape(6.dp),
+                            ) {
+                              Text(
+                                "ONLINE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF10B981),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                              )
+                            }
+                          }
                           if (p.verified) {
                             Icon(Icons.Default.Verified, "Verified", tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(14.dp))
                           }
@@ -647,7 +689,7 @@ fun DirectMessagesSheet(
                           }
                         }
                         Text(
-                          "${p.rankBadge} • ${spec.displayRigName} • ${p.ridesCount} rides (${"%.1f".format(p.totalKm)} km)",
+                          "${p.rankBadge} • ${spec.displayRigName} • ${p.ridesCount} rides (${com.example.ui.components.formatDistLabel(p.totalKm, settings.distanceUnit, decimals = 1)})",
                           style = MaterialTheme.typography.labelSmall,
                           color = MaterialTheme.colorScheme.onSurfaceVariant,
                           maxLines = 1,
@@ -700,7 +742,7 @@ fun DirectMessagesSheet(
                   }
                 }
               }
-              items(orderedThreads, key = { it.id }) { th ->
+              itemsIndexed(orderedThreads, key = { idx, th -> "thread_${idx}_${th.id}" }) { _, th ->
                 val otherIdx = th.participantUids.indexOfFirst { it != myUid }.coerceAtLeast(0)
                 val otherUid = th.participantUids.getOrElse(otherIdx) { "" }
                 val otherCs = th.participantCallsigns.getOrElse(otherIdx) { "Pilot" }
@@ -906,7 +948,7 @@ fun DirectMessagesSheet(
               }
             }
           }
-          items(visibleMessages, key = { it.id }) { msg ->
+          itemsIndexed(visibleMessages, key = { idx, msg -> "msg_${idx}_${msg.id}" }) { _, msg ->
             val isMine = msg.senderId == myUid
             val bubbleShape =
               if (isMine) RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
@@ -1314,6 +1356,7 @@ fun DirectMessagesSheet(
         }
       }
     }
+  }
   }
 
   lightboxImageUrl?.let { url ->

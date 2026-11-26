@@ -861,9 +861,17 @@ data class PublicPilotProfile(
   val vehicleSummary: String = "PEV Unit",
   val visibility: String = "PUBLIC",
   val avatarBase64: String = "",
+  val online: Boolean = false,
+  val lastSeenMs: Long = 0L,
   val createdAt: Timestamp? = null,
   val updatedAt: Timestamp? = null,
-)
+) {
+  fun isLiveOnline(nowMs: Long = System.currentTimeMillis()): Boolean {
+    val recentSeen = lastSeenMs > 0L && (nowMs - lastSeenMs) <= 5L * 60_000L
+    val recentUpdate = (updatedAt?.seconds ?: 0L) > 0L && (nowMs / 1000L - (updatedAt?.seconds ?: 0L)) <= 300L
+    return (online && (recentSeen || recentUpdate || lastSeenMs == 0L)) || recentSeen
+  }
+}
 
 data class RideSession(
   @DocumentId val id: String = "",
@@ -942,6 +950,9 @@ data class PrayerJournalEntry(
 data class UserNotification(
   @DocumentId val id: String = "",
   val userId: String = "",
+  val recipientId: String = "",
+  val senderId: String = "",
+  val senderCallsign: String = "",
   val title: String = "",
   val body: String = "",
   val message: String = "",
@@ -1098,6 +1109,7 @@ data class DmThread(
   val participantUids: List<String> = emptyList(),
   val participantCallsigns: List<String> = emptyList(),
   val lastMessage: String = "",
+  val lastSenderId: String = "",
   val selfDestructSec: Long = 0L,
   val createdAt: Timestamp? = null,
   val updatedAt: Timestamp? = null,

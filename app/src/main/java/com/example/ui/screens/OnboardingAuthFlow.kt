@@ -1202,7 +1202,6 @@ fun RidersPrayerModal(
   onDeleteJournal: (String) -> Unit,
   onDismiss: () -> Unit,
 ) {
-  BackHandler(onBack = onDismiss)
   var selectedTab by remember { mutableIntStateOf(0) }
   var journalTitle by remember { mutableStateOf("") }
   var journalBody by remember { mutableStateOf("") }

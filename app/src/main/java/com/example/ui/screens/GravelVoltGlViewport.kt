@@ -77,12 +77,89 @@ private class GravelVoltGlRenderer(
   private lateinit var sphereBuf: FloatBuffer
   private var sphereVertCount = 0
 
+  private class GlSculptedPart(
+    val buf: FloatBuffer,
+    val vertCount: Int,
+    val baseRgb: FloatArray,
+    val emissiveBoost: Float,
+    val isWheel: Boolean,
+    val axleCenter: Vec3?,
+  )
+
+  private var cachedVehicleKey = ""
+  private var cachedVehicleParts: List<GlSculptedPart> = emptyList()
+  private var cachedVehicleMinY = -0.45f
+  private var cachedVehicleScale = 1.05f
+
   private val viewMatrix = FloatArray(16)
   private val projMatrix = FloatArray(16)
   private val modelMatrix = FloatArray(16)
   private val mvMatrix = FloatArray(16)
   private val mvpMatrix = FloatArray(16)
   private val startNs = System.nanoTime()
+
+  private fun ensureVehicleMeshLoaded(vehicleName: String) {
+    if (vehicleName == cachedVehicleKey && cachedVehicleParts.isNotEmpty()) return
+    cachedVehicleKey = vehicleName
+    val finish = Pev3dEngine.finishForModel(vehicleName, "", 72)
+    val archetype =
+      when (finish.blueprintType) {
+        Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE,
+        Pev3dBlueprintType.EUC_AERO_TRAIL -> Pev3dArchetype.EUC
+        Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD,
+        Pev3dBlueprintType.SCOOTER_TUBULAR_RACING,
+        Pev3dBlueprintType.SCOOTER_MONOCOQUE_AERO -> Pev3dArchetype.SCOOTER
+        Pev3dBlueprintType.EBIKE_SCRAMBLER_MOPED -> Pev3dArchetype.EBIKE
+        Pev3dBlueprintType.HYDROFOIL_EFOIL -> Pev3dArchetype.HYDROFOIL
+        else -> Pev3dArchetype.EMOTO
+      }
+    val scene = Pev3dGltfBuilder.buildSceneMeshes(
+      archetype = archetype,
+      finish = finish,
+      lightsOn = true,
+    )
+    var minY = Float.POSITIVE_INFINITY
+    var maxExtent = 0.5f
+    val glParts = ArrayList<GlSculptedPart>(scene.parts.size)
+    for (part in scene.parts) {
+      val idxArr = part.indices
+      val srcVerts = part.vertices
+      if (idxArr.isEmpty() || srcVerts.isEmpty()) continue
+      val out = FloatArray(idxArr.size * 6)
+      var o = 0
+      for (k in idxArr.indices) {
+        val vi = (idxArr[k].toInt() and 0xFFFF) * 8
+        if (vi + 5 >= srcVerts.size) continue
+        val px = srcVerts[vi]
+        val py = srcVerts[vi + 1]
+        val pz = srcVerts[vi + 2]
+        if (py < minY) minY = py
+        val ax = kotlin.math.abs(px)
+        if (ax > maxExtent) maxExtent = ax
+        out[o] = px
+        out[o + 1] = py
+        out[o + 2] = pz
+        out[o + 3] = srcVerts[vi + 3]
+        out[o + 4] = srcVerts[vi + 4]
+        out[o + 5] = srcVerts[vi + 5]
+        o += 6
+      }
+      val em = ((part.emissiveRgb[0] + part.emissiveRgb[1] + part.emissiveRgb[2]) / 3f).coerceIn(0f, 1f)
+      glParts.add(
+        GlSculptedPart(
+          buf = allocBuffer(out),
+          vertCount = o / 6,
+          baseRgb = part.baseRgb.copyOf(),
+          emissiveBoost = em,
+          isWheel = part.nodeName.startsWith("wheel_") && part.axleCenter != null,
+          axleCenter = part.axleCenter,
+        )
+      )
+    }
+    cachedVehicleMinY = if (minY.isFinite()) minY else -0.45f
+    cachedVehicleScale = (0.95f / maxExtent.coerceAtLeast(0.45f)).coerceIn(0.75f, 1.35f)
+    cachedVehicleParts = glParts
+  }
 
   override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
     val glVersion = GLES20.glGetString(GLES20.GL_VERSION).orEmpty()
@@ -404,142 +481,67 @@ private class GravelVoltGlRenderer(
     }
 
     // =========================================================================
-    // 6. REALISTIC MULTI-PART 3D PLAYER PEV RIG + HEADLIGHT CONE & KNOBBY WHEELS
+    // 6. HIGH-POLY SCULPTED 3D PLAYER PEV RIG (SHARED WITH 3D LABS ENGINE)
     // =========================================================================
     val px = laneX
-    val py = 0.42f + state.jumpHeight * 2.2f
+    val groundY = -0.06f
+    val py = groundY + state.jumpHeight * 2.2f
     val pz = 0f
     val bankRad = state.turnBankDeg
-    val finish = Pev3dEngine.finishForModel(state.vehicleName, "", 72)
-    val bCol = finish.bodyRgb
-    val aCol = finish.accentRgb
-    val cCol = finish.caliperRgb
-    val boostCol = if (state.boostActive) floatArrayOf(0.15f, 0.92f, 1.0f) else floatArrayOf(0.95f, 0.22f, 0.14f)
+    ensureVehicleMeshLoaded(state.vehicleName)
+
+    // Grounded contact shadow directly underneath the PEV wheels on the dirt trail
+    val shadowScale = (1f - state.jumpHeight * 0.45f).coerceIn(0.45f, 1f)
+    drawSphere(px, -0.055f, pz, 0.95f * shadowScale, 0.02f, 2.05f * shadowScale, 0.12f, 0.09f, 0.06f, 0.62f, 0f)
 
     // Soft warm headlight beam pool on dirt road ahead
-    drawSphere(px, -0.05f, pz - 4.2f, 2.2f, 0.03f, 6.0f, 0.98f, 0.95f, 0.82f, 0.18f, 0.9f)
+    drawSphere(px, -0.05f, pz - 4.4f, 2.3f, 0.03f, 6.4f, 0.98f, 0.95f, 0.82f, 0.20f, 0.92f)
 
-    fun drawDetailedGameWheel(wx: Float, wy: Float, wz: Float, radius: Float, width: Float) {
-      drawPartRotated(wx, wy, wz, width, radius * 2f, radius * 2f, state.wheelSpinDeg, bankRad, 0.11f, 0.12f, 0.14f, 0f, isCyl = true)
-      for (k in 0 until 10) {
-        val angRad = ((state.wheelSpinDeg + k * 36f) * PI / 180.0).toFloat()
-        val ty = wy + cos(angRad) * (radius * 0.97f)
-        val tz = wz - sin(angRad) * (radius * 0.97f)
-        drawPartRotated(wx, ty, tz, width * 1.06f, 0.055f, 0.055f, 0f, bankRad, 0.08f, 0.09f, 0.11f, 0f)
+    // Render every sculpted high-poly mesh part from Pev3dGltfBuilder
+    val vehScale = cachedVehicleScale
+    val liftY = py - cachedVehicleMinY * vehScale
+    for (part in cachedVehicleParts) {
+      Matrix.setIdentityM(modelMatrix, 0)
+      Matrix.translateM(modelMatrix, 0, px, liftY, pz)
+      if (bankRad != 0f) {
+        Matrix.rotateM(modelMatrix, 0, -bankRad * 1.15f, 0f, 0f, 1f)
       }
-      drawPartRotated(wx, wy, wz, width * 1.08f, radius * 1.24f, radius * 1.24f, state.wheelSpinDeg, bankRad, aCol[0], aCol[1], aCol[2], 0.25f, isCyl = true)
-      drawPartRotated(wx, wy, wz, width * 1.14f, radius * 0.68f, radius * 0.68f, state.wheelSpinDeg, bankRad, 0.24f, 0.27f, 0.32f, 0.15f, isCyl = true)
-      drawPartRotated(wx + width * 0.58f, wy, wz, 0.03f, radius * 0.96f, radius * 0.96f, state.wheelSpinDeg, bankRad, 0.82f, 0.86f, 0.92f, 0.35f, isCyl = true)
-      drawPartRotated(wx + width * 0.62f, wy + radius * 0.38f, wz - radius * 0.22f, 0.06f, 0.11f, 0.13f, 0f, bankRad, cCol[0], cCol[1], cCol[2], 0.45f)
+      // Rotate +X forward (3D Lab frame) into -Z forward (dirt trail heading)
+      Matrix.rotateM(modelMatrix, 0, 90f, 0f, 1f, 0f)
+      Matrix.scaleM(modelMatrix, 0, vehScale, vehScale, vehScale)
+      if (part.isWheel && part.axleCenter != null) {
+        val ac = part.axleCenter
+        Matrix.translateM(modelMatrix, 0, ac.x, ac.y, ac.z)
+        Matrix.rotateM(modelMatrix, 0, -state.wheelSpinDeg, 0f, 0f, 1f)
+        Matrix.translateM(modelMatrix, 0, -ac.x, -ac.y, -ac.z)
+      }
+      val r = part.baseRgb[0]
+      val g = part.baseRgb[1]
+      val b = part.baseRgb[2]
+      submitBuffer(part.buf, part.vertCount, r, g, b, 1f, part.emissiveBoost)
     }
 
-    when (finish.blueprintType) {
-      Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE,
-      Pev3dBlueprintType.EUC_AERO_TRAIL, -> {
-        drawDetailedGameWheel(px, py + 0.05f, pz, 0.30f, 0.24f)
-        drawPartRotated(px - 0.17f, py + 0.22f, pz, 0.10f, 0.58f, 0.54f, 0f, bankRad, 0.18f, 0.20f, 0.25f, 0.12f)
-        drawPartRotated(px + 0.17f, py + 0.22f, pz, 0.10f, 0.58f, 0.54f, 0f, bankRad, 0.18f, 0.20f, 0.25f, 0.12f)
-        drawPartRotated(px - 0.22f, py + 0.24f, pz, 0.05f, 0.46f, 0.48f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.28f, isSphere = true)
-        drawPartRotated(px + 0.22f, py + 0.24f, pz, 0.05f, 0.46f, 0.48f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.28f, isSphere = true)
-        drawPartRotated(px - 0.25f, py + 0.24f, pz - 0.14f, 0.06f, 0.36f, 0.14f, 0f, bankRad, 0.13f, 0.13f, 0.16f, 0.05f, isSphere = true)
-        drawPartRotated(px + 0.25f, py + 0.24f, pz - 0.14f, 0.06f, 0.36f, 0.14f, 0f, bankRad, 0.13f, 0.13f, 0.16f, 0.05f, isSphere = true)
-        drawPartRotated(px - 0.32f, py - 0.05f, pz, 0.18f, 0.04f, 0.38f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.35f)
-        drawPartRotated(px + 0.32f, py - 0.05f, pz, 0.18f, 0.04f, 0.38f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.35f)
-        drawPartRotated(px - 0.19f, py + 0.28f, pz + 0.18f, 0.06f, 0.64f, 0.06f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f)
-        drawPartRotated(px + 0.19f, py + 0.28f, pz + 0.18f, 0.06f, 0.64f, 0.06f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f)
-        drawPartRotated(px, py + 0.56f, pz, 0.38f, 0.10f, 0.50f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.35f, isSphere = true)
-        drawPartRotated(px, py + 0.62f, pz - 0.05f, 0.18f, 0.03f, 0.18f, 0f, bankRad, 0.08f, 0.85f, 0.98f, 0.95f)
-        drawPartRotated(px, py + 0.44f, pz - 0.32f, 0.22f, 0.14f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f, isSphere = true)
-        drawPartRotated(px, py + 0.40f, pz + 0.32f, 0.26f, 0.10f, 0.08f, 0f, bankRad, boostCol[0], boostCol[1], boostCol[2], 1.0f)
-      }
-      Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD,
-      Pev3dBlueprintType.SCOOTER_TUBULAR_RACING,
-      Pev3dBlueprintType.SCOOTER_MONOCOQUE_AERO, -> {
-        drawDetailedGameWheel(px, py - 0.18f, pz - 0.66f, 0.18f, 0.18f)
-        drawDetailedGameWheel(px, py - 0.18f, pz + 0.66f, 0.18f, 0.18f)
-        drawPartRotated(px, py - 0.10f, pz, 0.46f, 0.14f, 1.18f, 0f, bankRad, 0.16f, 0.18f, 0.22f, 0.12f)
-        drawPartRotated(px, py - 0.02f, pz, 0.40f, 0.03f, 1.06f, 0f, bankRad, 0.10f, 0.11f, 0.13f, 0.05f)
-        drawPartRotated(px - 0.24f, py - 0.10f, pz, 0.05f, 0.12f, 1.12f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.35f, isSphere = true)
-        drawPartRotated(px + 0.24f, py - 0.10f, pz, 0.05f, 0.12f, 1.12f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.35f, isSphere = true)
-        drawPartRotated(px, py + 0.04f, pz + 0.52f, 0.36f, 0.14f, 0.26f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.30f, isSphere = true)
-        drawPartRotated(px - 0.14f, py - 0.14f, pz + 0.56f, 0.05f, 0.10f, 0.32f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f)
-        drawPartRotated(px + 0.14f, py - 0.14f, pz + 0.56f, 0.05f, 0.10f, 0.32f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f)
-        if (finish.blueprintType == Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD) {
-          drawPartRotated(px - 0.12f, py + 0.48f, pz - 0.50f, 0.07f, 1.16f, 0.07f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.35f)
-          drawPartRotated(px + 0.12f, py + 0.48f, pz - 0.50f, 0.07f, 1.16f, 0.07f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.35f)
-          drawPartRotated(px, py + 0.32f, pz - 0.50f, 0.34f, 0.06f, 0.12f, 0f, bankRad, 0.20f, 0.22f, 0.26f, 0.20f)
-          drawPartRotated(px, py + 0.72f, pz - 0.49f, 0.34f, 0.06f, 0.12f, 0f, bankRad, 0.20f, 0.22f, 0.26f, 0.20f)
-        } else {
-          drawPartRotated(px, py + 0.48f, pz - 0.50f, 0.13f, 1.14f, 0.14f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.30f)
-        }
-        drawPartRotated(px, py + 1.06f, pz - 0.48f, 0.86f, 0.06f, 0.07f, 0f, bankRad, 0.85f, 0.88f, 0.94f, 0.40f, isCyl = true)
-        drawPartRotated(px - 0.36f, py + 1.06f, pz - 0.48f, 0.18f, 0.08f, 0.09f, 0f, bankRad, 0.11f, 0.12f, 0.14f, 0.05f, isCyl = true)
-        drawPartRotated(px + 0.36f, py + 1.06f, pz - 0.48f, 0.18f, 0.08f, 0.09f, 0f, bankRad, 0.11f, 0.12f, 0.14f, 0.05f, isCyl = true)
-        drawPartRotated(px, py + 1.12f, pz - 0.46f, 0.18f, 0.10f, 0.06f, 0f, bankRad, 0.08f, 0.86f, 0.98f, 0.95f)
-        drawPartRotated(px, py + 0.38f, pz - 0.58f, 0.24f, 0.12f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f, isSphere = true)
-        drawPartRotated(px, py - 0.02f, pz + 0.64f, 0.28f, 0.09f, 0.08f, 0f, bankRad, boostCol[0], boostCol[1], boostCol[2], 1.0f)
-      }
-      Pev3dBlueprintType.HYDROFOIL_EFOIL -> {
-        drawPartRotated(px, py + 0.08f, pz, 0.72f, 0.12f, 1.62f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.28f, isSphere = true)
-        drawPartRotated(px, py + 0.14f, pz + 0.06f, 0.54f, 0.04f, 1.18f, 0f, bankRad, 0.11f, 0.12f, 0.14f, 0.05f, isSphere = true)
-        drawPartRotated(px, py - 0.22f, pz + 0.15f, 0.07f, 0.54f, 0.22f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.30f)
-        drawPartRotated(px, py - 0.44f, pz + 0.10f, 0.88f, 0.05f, 0.24f, 0f, bankRad, 0.20f, 0.85f, 0.95f, 0.45f, isSphere = true)
-        drawPartRotated(px, py + 0.16f, pz - 0.72f, 0.24f, 0.08f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f, isSphere = true)
-      }
-      else -> {
-        val isScrambler = finish.blueprintType == Pev3dBlueprintType.EBIKE_SCRAMBLER_MOPED
-        val wheelR = if (isScrambler) 0.22f else 0.25f
-        val tireW = if (isScrambler) 0.18f else 0.15f
-        drawDetailedGameWheel(px, py - 0.13f, pz - 0.70f, wheelR, tireW)
-        drawDetailedGameWheel(px, py - 0.13f, pz + 0.70f, wheelR, tireW)
-
-        drawPartRotated(px - 0.11f, py + 0.14f, pz - 0.08f, 0.06f, 0.24f, 0.86f, 0f, bankRad, 0.18f, 0.20f, 0.24f, 0.15f)
-        drawPartRotated(px + 0.11f, py + 0.14f, pz - 0.08f, 0.06f, 0.24f, 0.86f, 0f, bankRad, 0.18f, 0.20f, 0.24f, 0.15f)
-        drawPartRotated(px - 0.12f, py - 0.08f, pz + 0.44f, 0.05f, 0.09f, 0.56f, 0f, bankRad, 0.24f, 0.27f, 0.32f, 0.18f)
-        drawPartRotated(px + 0.12f, py - 0.08f, pz + 0.44f, 0.05f, 0.09f, 0.56f, 0f, bankRad, 0.24f, 0.27f, 0.32f, 0.18f)
-        drawPartRotated(px, py - 0.14f, pz + 0.08f, 0.48f, 0.04f, 0.07f, 0f, bankRad, 0.65f, 0.68f, 0.74f, 0.25f, isCyl = true)
-        drawPartRotated(px, py + 0.06f, pz + 0.28f, 0.10f, 0.28f, 0.10f, 0f, bankRad, cCol[0], cCol[1], cCol[2], 0.45f)
-
-        drawPartRotated(px, py + 0.14f, pz - 0.08f, 0.22f, 0.32f, 0.38f, 0f, bankRad, 0.16f, 0.19f, 0.24f, 0.15f)
-        drawPartRotated(px, py - 0.06f, pz + 0.02f, 0.26f, 0.18f, 0.20f, 0f, bankRad, 0.55f, 0.38f, 0.20f, 0.30f, isCyl = true)
-
-        // Sculpted curved tank shrouds, side fairings & tail (using smooth spheres instead of sharp boxes)
-        drawPartRotated(px, py + 0.34f, pz - 0.16f, 0.30f, 0.20f, 0.52f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.32f, isSphere = true)
-        drawPartRotated(px - 0.15f, py + 0.28f, pz - 0.14f, 0.06f, 0.24f, 0.48f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.38f, isSphere = true)
-        drawPartRotated(px + 0.15f, py + 0.28f, pz - 0.14f, 0.06f, 0.24f, 0.48f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.38f, isSphere = true)
-        drawPartRotated(px, py + 0.34f, pz + 0.48f, 0.22f, 0.12f, 0.46f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.34f, isSphere = true)
-
-        // Sculpted Moto Saddle Bench Seat
-        drawPartRotated(px, py + 0.39f, pz + 0.22f, 0.24f, 0.12f, 0.56f, 0f, bankRad, 0.12f, 0.12f, 0.15f, 0.06f, isSphere = true)
-
-        // Inverted USD Front Forks + Sculpted High MX Front Fender Beak
-        drawPartRotated(px - 0.12f, py + 0.40f, pz - 0.54f, 0.07f, 0.54f, 0.07f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.45f)
-        drawPartRotated(px + 0.12f, py + 0.40f, pz - 0.54f, 0.07f, 0.54f, 0.07f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.45f)
-        drawPartRotated(px - 0.12f, py + 0.04f, pz - 0.64f, 0.05f, 0.36f, 0.05f, 0f, bankRad, 0.82f, 0.86f, 0.90f, 0.35f)
-        drawPartRotated(px + 0.12f, py + 0.04f, pz - 0.64f, 0.05f, 0.36f, 0.05f, 0f, bankRad, 0.82f, 0.86f, 0.90f, 0.35f)
-        drawPartRotated(px, py + 0.52f, pz - 0.52f, 0.32f, 0.05f, 0.11f, 0f, bankRad, 0.20f, 0.22f, 0.26f, 0.25f)
-        drawPartRotated(px, py + 0.32f, pz - 0.68f, 0.18f, 0.07f, 0.38f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.36f, isSphere = true)
-
-        drawPartRotated(px, py + 0.58f, pz - 0.58f, 0.20f, 0.20f, 0.05f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.32f)
-        drawPartRotated(px, py + 0.74f, pz - 0.48f, 0.84f, 0.06f, 0.07f, 0f, bankRad, 0.86f, 0.90f, 0.95f, 0.40f, isCyl = true)
-        drawPartRotated(px - 0.35f, py + 0.74f, pz - 0.48f, 0.18f, 0.08f, 0.09f, 0f, bankRad, 0.10f, 0.11f, 0.13f, 0.05f, isCyl = true)
-        drawPartRotated(px + 0.35f, py + 0.74f, pz - 0.48f, 0.18f, 0.08f, 0.09f, 0f, bankRad, 0.10f, 0.11f, 0.13f, 0.05f, isCyl = true)
-        drawPartRotated(px - 0.38f, py + 0.76f, pz - 0.54f, 0.15f, 0.09f, 0.06f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f, isSphere = true)
-        drawPartRotated(px + 0.38f, py + 0.76f, pz - 0.54f, 0.15f, 0.09f, 0.06f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f, isSphere = true)
-        drawPartRotated(px, py + 0.79f, pz - 0.46f, 0.16f, 0.09f, 0.05f, 0f, bankRad, 0.08f, 0.86f, 0.98f, 0.95f)
-
-        drawPartRotated(px, py + 0.48f, pz - 0.62f, 0.22f, 0.12f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f, isSphere = true)
-        drawPartRotated(px, py + 0.33f, pz + 0.70f, 0.22f, 0.08f, 0.08f, 0f, bankRad, boostCol[0], boostCol[1], boostCol[2], 1.0f)
+    // Dynamic gravel & dirt dust rooster-tail kicked up behind the rear tire when grounded
+    if (state.jumpHeight < 0.08f) {
+      for (d in 0..4) {
+        val phase = ((t * 5.2f + d * 0.22f) % 1f)
+        val dustZ = pz + 0.95f + phase * 2.15f
+        val dustY = 0.08f + phase * 0.42f
+        val dustX = px + sin(t * 9f + d * 1.7f) * (0.09f + phase * 0.22f)
+        val dustSize = 0.16f + phase * 0.34f
+        val dustAlpha = ((1f - phase) * 0.45f).coerceIn(0.05f, 0.45f)
+        drawSphere(dustX, dustY, dustZ, dustSize, dustSize * 0.72f, dustSize, 0.62f, 0.47f, 0.31f, dustAlpha, 0.05f)
       }
     }
+
     if (state.boostActive) {
-      drawSphere(px, py + 0.22f, pz + 1.05f, 0.28f, 0.24f, 0.65f, 0.15f, 0.95f, 1.0f, 0.85f, 1.0f)
+      drawSphere(px, py + 0.45f, pz + 1.18f, 0.30f, 0.26f, 0.72f, 0.15f, 0.95f, 1.0f, 0.85f, 1.0f)
     }
 
     if (state.turnSignalActive && state.turnSignalDir != 0) {
       val sx = if (state.turnSignalDir < 0) px - 0.44f else px + 0.44f
-      drawSphere(sx, py + 0.72f, pz - 0.46f, 0.13f, 0.10f, 0.10f, 1.0f, 0.68f, 0.05f, 1f, 1.0f)
-      drawSphere(sx * 0.65f, py + 0.32f, pz + 0.68f, 0.11f, 0.09f, 0.09f, 1.0f, 0.68f, 0.05f, 1f, 1.0f)
+      drawSphere(sx, py + 0.95f, pz - 0.46f, 0.14f, 0.10f, 0.10f, 1.0f, 0.68f, 0.05f, 1f, 1.0f)
+      drawSphere(sx * 0.65f, py + 0.52f, pz + 0.72f, 0.12f, 0.09f, 0.09f, 1.0f, 0.68f, 0.05f, 1f, 1.0f)
     }
   }
 

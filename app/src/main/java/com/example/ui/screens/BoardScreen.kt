@@ -996,6 +996,8 @@ fun BoardScreen(
                         items(activeCrew, key = { "crew_${it.userId}" }) { pilot ->
                           val isMe = pilot.userId == myUid
                           val isFollowing = followedPilotIds.contains(pilot.userId)
+                          val isOnline = pilot.isLiveOnline() || isMe
+                          val distText = com.example.ui.components.formatDistanceLabel(pilot.totalKm, settings.distanceUnit)
                           Surface(
                             onClick = {
                               playCue(VoiceAudioManager.TouchCue.BUTTON_TAP)
@@ -1004,8 +1006,12 @@ fun BoardScreen(
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                             shape = RoundedCornerShape(14.dp),
                             border = BorderStroke(
-                              0.8.dp,
-                              if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                              if (isOnline) 1.2.dp else 0.8.dp,
+                              when {
+                                isOnline -> Color(0xFF22C55E)
+                                isFollowing -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                              },
                             ),
                           ) {
                             Row(
@@ -1015,17 +1021,26 @@ fun BoardScreen(
                             ) {
                               PilotAvatarThumb(avatarSource = pilot.avatarBase64, callsign = pilot.callsign, size = 28.dp)
                               Column {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                  Box(
+                                    Modifier
+                                      .size(8.dp)
+                                      .clip(CircleShape)
+                                      .background(if (isOnline) Color(0xFF22C55E) else MaterialTheme.colorScheme.outlineVariant)
+                                  )
+                                  Text(
+                                    if (isMe) "${pilot.callsign.ifBlank { "PILOT" }} (YOU)" else pilot.callsign.ifBlank { "PILOT" },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                  )
+                                }
                                 Text(
-                                  if (isMe) "${pilot.callsign.ifBlank { "PILOT" }} (YOU)" else pilot.callsign.ifBlank { "PILOT" },
+                                  "${if (isOnline) "ONLINE NOW" else "OFFLINE"} • ${pilot.ridesCount} rides • $distText",
                                   style = MaterialTheme.typography.labelSmall,
-                                  fontWeight = FontWeight.Bold,
-                                  maxLines = 1,
-                                  softWrap = false,
-                                )
-                                Text(
-                                  "${pilot.ridesCount} rides • ${"%.0f".format(pilot.totalKm)}km",
-                                  style = MaterialTheme.typography.labelSmall,
-                                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                  color = if (isOnline) Color(0xFF22C55E) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                  fontWeight = if (isOnline) FontWeight.Bold else FontWeight.Normal,
                                   maxLines = 1,
                                   softWrap = false,
                                 )
@@ -1034,7 +1049,7 @@ fun BoardScreen(
                                 Surface(
                                   onClick = {
                                     playCue(VoiceAudioManager.TouchCue.BUTTON_TAP)
-                                    socialVm.toggleFollowPilot(myUid, pilot.userId)
+                                    socialVm.toggleFollowPilot(myUid, pilot.userId, callsign, pilot.callsign)
                                   },
                                   color = if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
                                   shape = RoundedCornerShape(8.dp),
@@ -1076,8 +1091,9 @@ fun BoardScreen(
             } else if (activeSubTab == 1 && activeCrew.isNotEmpty()) {
               item(key = "board_trail_crew_directory") {
                 TacticalCard(modifier = Modifier.padding(horizontal = 14.dp).testTag("board_trail_crew_directory")) {
+                  val onlineCount = activeCrew.count { it.isLiveOnline() || it.userId == myUid }
                   Text(
-                    "DISCOVER & FRIEND RIDERS (${activeCrew.size})",
+                    "DISCOVER & FRIEND RIDERS (${activeCrew.size} REAL • $onlineCount ONLINE NOW)",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary,
@@ -1087,11 +1103,15 @@ fun BoardScreen(
                     items(activeCrew, key = { "trail_crew_${it.userId}" }) { pilot ->
                       val isMe = pilot.userId == myUid
                       val isFollowing = followedPilotIds.contains(pilot.userId)
+                      val isOnline = pilot.isLiveOnline() || isMe
                       Surface(
                         onClick = { inspectedPilot = pilot },
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(0.8.dp, if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                        border = BorderStroke(
+                          if (isOnline) 1.2.dp else 0.8.dp,
+                          if (isOnline) Color(0xFF22C55E) else if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                        ),
                       ) {
                         Row(
                           modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -1100,20 +1120,28 @@ fun BoardScreen(
                         ) {
                           PilotAvatarThumb(avatarSource = pilot.avatarBase64, callsign = pilot.callsign, size = 28.dp)
                           Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                              Box(
+                                Modifier
+                                  .size(8.dp)
+                                  .clip(CircleShape)
+                                  .background(if (isOnline) Color(0xFF22C55E) else MaterialTheme.colorScheme.outlineVariant)
+                              )
+                              Text(
+                                if (isMe) "${pilot.callsign.ifBlank { "PILOT" }} (YOU)" else pilot.callsign.ifBlank { "PILOT" },
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                              )
+                            }
                             Text(
-                              if (isMe) "${pilot.callsign.ifBlank { "PILOT" }} (YOU)" else pilot.callsign.ifBlank { "PILOT" },
+                              if (isOnline) "ONLINE • ${pilot.vehicleSummary.ifBlank { "PEV Pilot" }.take(18)}" else pilot.vehicleSummary.ifBlank { "PEV Pilot" }.take(22),
                               style = MaterialTheme.typography.labelSmall,
-                              fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                              pilot.vehicleSummary.ifBlank { "PEV Pilot" }.take(22),
-                              style = MaterialTheme.typography.labelSmall,
-                              color = MaterialTheme.colorScheme.onSurfaceVariant,
+                              color = if (isOnline) Color(0xFF22C55E) else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                           }
                           if (!isMe) {
                             Surface(
-                              onClick = { socialVm.toggleFollowPilot(myUid, pilot.userId) },
+                              onClick = { socialVm.toggleFollowPilot(myUid, pilot.userId, callsign, pilot.callsign) },
                               color = if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
                               shape = RoundedCornerShape(8.dp),
                             ) {
@@ -1363,7 +1391,6 @@ fun BoardScreen(
   }
 
   activeCommentPost?.let { p ->
-    BackHandler { activeCommentPost = null }
     var cText by remember { mutableStateOf("") }
     var aiReplies by remember { mutableStateOf<List<String>>(emptyList()) }
     ModalBottomSheet(onDismissRequest = { activeCommentPost = null }) {
@@ -1454,14 +1481,21 @@ fun BoardScreen(
               Text(p.callsign, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
               if (p.verified) Icon(Icons.Default.Verified, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
             }
-            Text("XP: ${p.xpPoints} • Rides: ${p.ridesCount} • ${"%.1f".format(p.totalKm)} km", style = MaterialTheme.typography.bodySmall)
+            Text(
+              "XP: ${p.xpPoints} • Rides: ${p.ridesCount} • ${com.example.ui.components.formatDistanceLabel(p.totalKm, settings.distanceUnit)}",
+              style = MaterialTheme.typography.bodySmall,
+            )
           }
         }
-        Text("Trust Score: ${p.trustScore}/100 • Fleet: ${p.vehicleSummary.ifBlank { "PEV Rider" }}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+          "${if (p.isLiveOnline() || p.userId == myUid) "🟢 ONLINE NOW • " else ""}Trust Score: ${p.trustScore}/100 • Fleet: ${p.vehicleSummary.ifBlank { "PEV Rider" }}",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         if (p.userId != myUid && p.userId.isNotBlank()) {
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TacticalOutlinedButton(
-              onClick = { socialVm.toggleFollowPilot(myUid, p.userId) },
+              onClick = { socialVm.toggleFollowPilot(myUid, p.userId, callsign, p.callsign) },
               modifier = Modifier.weight(1f),
             ) { Text(if (isFollowing) "Unfollow" else "Follow") }
             TacticalOutlinedButton(

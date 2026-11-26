@@ -152,7 +152,15 @@ service cloud.firestore {
              data.trustScore is int && data.trustScore >= 0 && data.trustScore <= 100 &&
              data.vehicleSummary is string && data.vehicleSummary.size() <= 100 &&
              data.visibility in ['PUBLIC', 'PRIVATE'] &&
+             (!('online' in data) || data.online is bool) &&
+             (!('lastSeenMs' in data) || data.lastSeenMs is int) &&
              (!('avatarBase64' in data) || (data.avatarBase64 is string && data.avatarBase64.size() <= 65000));
+    }
+
+    function isValidFollowingEntry(data, userId, targetUid) {
+      return data.userId == userId &&
+             data.targetUid == targetUid &&
+             data.targetCallsign is string && data.targetCallsign.size() <= 32;
     }
 
     function isValidBoardPost(data) {
@@ -483,6 +491,27 @@ service cloud.firestore {
         allow delete: if isOwner(userId) && isValidId(notifId);
       }
 
+      match /following/{targetUid} {
+        allow get: if isOwner(userId) && isValidId(targetUid);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(targetUid) &&
+                         userId != targetUid &&
+                         incoming().keys().hasAll(['userId', 'targetUid', 'targetCallsign', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'targetUid', 'targetCallsign', 'createdAt', 'updatedAt']) &&
+                         isValidFollowingEntry(incoming(), userId, targetUid) &&
+                         isValidCreateTimestamps(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(targetUid) &&
+                         isValidFollowingEntry(incoming(), userId, targetUid) &&
+                         isValidUpdateTimestamps(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['targetCallsign', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(targetUid);
+      }
+
       match /backups/{backupId} {
         allow get: if isOwner(userId) && isValidId(backupId);
         allow list: if isOwner(userId);
@@ -513,7 +542,7 @@ service cloud.firestore {
       allow create: if isOwner(userId) &&
                        isValidId(userId) &&
                        incoming().keys().hasAll(['userId', 'callsign', 'rankBadge', 'xpPoints', 'totalKm', 'ridesCount', 'verified', 'banned', 'trustScore', 'vehicleSummary', 'visibility', 'createdAt', 'updatedAt']) &&
-                       incoming().keys().hasOnly(['userId', 'callsign', 'rankBadge', 'xpPoints', 'totalKm', 'ridesCount', 'verified', 'banned', 'trustScore', 'vehicleSummary', 'visibility', 'avatarBase64', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'callsign', 'rankBadge', 'xpPoints', 'totalKm', 'ridesCount', 'verified', 'banned', 'trustScore', 'vehicleSummary', 'visibility', 'avatarBase64', 'online', 'lastSeenMs', 'createdAt', 'updatedAt']) &&
                        incoming().verified == false &&
                        incoming().banned == false &&
                        incoming().trustScore == 100 &&
@@ -527,16 +556,15 @@ service cloud.firestore {
                        (!('createdAt' in existing()) || isValidUpdateTimestamps(incoming())) &&
                        (
                          (isOwner(userId) &&
-                          (!('callsign' in existing()) || existing().callsign == '' || existing().callsign.matches('^[Pp][Ii][Ll][Oo][Tt][_\\-].*') || incoming().callsign == existing().callsign) &&
                           ((!('verified' in existing()) && incoming().verified == false) || incoming().verified == existing().verified) &&
                           ((!('banned' in existing()) && incoming().banned == false) || incoming().banned == existing().banned) &&
                           ((!('trustScore' in existing()) && incoming().trustScore == 100) || incoming().trustScore == existing().trustScore) &&
-                          incoming().diff(existing()).affectedKeys().hasOnly(['userId', 'callsign', 'rankBadge', 'xpPoints', 'totalKm', 'ridesCount', 'verified', 'banned', 'trustScore', 'vehicleSummary', 'visibility', 'avatarBase64', 'createdAt', 'updatedAt'])) ||
+                          incoming().diff(existing()).affectedKeys().hasOnly(['userId', 'callsign', 'rankBadge', 'xpPoints', 'totalKm', 'ridesCount', 'verified', 'banned', 'trustScore', 'vehicleSummary', 'visibility', 'avatarBase64', 'online', 'lastSeenMs', 'createdAt', 'updatedAt'])) ||
                          (isAdmin() &&
-                          incoming().diff(existing()).affectedKeys().hasOnly(['verified', 'banned', 'trustScore', 'rankBadge', 'updatedAt']))
+                          incoming().diff(existing()).affectedKeys().hasOnly(['verified', 'banned', 'trustScore', 'rankBadge', 'visibility', 'updatedAt']))
                        );
 
-      allow delete: if isAdmin() && isValidId(userId);
+      allow delete: if (isOwner(userId) || isAdmin()) && isValidId(userId);
     }
 
     // --- COMMUNITY BOARD ---
@@ -803,7 +831,7 @@ service cloud.firestore {
                        isValidId(threadId) &&
                        (request.auth.uid in incoming().participantUids) &&
                        incoming().keys().hasAll(['participantUids', 'participantCallsigns', 'lastMessage', 'selfDestructSec', 'createdAt', 'updatedAt']) &&
-                       incoming().keys().hasOnly(['participantUids', 'participantCallsigns', 'lastMessage', 'selfDestructSec', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['participantUids', 'participantCallsigns', 'lastMessage', 'lastSenderId', 'selfDestructSec', 'createdAt', 'updatedAt']) &&
                        isValidDmThread(incoming()) &&
                        isValidCreateTimestamps(incoming());
 
@@ -813,7 +841,7 @@ service cloud.firestore {
                        incoming().participantUids == existing().participantUids &&
                        isValidDmThread(incoming()) &&
                        isValidUpdateTimestamps(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'selfDestructSec', 'participantCallsigns', 'updatedAt']);
+                       incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastSenderId', 'selfDestructSec', 'participantCallsigns', 'updatedAt']);
 
       match /messages/{messageId} {
         allow get: if isSignedIn() && isValidId(threadId) && isValidId(messageId) && (resource == null || (request.auth.uid in existing().participantUids));
@@ -828,8 +856,12 @@ service cloud.firestore {
                          incoming().keys().hasOnly(['participantUids', 'senderId', 'senderCallsign', 'text', 'imageUrl', 'voiceBase64', 'selfDestructSec', 'createdAt', 'updatedAt']) &&
                          isValidDmMessage(incoming()) &&
                          isValidCreateTimestamps(incoming()) &&
-                         exists(/databases/$(database)/documents/direct_messages/$(threadId)) &&
-                         (request.auth.uid in get(/databases/$(database)/documents/direct_messages/$(threadId)).data.participantUids);
+                         (
+                           (exists(/databases/$(database)/documents/direct_messages/$(threadId)) &&
+                            (request.auth.uid in get(/databases/$(database)/documents/direct_messages/$(threadId)).data.participantUids)) ||
+                           (existsAfter(/databases/$(database)/documents/direct_messages/$(threadId)) &&
+                            (request.auth.uid in getAfter(/databases/$(database)/documents/direct_messages/$(threadId)).data.participantUids))
+                         );
 
         allow delete: if isSignedIn() && isValidId(threadId) && isValidId(messageId) && (request.auth.uid in existing().participantUids);
       }
