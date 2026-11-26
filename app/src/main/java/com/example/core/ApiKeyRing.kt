@@ -1,5 +1,6 @@
 package com.example.core
 
+import android.content.Context
 import android.util.Log
 import com.example.BuildConfig
 import java.util.concurrent.ConcurrentHashMap
@@ -13,7 +14,7 @@ class ApiKeyFailoverException(
 
 /**
  * Central API Key failover ring & secret redaction guard.
- * Reads configured secrets from BuildConfig while ensuring raw key values are never exposed in UI or logs.
+ * Reads configured secrets from BuildConfig and user-configured runtime keys.
  */
 object ApiKeyRing {
   private const val COOLDOWN_MS = 5L * 60L * 1000L
@@ -22,6 +23,49 @@ object ApiKeyRing {
     Regex("""(?i)([?&](?:key|api_key|apikey|access_token|appid|token)=)([^&\s]+)""")
   private val googleKeyPatternRegex =
     Regex("""\b(?:AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z._-]{20,})\b""")
+
+  @Volatile private var runtimeGeminiKey: String = ""
+
+  fun init(context: Context) {
+    if (runtimeGeminiKey.isBlank()) {
+      runCatching {
+        val prefs =
+          context.applicationContext.getSharedPreferences(
+            "rural_erides_runtime_secrets",
+            Context.MODE_PRIVATE,
+          )
+        val saved = prefs.getString("runtime_gemini_api_key", null)?.trim().orEmpty()
+        if (isRealKey(saved)) {
+          runtimeGeminiKey = saved
+          Log.i(KEY_RING_TAG, "Loaded user runtime Gemini API key (${saved.take(6)}...${saved.takeLast(4)})")
+        }
+      }
+    }
+  }
+
+  fun setRuntimeGeminiKey(context: Context?, key: String) {
+    val clean = key.trim()
+    runtimeGeminiKey = clean
+    context?.let { ctx ->
+      runCatching {
+        ctx.applicationContext
+          .getSharedPreferences("rural_erides_runtime_secrets", Context.MODE_PRIVATE)
+          .edit()
+          .putString("runtime_gemini_api_key", clean)
+          .apply()
+      }
+    }
+    if (clean.isNotBlank()) {
+      markKeyHealthy("GEMINI_CLOUD_CONSOLE", clean)
+    }
+  }
+
+  fun getRuntimeGeminiKey(): String = runtimeGeminiKey
+
+  fun getMaskedGeminiKey(): String {
+    val active = geminiKeys().firstOrNull() ?: return "No key configured"
+    return if (active.length > 8) "${active.take(6)}...${active.takeLast(4)}" else "***"
+  }
 
   fun isRealKey(raw: String?): Boolean {
     val v = raw?.trim().orEmpty()
@@ -59,7 +103,7 @@ object ApiKeyRing {
   }
 
   fun isFailoverCode(httpCode: Int): Boolean =
-    httpCode == 429 || httpCode == 403 || httpCode == 401 || httpCode == 402
+    httpCode == 429 || httpCode == 403 || httpCode == 401 || httpCode == 402 || httpCode == 400
 
   fun hasHealthyKey(service: String, pool: List<String>): Boolean {
     if (pool.isEmpty()) return false
@@ -133,8 +177,9 @@ object ApiKeyRing {
 
   fun geminiKeys(): List<String> =
     collectPool(
-      readOptionalBuildConfigSecret("GEMINI_API_KEY"),
+      runtimeGeminiKey,
       readOptionalBuildConfigSecret("GEMINI_API_KEY_2"),
+      readOptionalBuildConfigSecret("GEMINI_API_KEY"),
       BuildConfig.GOOGLE_CLOUD_API_KEY,
       BuildConfig.GOOGLE_API_KEY,
     )

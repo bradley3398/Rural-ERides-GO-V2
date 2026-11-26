@@ -57,6 +57,9 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Route
@@ -73,6 +76,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -87,7 +91,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.ai.DirectGeminiRestClient
+import com.example.ai.GeminiModelCatalog
+import com.example.core.ApiKeyRing
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -216,6 +225,8 @@ fun CopilotScreen(
   var skillSearch by rememberSaveable { mutableStateOf("") }
   var showSessionsSheet by remember { mutableStateOf(false) }
   var showSettingsDialog by remember { mutableStateOf(false) }
+  var showApiKeyDialog by remember { mutableStateOf(false) }
+  val coroutineScope = rememberCoroutineScope()
   var showBriefingsVault by remember { mutableStateOf(false) }
   var showWizardsDialog by remember { mutableStateOf(false) }
   var showCameraSheet by remember { mutableStateOf(false) }
@@ -932,6 +943,19 @@ fun CopilotScreen(
                   label = { Text("Regenerate", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
                 )
               }
+              if (m.text.contains("API key", ignoreCase = true) || m.text.contains("App Check", ignoreCase = true)) {
+                item {
+                  AssistChip(
+                    onClick = {
+                      tapCue()
+                      showApiKeyDialog = true
+                    },
+                    leadingIcon = { Icon(Icons.Default.Key, contentDescription = "Configure Key", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary) },
+                    label = { Text("Configure API Key", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                    modifier = Modifier.testTag("copilot_configure_api_key_chip_${m.id}"),
+                  )
+                }
+              }
             }
           }
 
@@ -1378,6 +1402,129 @@ fun CopilotScreen(
           shape = chrome.buttonShape,
           modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(Modifier.height(4.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        Spacer(Modifier.height(4.dp))
+        Row(
+          Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Column(Modifier.weight(1f)) {
+            Text("Gemini API Key", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(
+              "Active: ${ApiKeyRing.getMaskedGeminiKey()} (${ApiKeyRing.geminiKeys().size} key slot(s))",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          TacticalButton(
+            onClick = {
+              tapCue()
+              showApiKeyDialog = true
+            },
+          ) {
+            Icon(Icons.Default.Key, contentDescription = "Edit Key", modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Edit Key")
+          }
+        }
+      }
+    }
+  }
+
+  if (showApiKeyDialog) {
+    var keyInput by remember { mutableStateOf(ApiKeyRing.getRuntimeGeminiKey().ifBlank { ApiKeyRing.geminiKeys().firstOrNull().orEmpty() }) }
+    var probeStatus by remember { mutableStateOf<String?>(null) }
+    var probing by remember { mutableStateOf(false) }
+    TacticalDialog(
+      onDismissRequest = { showApiKeyDialog = false },
+      title = "Cloud Console / Gemini API Key",
+      subtitle = "Save a Gemini API key (AIza... or AQ...) directly on this device",
+      icon = Icons.Default.Key,
+      confirmButton = {
+        TacticalButton(
+          onClick = {
+            tapCue(VoiceAudioManager.TouchCue.ACTION_CONFIRM)
+            ApiKeyRing.setRuntimeGeminiKey(ctx, keyInput)
+            Toast.makeText(ctx, "Gemini API key saved & activated!", Toast.LENGTH_SHORT).show()
+            showApiKeyDialog = false
+          },
+        ) { Text("Save & Apply") }
+      },
+      dismissButton = {
+        TacticalButton(
+          onClick = { showApiKeyDialog = false },
+          colors = ButtonDefaults.outlinedButtonColors(),
+        ) { Text("Close") }
+      },
+    ) {
+      Column(
+        modifier = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+      ) {
+        Text("ACTIVE KEY IN FAILOVER RING", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(
+          "Current: ${ApiKeyRing.getMaskedGeminiKey()} (${ApiKeyRing.geminiKeys().size} key slot(s) active)",
+          style = MaterialTheme.typography.bodySmall,
+        )
+        OutlinedTextField(
+          value = keyInput,
+          onValueChange = { keyInput = it.trim() },
+          label = { Text("Gemini API Key (AIza... or AQ...)") },
+          placeholder = { Text("Paste key here...") },
+          colors = tacticalOutlinedTextFieldColors(),
+          shape = chrome.buttonShape,
+          modifier = Modifier.fillMaxWidth().testTag("runtime_api_key_input"),
+          singleLine = true,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+          TacticalButton(
+            onClick = {
+              val clip = clipboard.getText()?.text?.trim().orEmpty()
+              if (clip.isNotBlank()) {
+                keyInput = clip
+                Toast.makeText(ctx, "Pasted from clipboard", Toast.LENGTH_SHORT).show()
+              }
+            },
+            colors = ButtonDefaults.outlinedButtonColors(),
+          ) {
+            Icon(Icons.Default.ContentPaste, contentDescription = "Paste Key", modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Paste")
+          }
+          TacticalButton(
+            onClick = {
+              if (keyInput.isBlank()) {
+                Toast.makeText(ctx, "Enter a key first", Toast.LENGTH_SHORT).show()
+                return@TacticalButton
+              }
+              ApiKeyRing.setRuntimeGeminiKey(ctx, keyInput)
+              probing = true
+              probeStatus = "Testing key with gemini-3.1-flash-lite..."
+              coroutineScope.launch {
+                val (ok, ms, msg) = DirectGeminiRestClient.probeLiveCloudConsoleKey(GeminiModelCatalog.GEMINI_3_1_FLASH_LITE)
+                probing = false
+                probeStatus = if (ok) "SUCCESS (${ms}ms): $msg" else "FAILED (${ms}ms): $msg"
+              }
+            },
+          ) {
+            if (probing) {
+              CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            } else {
+              Icon(Icons.Default.NetworkCheck, contentDescription = "Test Key", modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Test Key")
+            }
+          }
+        }
+        if (probeStatus != null) {
+          Text(
+            probeStatus!!,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (probeStatus!!.startsWith("SUCCESS")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+          )
+        }
       }
     }
   }

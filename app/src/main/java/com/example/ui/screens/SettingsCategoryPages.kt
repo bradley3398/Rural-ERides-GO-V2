@@ -82,8 +82,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.runtime.rememberCoroutineScope
 import com.example.BuildConfig
+import com.example.ai.DirectGeminiRestClient
 import com.example.ai.GeminiModelCatalog
+import com.example.core.ApiKeyRing
+import kotlinx.coroutines.launch
 import com.example.core.AppLocale
 import com.example.core.ReminderScheduler
 import com.example.data.AiVoiceProfile
@@ -1451,6 +1458,10 @@ fun AiCoreChatSettingsContent(
   onSelectSubCategory: (String) -> Unit = {},
   onOpenVoiceStudio: () -> Unit = {},
 ) {
+  val ctx = LocalContext.current
+  val clipboard = LocalClipboardManager.current
+  val coroutineScope = rememberCoroutineScope()
+
   if (selectedSubCategory == null) {
     AndroidSettingsSubCategoryMenu(
       sectionHeader = "AI Co-Pilot & Barn Mechanic",
@@ -1518,6 +1529,91 @@ fun AiCoreChatSettingsContent(
         subtitle = "Looks up up-to-date local trails, laws, and parts online",
         checked = settings.aiWebGrounding,
       ) { v -> sessionVm.updateSettings { it.copy(aiWebGrounding = v) } }
+
+      HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+      Text("GOOGLE CLOUD CONSOLE / GEMINI API KEY", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+      Spacer(Modifier.height(4.dp))
+      Text(
+        "Active Key: ${ApiKeyRing.getMaskedGeminiKey()}",
+        style = MaterialTheme.typography.bodySmall,
+        fontWeight = FontWeight.Bold,
+        color = if (ApiKeyRing.geminiKeys().isNotEmpty()) Color(0xFF10B981) else Color(0xFFEF4444),
+      )
+      Text(
+        "Direct connection to Gemini 3.1 Flash-Lite without App Check. You can rotate or paste a new key anytime.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Spacer(Modifier.height(8.dp))
+      var keyInput by remember { mutableStateOf(ApiKeyRing.getRuntimeGeminiKey()) }
+      var probeStatus by remember { mutableStateOf<String?>(null) }
+      var probing by remember { mutableStateOf(false) }
+
+      OutlinedTextField(
+        value = keyInput,
+        onValueChange = { keyInput = it },
+        label = { Text("Gemini API Key (AIza... or AQ.Ab...)") },
+        placeholder = { Text("Paste new Cloud Console API key") },
+        modifier = Modifier.fillMaxWidth().testTag("settings_gemini_api_key_input"),
+        singleLine = true,
+        colors = tacticalOutlinedTextFieldColors(),
+        leadingIcon = { Icon(Icons.Default.Key, null, tint = MaterialTheme.colorScheme.primary) },
+      )
+      Spacer(Modifier.height(8.dp))
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TacticalOutlinedButton(
+          onClick = {
+            val clipText = clipboard.getText()?.text?.trim().orEmpty()
+            if (clipText.isNotBlank()) {
+              keyInput = clipText
+            }
+          },
+          modifier = Modifier.weight(1f).testTag("settings_paste_api_key_btn"),
+        ) {
+          Icon(Icons.Default.ContentPaste, null, Modifier.size(16.dp))
+          Spacer(Modifier.width(4.dp))
+          Text("Paste")
+        }
+        TacticalButton(
+          onClick = {
+            ApiKeyRing.setRuntimeGeminiKey(ctx, keyInput)
+            Toast.makeText(ctx, if (keyInput.isBlank()) "Runtime key cleared (using compiled keys)" else "API Key saved & applied!", Toast.LENGTH_SHORT).show()
+          },
+          modifier = Modifier.weight(1.2f).testTag("settings_save_api_key_btn"),
+        ) {
+          Text("Save & Apply")
+        }
+      }
+      Spacer(Modifier.height(8.dp))
+      TacticalOutlinedButton(
+        onClick = {
+          if (keyInput.isNotBlank()) {
+            ApiKeyRing.setRuntimeGeminiKey(ctx, keyInput)
+          }
+          probing = true
+          probeStatus = "Testing key with gemini-3.1-flash-lite..."
+          coroutineScope.launch {
+            val (ok, ms, msg) = DirectGeminiRestClient.probeLiveCloudConsoleKey(GeminiModelCatalog.GEMINI_3_1_FLASH_LITE)
+            probing = false
+            probeStatus = if (ok) "SUCCESS (${ms}ms): $msg" else "FAILED (${ms}ms): $msg"
+          }
+        },
+        enabled = !probing && ApiKeyRing.geminiKeys().isNotEmpty(),
+        modifier = Modifier.fillMaxWidth().testTag("settings_test_api_key_btn"),
+      ) {
+        Icon(Icons.Default.NetworkCheck, null, Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(if (probing) "Testing Probe..." else "Test Active Key Live")
+      }
+      probeStatus?.let { status ->
+        Spacer(Modifier.height(6.dp))
+        Text(
+          status,
+          style = MaterialTheme.typography.bodySmall,
+          fontWeight = FontWeight.SemiBold,
+          color = if (status.startsWith("SUCCESS")) Color(0xFF10B981) else Color(0xFFEF4444),
+        )
+      }
     }
     Spacer(Modifier.height(12.dp))
   }

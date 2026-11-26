@@ -140,6 +140,7 @@ object DirectGeminiRestClient {
   @Volatile private var androidCertSha1Header: String = ""
 
   fun initAndroidIdentity(context: Context) {
+    ApiKeyRing.init(context)
     if (androidPackageHeader.isNotBlank() && androidCertSha1Header.isNotBlank()) return
     runCatching {
       val appCtx = context.applicationContext
@@ -363,7 +364,7 @@ object DirectGeminiRestClient {
           val bodyStr = resp.body?.string().orEmpty()
           if (!resp.isSuccessful) {
             val cleanErr = parseApiErrorMessage(resp.code, bodyStr)
-            if (ApiKeyRing.isFailoverCode(resp.code)) {
+            if (ApiKeyRing.isFailoverCode(resp.code) || cleanErr.contains("API_KEY", ignoreCase = true)) {
               throw ApiKeyFailoverException(resp.code, cleanErr)
             }
             throw IllegalStateException(cleanErr)
@@ -409,7 +410,7 @@ object DirectGeminiRestClient {
             if (!resp.isSuccessful) {
               val errBody = resp.body?.string().orEmpty()
               val cleanErr = parseApiErrorMessage(resp.code, errBody)
-              if (ApiKeyRing.isFailoverCode(resp.code)) {
+              if (ApiKeyRing.isFailoverCode(resp.code) || cleanErr.contains("API_KEY", ignoreCase = true)) {
                 ApiKeyRing.markKeyThrottled("GEMINI_CLOUD_CONSOLE", apiKey, resp.code)
               }
               throw IllegalStateException(cleanErr)
