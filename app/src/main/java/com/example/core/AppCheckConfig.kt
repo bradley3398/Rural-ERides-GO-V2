@@ -7,6 +7,10 @@ import com.example.BuildConfig
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.firebase.FirebaseApp
+import com.google.firebase.ai.GenerativeModel
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.GenerationConfig
+import com.google.firebase.ai.type.SafetySetting
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.recaptcha.RecaptchaAppCheckProviderFactory
