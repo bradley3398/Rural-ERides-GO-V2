@@ -757,8 +757,10 @@ class VoiceAudioManager(private val context: Context) {
       val model = getOrCreateNeuralTtsModel(voiceName, localeTag)
       val directedPrompt = "$directive. Speak naturally and read this text aloud:\n$spokenExcerpt"
       val response =
-        withTimeout(18_000L) {
-          model.generateContent(directedPrompt)
+        com.example.core.AppCheckHealthManager.runWithAppCheckRecovery("VoiceAudioManager") {
+          withTimeout(18_000L) {
+            model.generateContent(directedPrompt)
+          }
         }
       val outStream = ByteArrayOutputStream()
       var audioMime = ""

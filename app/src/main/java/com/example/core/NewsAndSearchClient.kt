@@ -564,14 +564,14 @@ internal object NewsAndSearchClient {
           url = "https://electrek.co/feed/",
         )
 
-      val appCheckReady = runCatching { FirebaseApp.getInstance().options.applicationId.isNotBlank() }.getOrDefault(false)
+      val (appCheckOk, appCheckMs, appCheckDetail) = AppCheckHealthManager.probeLiveAppCheck(context)
       results +=
         DiagnosticCheckResult(
           name = "Firebase AI Logic & App Check",
           category = "AI",
-          ok = appCheckReady,
-          latencyMs = 0L,
-          detail = if (appCheckReady) "App Check attested Gemini AI active ($firebaseProjectId)" else "Firebase app not initialized",
+          ok = appCheckOk,
+          latencyMs = appCheckMs,
+          detail = "$appCheckDetail ($firebaseProjectId)",
         )
 
       val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager

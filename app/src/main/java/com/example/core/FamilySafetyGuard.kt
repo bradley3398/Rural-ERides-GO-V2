@@ -428,13 +428,15 @@ object FamilySafetyGuard {
           try {
             val model = Firebase.ai.generativeModel(modelName = modelId, generationConfig = config)
             val response =
-              withTimeout(22_000L) {
-                model.generateContent(
-                  content {
-                    image(safeScaled)
-                    text(prompt)
-                  },
-                )
+              AppCheckHealthManager.runWithAppCheckRecovery("FamilySafetyGuard") {
+                withTimeout(22_000L) {
+                  model.generateContent(
+                    content {
+                      image(safeScaled)
+                      text(prompt)
+                    },
+                  )
+                }
               }
             responseText = response.text
             if (!responseText.isNullOrBlank()) break
@@ -598,7 +600,10 @@ object FamilySafetyGuard {
           Text to evaluate:
           "${text.take(800)}"
           """.trimIndent()
-        val response = withTimeout(12_000L) { model.generateContent(prompt) }
+        val response =
+          AppCheckHealthManager.runWithAppCheckRecovery("FamilySafetyGuard") {
+            withTimeout(12_000L) { model.generateContent(prompt) }
+          }
         val raw = response.text
         if (!raw.isNullOrBlank()) {
           val json = JSONObject(raw)

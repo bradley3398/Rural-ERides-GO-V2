@@ -2,6 +2,11 @@
 
 All notable changes to **Rural ERides GO** (`com.aistudio.volttrail.kqrmvx`) are documented in this file.
 
+## [61.0] (Build 61) — November 2026
+### Multi-Device & Tablet Firebase AI App Check Self-Healing & Live Diagnostic Probe
+- **Tablet & Multi-Device Firebase App Check Recovery (`AppCheckConfig.kt`, `MainActivity.kt`, `GeminiAiRepository.kt`, `GeminiStudioEngine.kt`, `FamilySafetyGuard.kt`, `VoiceAudioManager.kt`)**: Added a `noBackupFilesDir` device anchor to purge restored cross-device App Check token/debug caches on fresh or restored tablet installs, guarded `installAppCheckProviderFactory` against redundant resets on tablet activity recreations, added background reCAPTCHA Enterprise token warm-up, and wrapped all Firebase AI Logic calls in automatic force-refresh & retry recovery with actionable Play Services/reCAPTCHA diagnostics.
+- **Live App Check Verification Probe (`NewsAndSearchClient.kt`)**: Upgraded Live Diagnostics to execute a real `getAppCheckToken(true)` + `GoogleApiAvailability` check showing live latency and exact attestation status.
+
 ## [60.0] (Build 60) — November 2026
 ### Native CameraX Video Calling, YouTube Playback Fix, HUD Sensor Calibration, Rich Profile/Username Settings, Family-Friendly Safety & Media Shield, Fixed GitHub Links & Hardware 3D PBR
 - **Native Two-Way Live Video & Voice Calling (`NativeLiveCallEngine.kt`, `LiveCallOverlay.kt`, `CopilotSocialViewModel.kt`, `CommunityRepository.kt`, `firestore.rules`)**: Rebuilt live calls using native CameraX 1.5 preview + image analysis, G.711 μ-law voice with hardware `AcousticEchoCanceler` / `NoiseSuppressor`, fixed-slot Firestore `/call_sessions/{sessionId}/streams/{streamId}` media delivery, an 8-second session reconciliation grace window, and a full-screen `Dialog` overlay so calls always appear above DMs and every modal.

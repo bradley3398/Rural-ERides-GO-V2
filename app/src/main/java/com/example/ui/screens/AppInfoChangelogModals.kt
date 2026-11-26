@@ -86,6 +86,9 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
+        "v61.0 (Build 61) — Multi-Device & Tablet Firebase AI App Check Self-Healing" to
+          "• Tablet & Multi-Device Firebase AI App Check Fix: Added a non-backed-up device install anchor so restored or stale App Check tokens/debug secrets copied between phones and tablets are automatically wiped on startup, prevented duplicate provider resets on tablet layout/taskbar changes, added startup reCAPTCHA Enterprise warm-up, and wired automatic force-refresh & retry recovery across Mechanic AI, Co-Pilot, Studio Labs, Safety Shield, and Neural TTS.\n" +
+          "• Live App Check Diagnostic Probe: Upgraded About & Diagnostics to run a real live App Check token verification probe reporting exact Google Play Services & reCAPTCHA Enterprise status.",
         "v60.0 (Build 60) — Native Video Calls, HUD Sensor Calibration, Profile Settings, Family Safety & YouTube Fix" to
           "• Native Two-Way Video & Voice Calling: Rebuilt live calls on native Android CameraX + G.711 μ-law voice with hardware echo cancellation, fixed-slot Cloud Firestore media streaming, and a dedicated full-screen Dialog window so video calls launch reliably above DMs and every modal.\n" +
           "• YouTube In-App Playback Black-Screen Fix: Replaced the detaching embedded YouTube container with a single fixed-slot hardware-accelerated player with strict referrer policy, visible YouTube controls, zero black-screen detachment between theater and mini-bar modes, and automatic Mobile Web Player fallback.\n" +

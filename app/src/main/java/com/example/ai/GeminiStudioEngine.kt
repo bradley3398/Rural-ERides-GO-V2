@@ -2,6 +2,7 @@ package com.example.ai
 
 import android.graphics.Bitmap
 import android.util.Log
+import com.example.core.AppCheckHealthManager
 import com.example.core.LiveCloudServices
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
@@ -108,16 +109,18 @@ class GeminiStudioEngine {
             generationConfig = config,
           )
         val response =
-          withTimeout(60_000L) {
-            if (sourceBitmap != null) {
-              model.generateContent(
-                content {
-                  image(sourceBitmap)
-                  text(prompt)
-                }
-              )
-            } else {
-              model.generateContent(prompt)
+          AppCheckHealthManager.runWithAppCheckRecovery(STUDIO_TAG) {
+            withTimeout(60_000L) {
+              if (sourceBitmap != null) {
+                model.generateContent(
+                  content {
+                    image(sourceBitmap)
+                    text(prompt)
+                  }
+                )
+              } else {
+                model.generateContent(prompt)
+              }
             }
           }
         val parts = response.candidates.firstOrNull()?.content?.parts.orEmpty()
@@ -178,16 +181,18 @@ class GeminiStudioEngine {
               },
           )
         val response =
-          withTimeout(60_000L) {
-            model.generateContent(
-              content {
-                inlineData(wavBytes, "audio/wav")
-                text(
-                  "Transcribe this microphone audio from an electric PEV rider accurately verbatim. " +
-                    "Rider context: $vehicleContext. Return JSON with transcript, summary, and actionCategory."
-                )
-              }
-            )
+          AppCheckHealthManager.runWithAppCheckRecovery(STUDIO_TAG) {
+            withTimeout(60_000L) {
+              model.generateContent(
+                content {
+                  inlineData(wavBytes, "audio/wav")
+                  text(
+                    "Transcribe this microphone audio from an electric PEV rider accurately verbatim. " +
+                      "Rider context: $vehicleContext. Return JSON with transcript, summary, and actionCategory."
+                  )
+                }
+              )
+            }
           }
         val raw = response.text ?: error("Empty transcription response.")
         val json = JSONObject(raw)
@@ -249,17 +254,19 @@ class GeminiStudioEngine {
           )
         val chat = model.startChat(history = chatHistory)
         val response =
-          withTimeout(60_000L) {
-            if (audioWavBytes != null && audioWavBytes.size > 256) {
-              chat.sendMessage(
-                content("user") {
-                  inlineData(audioWavBytes, "audio/wav")
-                  if (userMessage.isNotBlank()) text(userMessage)
-                  else text("Listen to my voice message and answer conversationally as my riding co-pilot.")
-                }
-              )
-            } else {
-              chat.sendMessage(userMessage)
+          AppCheckHealthManager.runWithAppCheckRecovery(STUDIO_TAG) {
+            withTimeout(60_000L) {
+              if (audioWavBytes != null && audioWavBytes.size > 256) {
+                chat.sendMessage(
+                  content("user") {
+                    inlineData(audioWavBytes, "audio/wav")
+                    if (userMessage.isNotBlank()) text(userMessage)
+                    else text("Listen to my voice message and answer conversationally as my riding co-pilot.")
+                  }
+                )
+              } else {
+                chat.sendMessage(userMessage)
+              }
             }
           }
         val reply = response.text?.trim().orEmpty().ifBlank { "Copy that partner — signal was faint, say again?" }
@@ -326,30 +333,33 @@ class GeminiStudioEngine {
       var usedSearch = false
       val webSources = mutableListOf<Pair<String, String>>()
       val response =
-        withTimeout(60_000L) {
-          if (useGoogleSearch) {
-            try {
-              usedSearch = true
-              Firebase.ai.generativeModel(
-                modelName = GeminiModelCatalog.GEMINI_3_8_FLASH,
-                tools = listOf(Tool.googleSearch()),
-              ).generateContent(prompt)
-            } catch (e: CancellationException) {
-              throw e
-            } catch (toolErr: Exception) {
-              Log.w(STUDIO_TAG, "Google Search tool fallback: ${toolErr.message}")
-              usedSearch = false
+        AppCheckHealthManager.runWithAppCheckRecovery(STUDIO_TAG) {
+          withTimeout(60_000L) {
+            if (useGoogleSearch) {
+              try {
+                usedSearch = true
+                Firebase.ai.generativeModel(
+                  modelName = GeminiModelCatalog.GEMINI_3_8_FLASH,
+                  tools = listOf(Tool.googleSearch()),
+                ).generateContent(prompt)
+              } catch (e: CancellationException) {
+                throw e
+              } catch (toolErr: Exception) {
+                if (AppCheckHealthManager.isAppCheckError(toolErr)) throw toolErr
+                Log.w(STUDIO_TAG, "Google Search tool fallback: ${toolErr.message}")
+                usedSearch = false
+                runCatching {
+                  Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
+                }.getOrElse {
+                  Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
+                }
+              }
+            } else {
               runCatching {
                 Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
               }.getOrElse {
                 Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
               }
-            }
-          } else {
-            runCatching {
-              Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
-            }.getOrElse {
-              Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
             }
           }
         }
@@ -423,7 +433,10 @@ class GeminiStudioEngine {
                 temperature = 0.85f
               },
           )
-        val response = withTimeout(50_000L) { model.generateContent(prompt) }
+        val response =
+          AppCheckHealthManager.runWithAppCheckRecovery(STUDIO_TAG) {
+            withTimeout(50_000L) { model.generateContent(prompt) }
+          }
         val raw = response.text ?: error("Empty music composition response.")
         val json = JSONObject(raw)
 

@@ -2,6 +2,7 @@ package com.example.ai
 
 import android.graphics.Bitmap
 import android.util.Log
+import com.example.core.AppCheckHealthManager
 import com.example.core.LiveCloudServices
 import com.example.data.CopilotMessage
 import com.example.data.PevPartItem
@@ -192,7 +193,7 @@ class GeminiAiRepository {
     var lastError: Throwable? = null
     for ((idx, modelId) in chain.withIndex()) {
       try {
-        return block(modelId)
+        return AppCheckHealthManager.runWithAppCheckRecovery(TAG) { block(modelId) }
       } catch (e: CancellationException) {
         throw e
       } catch (e: Exception) {
@@ -1071,29 +1072,32 @@ class GeminiAiRepository {
     for ((idx, activeModel) in chain.withIndex()) {
       val sb = StringBuilder()
       try {
-        withTimeout(60_000L) {
-          val model =
-            Firebase.ai.generativeModel(
-              modelName = activeModel,
-              generationConfig =
-                generationConfig {
-                  this.temperature = temperature.coerceIn(0.1f, 1.4f)
-                },
-            )
-          model
-            .generateContentStream(
-              content {
-                text(fullPrompt)
-                if (bitmap != null) image(bitmap)
+        AppCheckHealthManager.runWithAppCheckRecovery(TAG) {
+          sb.clear()
+          withTimeout(60_000L) {
+            val model =
+              Firebase.ai.generativeModel(
+                modelName = activeModel,
+                generationConfig =
+                  generationConfig {
+                    this.temperature = temperature.coerceIn(0.1f, 1.4f)
+                  },
+              )
+            model
+              .generateContentStream(
+                content {
+                  text(fullPrompt)
+                  if (bitmap != null) image(bitmap)
+                }
+              )
+              .collect { chunk ->
+                val part = chunk.text.orEmpty()
+                if (part.isNotEmpty()) {
+                  sb.append(part)
+                  emit(sb.toString())
+                }
               }
-            )
-            .collect { chunk ->
-              val part = chunk.text.orEmpty()
-              if (part.isNotEmpty()) {
-                sb.append(part)
-                emit(sb.toString())
-              }
-            }
+          }
         }
         if (sb.isNotEmpty()) {
           succeeded = true
