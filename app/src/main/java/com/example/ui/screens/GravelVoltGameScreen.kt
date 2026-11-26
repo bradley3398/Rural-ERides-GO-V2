@@ -14,15 +14,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
@@ -889,16 +895,18 @@ fun GravelVoltGameScreen(
     if (showKnowledgeTest && phase != VoltGamePhase.PLAYING) {
       Surface(
         color = Color(0xF5050814),
-        modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 56.dp),
+        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding().padding(top = 56.dp),
       ) {
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
-          PevKnowledgeTestView(
-            activeVehicleName = activeVehicleName,
-            activeVoltage = 72,
-            onShareScoreToBoard = { scorePct, _, _ ->
-              onShareHighScore(scorePct * 100, 1.0)
-            },
-          )
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+          Column(modifier = Modifier.fillMaxSize().widthIn(max = 760.dp).padding(horizontal = 12.dp, vertical = 8.dp)) {
+            PevKnowledgeTestView(
+              activeVehicleName = activeVehicleName,
+              activeVoltage = 72,
+              onShareScoreToBoard = { scorePct, _, _ ->
+                onShareHighScore(scorePct * 100, 1.0)
+              },
+            )
+          }
         }
       }
     }
@@ -920,10 +928,17 @@ fun GravelVoltGameScreen(
         shape = RoundedCornerShape(24.dp),
         color = Color(0xE60B132B),
         border = BorderStroke(1.5.dp, Color(0xFF39FF14)),
-        modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.92f),
+        modifier = Modifier
+          .align(Alignment.Center)
+          .systemBarsPadding()
+          .padding(horizontal = 16.dp, vertical = 12.dp)
+          .widthIn(max = 520.dp)
+          .fillMaxWidth(),
       ) {
         Column(
-          modifier = Modifier.padding(18.dp),
+          modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(18.dp),
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -1020,7 +1035,7 @@ fun GravelVoltGameScreen(
           OutlinedButton(
             onClick = { showKnowledgeTest = true },
             border = BorderStroke(1.dp, Color(0xFFD946EF)),
-            modifier = Modifier.fillMaxWidth().height(42.dp).testTag("game_open_pev_quiz_cta"),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("game_open_pev_quiz_cta"),
           ) {
             Text("TAKE PEV KNOWLEDGE & CERTIFICATION TEST", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color(0xFFF0ABFC))
           }
@@ -1034,10 +1049,17 @@ fun GravelVoltGameScreen(
         shape = RoundedCornerShape(24.dp),
         color = Color(0xEE0B132B),
         border = BorderStroke(1.5.dp, if (phase == VoltGamePhase.GAME_OVER) Color(0xFFF43F5E) else Color(0xFF38BDF8)),
-        modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.88f),
+        modifier = Modifier
+          .align(Alignment.Center)
+          .systemBarsPadding()
+          .padding(horizontal = 16.dp, vertical = 12.dp)
+          .widthIn(max = 520.dp)
+          .fillMaxWidth(),
       ) {
         Column(
-          modifier = Modifier.padding(24.dp),
+          modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

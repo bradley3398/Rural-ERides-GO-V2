@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -94,10 +96,12 @@ import com.example.data.MasterSettings
 import com.example.data.PevVehicle
 import com.example.data.RideSession
 import com.example.hardware.VoiceAudioManager
+import com.example.ui.components.ConfigureEdgeToEdgeDialogWindow
 import com.example.ui.components.TacticalCard
 import com.example.ui.components.distUnitLabel
 import com.example.ui.components.formatDistValue
 import com.example.ui.components.formatSpeedValue
+import com.example.ui.components.rememberHostWindowSafeInsets
 import com.example.ui.components.speedUnitLabel
 import com.example.viewmodel.CockpitViewModel
 import com.example.viewmodel.RideTelemetryViewModel
@@ -222,9 +226,13 @@ fun RideTelemetryStudioScreen(
     color = MaterialTheme.colorScheme.background,
     modifier = Modifier.fillMaxSize().testTag("ride_telemetry_studio_screen"),
   ) {
-    Column(
-      modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
+    Box(
+      modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding(),
+      contentAlignment = Alignment.TopCenter,
     ) {
+      Column(
+        modifier = Modifier.fillMaxSize().widthIn(max = 860.dp),
+      ) {
       // TOP HEADER BAR
       Surface(
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
@@ -619,6 +627,7 @@ fun RideTelemetryStudioScreen(
         item { Spacer(Modifier.height(16.dp)) }
       }
     }
+    }
   }
 
   // DEDICATED GRAPH WINDOW POP-UP FOR TELEMETRY MATRIX CARDS (0..10)
@@ -838,14 +847,28 @@ fun RideTelemetryStudioScreen(
         usePlatformDefaultWidth = false,
         dismissOnBackPress = true,
         dismissOnClickOutside = true,
+        decorFitsSystemWindows = false,
       ),
     ) {
+      ConfigureEdgeToEdgeDialogWindow(fullScreen = false)
+      val safeInsets = rememberHostWindowSafeInsets()
+      BoxWithConstraints(
+        modifier = Modifier
+          .fillMaxSize()
+          .padding(
+            start = safeInsets.start + 10.dp,
+            end = safeInsets.end + 10.dp,
+            top = safeInsets.top + 10.dp,
+            bottom = maxOf(safeInsets.bottom, safeInsets.imeBottom) + 10.dp,
+          ),
+        contentAlignment = Alignment.Center,
+      ) {
+      val computedMaxHeight = (maxHeight - 8.dp).coerceIn(280.dp, 780.dp)
       Surface(
         modifier = Modifier
-          .fillMaxWidth(0.95f)
+          .fillMaxWidth(0.96f)
           .widthIn(max = 700.dp)
-          .heightIn(max = 780.dp)
-          .padding(vertical = 16.dp),
+          .heightIn(max = computedMaxHeight),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.5.dp, winAccent.copy(alpha = 0.65f)),
@@ -1133,6 +1156,7 @@ fun RideTelemetryStudioScreen(
             }
           }
         }
+      }
       }
     }
   }

@@ -11,12 +11,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -275,6 +280,7 @@ fun AuthLoginScreen(
           .fillMaxSize()
           .widthIn(max = 560.dp)
           .systemBarsPadding()
+          .imePadding()
           .verticalScroll(rememberScrollState())
           .padding(horizontal = 18.dp, vertical = 14.dp),
       verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -1012,15 +1018,19 @@ fun CallsignAndLegalOnboardingScreen(
   var ackPermanentCallsign by remember { mutableStateOf(false) }
   val allChecked = ackHelmet && ackLaws && ackBattery && ackRadar && ackSos && ackPrivacy && ackAssumption && ackPermanentCallsign
 
-  Column(
-    modifier =
-      Modifier
-        .fillMaxSize()
-        .systemBarsPadding()
-        .verticalScroll(rememberScrollState())
-        .padding(20.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
+  Box(
+    modifier = Modifier.fillMaxSize().systemBarsPadding().imePadding(),
+    contentAlignment = Alignment.TopCenter,
   ) {
+    Column(
+      modifier =
+        Modifier
+          .fillMaxSize()
+          .widthIn(max = 600.dp)
+          .verticalScroll(rememberScrollState())
+          .padding(20.dp),
+      verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Icon(Icons.Default.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
       Spacer(Modifier.width(8.dp))
@@ -1066,7 +1076,11 @@ fun CallsignAndLegalOnboardingScreen(
         modifier = Modifier.fillMaxWidth().testTag("display_name_input"),
       )
       Spacer(Modifier.height(8.dp))
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      @OptIn(ExperimentalLayoutApi::class)
+      FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
         FilterChip(
           selected = unitSystem == "IMPERIAL",
           onClick = { unitSystem = "IMPERIAL" },
@@ -1128,6 +1142,7 @@ fun CallsignAndLegalOnboardingScreen(
       else Text("ARM COCKPIT & ENTER GRID")
     }
   }
+  }
 }
 
 @Composable
@@ -1153,37 +1168,42 @@ fun BiometricLockScreen(
     }
   }
 
-  Column(
-    modifier = Modifier.fillMaxSize().systemBarsPadding().padding(24.dp),
-    verticalArrangement = Arrangement.Center,
-    horizontalAlignment = Alignment.CenterHorizontally,
+  Box(
+    modifier = Modifier.fillMaxSize().systemBarsPadding(),
+    contentAlignment = Alignment.Center,
   ) {
-    Icon(
-      Icons.Default.Fingerprint,
-      contentDescription = "Biometric Lock",
-      tint = MaterialTheme.colorScheme.primary,
-      modifier = Modifier.size(72.dp),
-    )
-    Spacer(Modifier.height(16.dp))
-    Text("COCKPIT BIOMETRIC LOCK ACTIVE", style = MaterialTheme.typography.titleLarge)
-    if (errMsg.isNotBlank()) {
-      Spacer(Modifier.height(8.dp))
-      Text(errMsg, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-    }
-    Spacer(Modifier.height(20.dp))
-    Button(
-      onClick = {
-        if (activity != null) {
-          voiceAudio.promptBiometricUnlock(activity, onSuccess = onUnlocked, onFailure = { errMsg = it })
-        }
-      },
-      modifier = Modifier.fillMaxWidth().height(50.dp).testTag("retry_biometric_button"),
+    Column(
+      modifier = Modifier.fillMaxWidth().widthIn(max = 520.dp).padding(24.dp),
+      verticalArrangement = Arrangement.Center,
+      horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-      Text("Unlock with Fingerprint / Face")
-    }
-    Spacer(Modifier.height(10.dp))
-    OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-      Text("Sign Out")
+      Icon(
+        Icons.Default.Fingerprint,
+        contentDescription = "Biometric Lock",
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.size(72.dp),
+      )
+      Spacer(Modifier.height(16.dp))
+      Text("COCKPIT BIOMETRIC LOCK ACTIVE", style = MaterialTheme.typography.titleLarge)
+      if (errMsg.isNotBlank()) {
+        Spacer(Modifier.height(8.dp))
+        Text(errMsg, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+      }
+      Spacer(Modifier.height(20.dp))
+      Button(
+        onClick = {
+          if (activity != null) {
+            voiceAudio.promptBiometricUnlock(activity, onSuccess = onUnlocked, onFailure = { errMsg = it })
+          }
+        },
+        modifier = Modifier.fillMaxWidth().height(50.dp).testTag("retry_biometric_button"),
+      ) {
+        Text("Unlock with Fingerprint / Face")
+      }
+      Spacer(Modifier.height(10.dp))
+      OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+        Text("Sign Out")
+      }
     }
   }
 }
@@ -1208,7 +1228,14 @@ fun RidersPrayerModal(
   var journalCategory by remember { mutableStateOf("Trail Safety") }
 
   ModalBottomSheet(onDismissRequest = onDismiss) {
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .navigationBarsPadding()
+        .imePadding()
+        .verticalScroll(rememberScrollState())
+        .padding(16.dp),
+    ) {
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text("RIDER'S PRAYER & BLESSING", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
         IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Close Prayer Overlay") }
@@ -1329,7 +1356,7 @@ fun RidersPrayerModal(
                 modifier = Modifier.fillMaxWidth().testTag("save_journal_entry_button"),
               ) { Text("Save Prayer to Vault") }
             }
-            LazyColumn(modifier = Modifier.height(220.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(modifier = Modifier.heightIn(min = 120.dp, max = 240.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
               items(journal, key = { it.id }) { entry ->
                 TacticalCard {
                   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

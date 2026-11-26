@@ -154,7 +154,7 @@ fun HudSensorCalibrationDialog(
     },
   ) {
     LazyColumn(
-      modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+      modifier = Modifier.fillMaxWidth(),
       verticalArrangement = Arrangement.spacedBy(10.dp),
       contentPadding = PaddingValues(bottom = 6.dp),
     ) {

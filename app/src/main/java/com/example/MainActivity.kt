@@ -582,19 +582,26 @@ fun VoltTrailRootApp(
                     }
                   }
 
-                  if (!isImeVisible) {
+                  val youtubeExpanded by socialVm.playerExpanded.collectAsStateWithLifecycle()
+                  if (!isImeVisible || youtubeExpanded) {
                     Box(
                       modifier =
                         Modifier
                           .align(Alignment.BottomCenter)
                           .then(
-                            if (overlayConsumed || useTopRibbon || useLeftRail || useRightRail) {
-                              Modifier.navigationBarsPadding()
-                            } else {
-                              Modifier
+                            when {
+                              youtubeExpanded -> Modifier.fillMaxSize()
+                              overlayConsumed || useTopRibbon || useLeftRail || useRightRail ->
+                                Modifier
+                                  .navigationBarsPadding()
+                                  .padding(bottom = 12.dp)
+                                  .widthIn(max = 760.dp)
+                              else ->
+                                Modifier
+                                  .padding(bottom = miniPlayerBottomOffset)
+                                  .widthIn(max = 760.dp)
                             }
-                          )
-                          .padding(bottom = if (overlayConsumed) 12.dp else miniPlayerBottomOffset),
+                          ),
                     ) {
                       YoutubeMiniPlayerHost(
                         sessionVm = sessionVm,

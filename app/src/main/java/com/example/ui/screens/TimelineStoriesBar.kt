@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -55,12 +56,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.ui.components.CloudImage
+import com.example.ui.components.ConfigureEdgeToEdgeDialogWindow
 import com.example.ui.components.PilotAvatarThumb
 import com.example.ui.components.TacticalButton
 import com.example.ui.components.TacticalCard
 import com.example.ui.components.TacticalDialog
 import com.example.ui.components.TacticalOutlinedButton
 import com.example.ui.components.decodeSampledBitmap
+import com.example.ui.components.rememberHostWindowSafeInsets
 import com.example.ui.components.tacticalOutlinedTextFieldColors
 
 data class TimelineStoryItem(
@@ -259,8 +262,10 @@ fun StoryViewerDialog(
 ) {
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    ConfigureEdgeToEdgeDialogWindow(fullScreen = true)
+    val safeInsets = rememberHostWindowSafeInsets()
     Box(
       modifier =
         Modifier
@@ -294,8 +299,15 @@ fun StoryViewerDialog(
       Column(
         modifier =
           Modifier
+            .align(Alignment.TopCenter)
             .fillMaxWidth()
-            .padding(16.dp),
+            .widthIn(max = 700.dp)
+            .padding(
+              start = safeInsets.start + 16.dp,
+              end = safeInsets.end + 16.dp,
+              top = safeInsets.top + 12.dp,
+              bottom = 12.dp,
+            ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         Row(
@@ -303,14 +315,14 @@ fun StoryViewerDialog(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
             PilotAvatarThumb(avatarSource = story.avatarBase64, callsign = story.authorCallsign, size = 36.dp)
             Column {
               Text(story.authorCallsign, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color.White)
               Text("Live Story • 24h Active", fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f))
             }
           }
-          IconButton(onClick = onDismiss) {
+          IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Default.Close, contentDescription = "Close Story", tint = Color.White)
           }
         }
@@ -318,11 +330,19 @@ fun StoryViewerDialog(
 
       // Bottom Caption Overlay
       Surface(
-        color = Color.Black.copy(alpha = 0.7f),
+        color = Color.Black.copy(alpha = 0.74f),
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().widthIn(max = 700.dp),
       ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(
+          modifier = Modifier.padding(
+            start = safeInsets.start + 16.dp,
+            end = safeInsets.end + 16.dp,
+            top = 14.dp,
+            bottom = safeInsets.bottom + 16.dp,
+          ),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
           Text(story.caption, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color.White)
           if (story.batteryStatus.isNotBlank()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

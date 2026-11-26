@@ -27,7 +27,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -1156,7 +1159,7 @@ fun CopilotScreen(
       }
     }
     ModalBottomSheet(onDismissRequest = { showSkillsModal = false }) {
-      Column(Modifier.fillMaxWidth().padding(16.dp)) {
+      Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           Text("100 LIVE CO-PILOT SKILLS", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
           IconButton(onClick = { showSkillsModal = false }) { Icon(Icons.Default.Close, contentDescription = "Close Skills") }
@@ -1177,7 +1180,7 @@ fun CopilotScreen(
           }
         }
         Spacer(Modifier.height(8.dp))
-        LazyColumn(modifier = Modifier.height(360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(modifier = Modifier.heightIn(min = 140.dp, max = 360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           items(filteredSkills, key = { it.id }) { sk ->
             TacticalCard(onClick = {
               showSkillsModal = false
@@ -1194,12 +1197,12 @@ fun CopilotScreen(
 
   if (showBriefingsVault) {
     ModalBottomSheet(onDismissRequest = { showBriefingsVault = false }) {
-      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           Text("SAVED AI BRIEFINGS VAULT (${savedBriefings.size})", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
           IconButton(onClick = { showBriefingsVault = false }) { Icon(Icons.Default.Close, "Close Vault") }
         }
-        LazyColumn(modifier = Modifier.height(340.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(modifier = Modifier.heightIn(min = 140.dp, max = 340.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           if (savedBriefings.isEmpty()) {
             item {
               TacticalCard {
@@ -1264,7 +1267,7 @@ fun CopilotScreen(
         }
       }
     ModalBottomSheet(onDismissRequest = { showSessionsSheet = false }) {
-      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           Text("CHAT HISTORY (${sessions.size})", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
           Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1317,7 +1320,7 @@ fun CopilotScreen(
           shape = chrome.buttonShape,
           modifier = Modifier.fillMaxWidth().testTag("copilot_sessions_search_input"),
         )
-        LazyColumn(modifier = Modifier.height(290.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyColumn(modifier = Modifier.heightIn(min = 120.dp, max = 290.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           items(filteredSessions, key = { it.id }) { s ->
             TacticalCard(highlight = s.id == activeSessionId, onClick = {
               socialVm.selectCopilotSession(s.id)

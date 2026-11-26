@@ -30,10 +30,13 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -250,7 +253,7 @@ fun YoutubeMiniPlayerHost(
 
   val barModifier =
     if (expanded) {
-      Modifier.fillMaxSize().statusBarsPadding()
+      Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()
     } else if (isClassic) {
       Modifier
         .fillMaxWidth()
@@ -283,7 +286,11 @@ fun YoutubeMiniPlayerHost(
     shadowElevation = if (expanded || isClassic) 0.dp else 8.dp,
     modifier = barModifier,
   ) {
-    Column(modifier = if (expanded) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
+    Box(
+      modifier = if (expanded) Modifier.fillMaxSize() else Modifier.fillMaxWidth(),
+      contentAlignment = Alignment.TopCenter,
+    ) {
+    Column(modifier = if (expanded) Modifier.fillMaxSize().widthIn(max = 860.dp) else Modifier.fillMaxWidth()) {
       // CLASSIC MINI-BAR TITLE STRIP
       if (!expanded && isClassic && settings.showClassicTitleBars) {
         ClassicWindowTitleBar(
@@ -1083,6 +1090,7 @@ fun YoutubeMiniPlayerHost(
           }
         }
       }
+    }
     }
   }
 }

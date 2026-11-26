@@ -14,6 +14,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -1362,14 +1363,28 @@ fun TacticalDialog(
 
   Dialog(
     onDismissRequest = onDismissRequest,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    ConfigureEdgeToEdgeDialogWindow(fullScreen = false)
+    val safeInsets = rememberHostWindowSafeInsets()
+    val effectiveBottom = maxOf(safeInsets.bottom, safeInsets.imeBottom)
+    BoxWithConstraints(
+      modifier = Modifier
+        .fillMaxSize()
+        .padding(
+          start = safeInsets.start + 10.dp,
+          end = safeInsets.end + 10.dp,
+          top = safeInsets.top + 10.dp,
+          bottom = effectiveBottom + 10.dp,
+        ),
+      contentAlignment = Alignment.Center,
+    ) {
+    val computedMaxHeight = (maxHeight - 8.dp).coerceIn(260.dp, 680.dp)
     val dialogMod =
       Modifier
-        .fillMaxWidth(0.94f)
+        .fillMaxWidth(0.96f)
         .widthIn(max = 560.dp)
-        .heightIn(max = 680.dp)
-        .padding(vertical = 12.dp)
+        .heightIn(max = computedMaxHeight)
 
     val isClassicWin = isWindowsClassicActive(settings) &&
       !isWindowsXpActive(settings) &&
@@ -1664,6 +1679,7 @@ fun TacticalDialog(
           }
         }
       }
+    }
     }
   }
 }

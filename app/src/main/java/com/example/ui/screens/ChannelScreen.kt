@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -544,12 +547,15 @@ fun ChannelScreen(
 
   if (showWatchlist) {
     ModalBottomSheet(onDismissRequest = { showWatchlist = false }) {
-      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Column(
+        Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           Text("WATCHLIST & FIELD NOTES (${savedVideos.size})", style = MaterialTheme.typography.titleLarge)
           IconButton(onClick = { showWatchlist = false }) { Icon(Icons.Default.Close, contentDescription = "Close Vault") }
         }
-        LazyColumn(modifier = Modifier.height(340.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(modifier = Modifier.heightIn(min = 140.dp, max = 340.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           items(savedVideos, key = { it.videoId }) { sv ->
             var note by remember(sv.videoId) { mutableStateOf(sv.personalNote) }
             val item =
@@ -590,14 +596,17 @@ fun ChannelScreen(
 
   if (showRecentHistory) {
     ModalBottomSheet(onDismissRequest = { showRecentHistory = false }) {
-      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Column(
+        Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           Text("RECENTLY PLAYED (${recentlyPlayed.size})", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
           IconButton(onClick = { showRecentHistory = false }) {
             Icon(Icons.Default.Close, contentDescription = "Close Recent History", tint = MaterialTheme.colorScheme.onSurface)
           }
         }
-        LazyColumn(modifier = Modifier.height(330.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(modifier = Modifier.heightIn(min = 140.dp, max = 330.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           if (recentlyPlayed.isEmpty()) {
             item {
               TacticalCard {

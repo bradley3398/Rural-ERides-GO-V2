@@ -14,16 +14,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -50,10 +53,12 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -79,6 +84,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -88,7 +94,9 @@ import com.example.data.CallSession
 import com.example.hardware.NativeCallCameraPreview
 import com.example.hardware.NativeCallVoiceEngine
 import com.example.hardware.decodeCallVideoFrame
+import com.example.ui.components.ConfigureEdgeToEdgeDialogWindow
 import com.example.ui.components.TacticalCard
+import com.example.ui.components.rememberHostWindowSafeInsets
 import com.example.viewmodel.CopilotSocialViewModel
 import com.example.viewmodel.SessionViewModel
 import kotlinx.coroutines.Dispatchers
@@ -173,55 +181,72 @@ private fun IncomingCallBanner(
         dismissOnBackPress = false,
         dismissOnClickOutside = false,
         usePlatformDefaultWidth = false,
+        decorFitsSystemWindows = false,
       ),
   ) {
+    ConfigureEdgeToEdgeDialogWindow(fullScreen = true)
+    val safeInsets = rememberHostWindowSafeInsets()
     Box(
       modifier =
         Modifier
           .fillMaxSize()
           .background(Color.Black.copy(alpha = 0.55f))
-          .statusBarsPadding()
-          .padding(horizontal = 14.dp, vertical = 20.dp),
+          .padding(
+            start = safeInsets.start + 14.dp,
+            end = safeInsets.end + 14.dp,
+            top = safeInsets.top + 16.dp,
+            bottom = safeInsets.bottom + 16.dp,
+          ),
       contentAlignment = Alignment.TopCenter,
     ) {
       TacticalCard(
         highlight = true,
         title = "INCOMING ${session.callType} DISPATCH",
-        modifier = Modifier.fillMaxWidth().testTag("incoming_call_banner"),
+        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp).testTag("incoming_call_banner"),
       ) {
         Row(
           modifier = Modifier.fillMaxWidth(),
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween,
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
           Column(modifier = Modifier.weight(1f)) {
             Text(
               "INCOMING ${session.callType} CALL",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.primary,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
             )
             Text(
               session.callerCallsign.ifBlank { "Pilot" },
               style = MaterialTheme.typography.titleMedium,
               fontWeight = FontWeight.Bold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
             )
             Text(
               "Native Hardware Camera & Live Voice Link",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 2,
+              overflow = TextOverflow.Ellipsis,
             )
           }
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            FilledIconButton(
               onClick = onDecline,
-              colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-              modifier = Modifier.testTag("decline_call_button"),
+              colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = Color(0xFFDC2626),
+                contentColor = Color.White,
+              ),
+              modifier = Modifier.size(48.dp).testTag("decline_call_button"),
             ) {
-              Icon(Icons.Default.CallEnd, contentDescription = "Decline Call", modifier = Modifier.size(18.dp))
+              Icon(Icons.Default.CallEnd, contentDescription = "Decline Call", modifier = Modifier.size(22.dp))
             }
             Button(
               onClick = onAccept,
-              modifier = Modifier.testTag("accept_call_button"),
+              contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+              modifier = Modifier.heightIn(min = 48.dp).testTag("accept_call_button"),
             ) {
               Icon(
                 if (session.callType == "VIDEO") Icons.Default.Videocam else Icons.Default.Call,
@@ -229,7 +254,7 @@ private fun IncomingCallBanner(
                 modifier = Modifier.size(18.dp),
               )
               Spacer(Modifier.width(4.dp))
-              Text("Answer")
+              Text("Answer", maxLines = 1, softWrap = false)
             }
           }
         }
@@ -244,7 +269,7 @@ private fun IncomingCallBanner(
           ) { reply ->
             AssistChip(
               onClick = { onQuickDeclineDm(reply) },
-              label = { Text("Decline: ${reply.take(22)}") },
+              label = { Text("Decline: ${reply.take(22)}", maxLines = 1, softWrap = false) },
             )
           }
         }
@@ -253,6 +278,7 @@ private fun IncomingCallBanner(
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ActiveNativeCallScreen(
   session: CallSession,
@@ -421,20 +447,30 @@ private fun ActiveNativeCallScreen(
     }
 
   if (minimized) {
+    val safeInsets = rememberHostWindowSafeInsets()
     // FLOATING PiP CALL PILL (USER CAN BROWSE COCKPIT / RADAR / BOARD WHILE LIVE VOICE CONTINUES)
-    Surface(
-      color = Color(0xF20B1420),
-      shape = RoundedCornerShape(16.dp),
-      border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)),
-      tonalElevation = 8.dp,
-      modifier =
-        Modifier
-          .fillMaxWidth()
-          .statusBarsPadding()
-          .padding(horizontal = 12.dp, vertical = 10.dp)
-          .clickable { socialVm.setCallMinimized(false) }
-          .testTag("minimized_call_pill"),
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(
+          start = safeInsets.start + 12.dp,
+          end = safeInsets.end + 12.dp,
+          top = safeInsets.top + 8.dp,
+        ),
+      contentAlignment = Alignment.TopCenter,
     ) {
+      Surface(
+        color = Color(0xF20B1420),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)),
+        tonalElevation = 8.dp,
+        modifier =
+          Modifier
+            .fillMaxWidth()
+            .widthIn(max = 600.dp)
+            .clickable { socialVm.setCallMinimized(false) }
+            .testTag("minimized_call_pill"),
+      ) {
       Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -475,6 +511,7 @@ private fun ActiveNativeCallScreen(
             Icon(Icons.Default.CallEnd, contentDescription = "End Call", tint = MaterialTheme.colorScheme.error)
           }
         }
+        }
       }
     }
     return
@@ -494,6 +531,11 @@ private fun ActiveNativeCallScreen(
         decorFitsSystemWindows = false,
       ),
   ) {
+    ConfigureEdgeToEdgeDialogWindow(fullScreen = true)
+    val safeInsets = rememberHostWindowSafeInsets()
+    val effectiveBottomInset = maxOf(safeInsets.bottom, safeInsets.imeBottom)
+    val pipBottomClearance = effectiveBottomInset + (if (pttHelmetMode) 156.dp else 98.dp)
+
     BackHandler(enabled = true) {
       if (showInCallChat) {
         showInCallChat = false
@@ -587,9 +629,8 @@ private fun ActiveNativeCallScreen(
             } else {
               Modifier
                 .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 14.dp, bottom = 104.dp)
-                .size(width = 118.dp, height = 166.dp)
+                .padding(end = safeInsets.end + 14.dp, bottom = pipBottomClearance)
+                .size(width = 112.dp, height = 156.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp))
                 .clickable { swapPreviewMain = !swapPreviewMain }
@@ -629,9 +670,8 @@ private fun ActiveNativeCallScreen(
           modifier =
             Modifier
               .align(Alignment.BottomEnd)
-              .navigationBarsPadding()
-              .padding(end = 14.dp, bottom = 104.dp)
-              .size(width = 118.dp, height = 166.dp)
+              .padding(end = safeInsets.end + 14.dp, bottom = pipBottomClearance)
+              .size(width = 112.dp, height = 156.dp)
               .clip(RoundedCornerShape(16.dp))
               .border(2.dp, MaterialTheme.colorScheme.secondary, RoundedCornerShape(16.dp))
               .clickable { swapPreviewMain = false },
@@ -651,13 +691,20 @@ private fun ActiveNativeCallScreen(
       }
 
       // 3. TRANSLUCENT HUD OVERLAY (TOP STATUS + CENTER PERMS/CHAT + BOTTOM CONTROLS)
-      Column(
+      Box(
         modifier =
           Modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(14.dp),
+            .padding(
+              start = safeInsets.start + 12.dp,
+              end = safeInsets.end + 12.dp,
+              top = safeInsets.top + 8.dp,
+              bottom = effectiveBottomInset + 12.dp,
+            ),
+        contentAlignment = Alignment.Center,
+      ) {
+      Column(
+        modifier = Modifier.fillMaxSize().widthIn(max = 580.dp),
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
       ) {
@@ -682,13 +729,19 @@ private fun ActiveNativeCallScreen(
               ) {
                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize Call to PiP", tint = Color.White)
               }
-              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                modifier = Modifier.weight(1f),
+              ) {
+                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                 Text(
                   "${session.callType} • ${if (speakerOn) "SPEAKER" else "EARPIECE"} • ${if (lowBandwidthMode) "LOW-BW" else "HD"}",
                   style = MaterialTheme.typography.labelMedium,
                   color = MaterialTheme.colorScheme.primary,
                   fontWeight = FontWeight.Bold,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
                 )
               }
               Row {
@@ -717,50 +770,52 @@ private fun ActiveNativeCallScreen(
               style = MaterialTheme.typography.titleLarge,
               color = Color.White,
               fontWeight = FontWeight.Bold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
             )
             Text(
               if (isCallActive) "$liveLinkStatus • $timerLabel" else liveLinkStatus,
               style = MaterialTheme.typography.bodySmall,
               color = Color(0xFFCBD5E1),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
             )
 
             Spacer(Modifier.height(6.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-              item {
-                FilterChip(
-                  selected = pttHelmetMode,
-                  onClick = {
-                    pttHelmetMode = !pttHelmetMode
-                    pttTalking = false
-                  },
-                  leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null, Modifier.size(16.dp)) },
-                  label = { Text("PTT Helmet") },
-                )
-              }
-              item {
-                FilterChip(
-                  selected = lowBandwidthMode,
-                  onClick = { lowBandwidthMode = !lowBandwidthMode },
-                  leadingIcon = { Icon(Icons.Default.SignalCellularAlt, null, Modifier.size(16.dp)) },
-                  label = { Text("Rural Low-BW") },
-                )
-              }
-              item {
-                FilterChip(
-                  selected = isVideo,
-                  onClick = {
-                    val nextType = if (isVideo) "AUDIO" else "VIDEO"
-                    socialVm.switchActiveCallType(nextType)
-                    val wantCam = nextType == "VIDEO"
-                    camEnabled = wantCam
-                    if (wantCam && !hasCamPerm) {
-                      permLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA))
-                    }
-                  },
-                  leadingIcon = { Icon(Icons.Default.Videocam, null, Modifier.size(16.dp)) },
-                  label = { Text(if (isVideo) "Switch to Audio" else "Switch to Video") },
-                )
-              }
+            FlowRow(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+              verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+              FilterChip(
+                selected = pttHelmetMode,
+                onClick = {
+                  pttHelmetMode = !pttHelmetMode
+                  pttTalking = false
+                },
+                leadingIcon = { Icon(Icons.Default.RecordVoiceOver, null, Modifier.size(15.dp)) },
+                label = { Text("PTT", maxLines = 1, softWrap = false) },
+              )
+              FilterChip(
+                selected = lowBandwidthMode,
+                onClick = { lowBandwidthMode = !lowBandwidthMode },
+                leadingIcon = { Icon(Icons.Default.SignalCellularAlt, null, Modifier.size(15.dp)) },
+                label = { Text("Low-BW", maxLines = 1, softWrap = false) },
+              )
+              FilterChip(
+                selected = isVideo,
+                onClick = {
+                  val nextType = if (isVideo) "AUDIO" else "VIDEO"
+                  socialVm.switchActiveCallType(nextType)
+                  val wantCam = nextType == "VIDEO"
+                  camEnabled = wantCam
+                  if (wantCam && !hasCamPerm) {
+                    permLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA))
+                  }
+                },
+                leadingIcon = { Icon(Icons.Default.Videocam, null, Modifier.size(15.dp)) },
+                label = { Text(if (isVideo) "Audio" else "Video", maxLines = 1, softWrap = false) },
+              )
             }
 
             latestPing?.let { lp ->
@@ -773,6 +828,8 @@ private fun ActiveNativeCallScreen(
                   "LIVE PING • $who: $code",
                   color = Color.White,
                   style = MaterialTheme.typography.labelMedium,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
                   modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                 )
               }
@@ -958,16 +1015,23 @@ private fun ActiveNativeCallScreen(
               }
             }
 
-            Button(
+            FilledIconButton(
               onClick = { socialVm.declineOrEndCall(session) },
-              shape = CircleShape,
-              colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-              modifier = Modifier.size(60.dp).testTag("end_call_button"),
+              colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = Color(0xFFDC2626),
+                contentColor = Color.White,
+              ),
+              modifier = Modifier.size(56.dp).testTag("end_call_button"),
             ) {
-              Icon(Icons.Default.CallEnd, contentDescription = "End Call", tint = Color.White)
+              Icon(
+                Icons.Default.CallEnd,
+                contentDescription = "End Call",
+                modifier = Modifier.size(26.dp),
+              )
             }
           }
         }
+      }
       }
     }
   }

@@ -112,9 +112,11 @@ import com.example.data.PublicPilotProfile
 import com.example.data.RiderMatchEngine
 import com.example.hardware.VoiceAudioManager
 import com.example.ui.components.CloudImage
+import com.example.ui.components.ConfigureEdgeToEdgeDialogWindow
 import com.example.ui.components.PilotAvatarThumb
 import com.example.ui.components.TacticalCard
 import com.example.ui.components.decodeSampledBitmap
+import com.example.ui.components.rememberHostWindowSafeInsets
 import com.example.viewmodel.CopilotSocialViewModel
 import com.example.viewmodel.SessionViewModel
 
@@ -306,6 +308,8 @@ fun DirectMessagesSheet(
       decorFitsSystemWindows = false,
     ),
   ) {
+    ConfigureEdgeToEdgeDialogWindow(fullScreen = true)
+    val safeInsets = rememberHostWindowSafeInsets()
     BackHandler(enabled = true) {
       handleSafeBack()
     }
@@ -313,13 +317,21 @@ fun DirectMessagesSheet(
       color = MaterialTheme.colorScheme.background,
       modifier = Modifier.fillMaxSize(),
     ) {
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .padding(
+            start = safeInsets.start + 14.dp,
+            end = safeInsets.end + 14.dp,
+            top = safeInsets.top + 6.dp,
+            bottom = maxOf(safeInsets.bottom, safeInsets.imeBottom) + 8.dp,
+          ),
+        contentAlignment = Alignment.TopCenter,
+      ) {
       Column(
         Modifier
           .fillMaxSize()
-          .statusBarsPadding()
-          .navigationBarsPadding()
-          .imePadding()
-          .padding(horizontal = 14.dp, vertical = 6.dp),
+          .widthIn(max = 780.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         if (dmModerationNotice.isNotBlank()) {
@@ -1379,6 +1391,7 @@ fun DirectMessagesSheet(
             }
           }
         }
+      }
       }
     }
   }

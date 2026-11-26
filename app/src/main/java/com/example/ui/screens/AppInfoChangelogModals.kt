@@ -6,6 +6,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,9 +14,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -86,8 +89,9 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
-        "v61.0 (Build 61) — Multi-Device & Tablet Firebase AI App Check Self-Healing" to
+        "v61.0 (Build 61) — Multi-Device Firebase AI App Check Self-Healing & Universal Screen-Fit Layout Overhaul" to
           "• Tablet & Multi-Device Firebase AI App Check Fix: Added a non-backed-up device install anchor so restored or stale App Check tokens/debug secrets copied between phones and tablets are automatically wiped on startup, prevented duplicate provider resets on tablet layout/taskbar changes, added startup reCAPTCHA Enterprise warm-up, and wired automatic force-refresh & retry recovery across Mechanic AI, Co-Pilot, Studio Labs, Safety Shield, and Neural TTS.\n" +
+          "• Universal Phone & Tablet Screen-Fit Layout Overhaul: Built a host-window safe-area inset engine for Samsung One UI & Android 14–16 edge-to-edge Dialog windows, fixed the Live Call Overlay End-Call button and top status chips, eliminated the bottom gap in YouTube Theater Mode, made modal dialogs and bottom sheets viewport-adaptive with IME keyboard avoidance, and added scrollable safe-area framing across Gravel Volt Runner 3D, Onboarding, and all Studio/Settings screens.\n" +
           "• Live App Check Diagnostic Probe: Upgraded About & Diagnostics to run a real live App Check token verification probe reporting exact Google Play Services & reCAPTCHA Enterprise status.",
         "v60.0 (Build 60) — Native Video Calls, HUD Sensor Calibration, Profile Settings, Family Safety & YouTube Fix" to
           "• Native Two-Way Video & Voice Calling: Rebuilt live calls on native Android CameraX + G.711 μ-law voice with hardware echo cancellation, fixed-slot Cloud Firestore media streaming, and a dedicated full-screen Dialog window so video calls launch reliably above DMs and every modal.\n" +
@@ -201,11 +205,15 @@ fun AppInfoAndChangelogScreen(
       )
     }
   ) { pad ->
-    LazyColumn(
-      modifier = Modifier.fillMaxSize().padding(pad),
-      contentPadding = PaddingValues(14.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
+    Box(
+      modifier = Modifier.fillMaxSize().padding(pad).imePadding(),
+      contentAlignment = Alignment.TopCenter,
     ) {
+      LazyColumn(
+        modifier = Modifier.fillMaxSize().widthIn(max = 860.dp),
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
       if (notice.isNotBlank()) {
         item {
           TacticalCard(highlight = true) {
@@ -413,6 +421,7 @@ fun AppInfoAndChangelogScreen(
           Text(desc, style = MaterialTheme.typography.bodySmall)
         }
       }
+    }
     }
   }
 }

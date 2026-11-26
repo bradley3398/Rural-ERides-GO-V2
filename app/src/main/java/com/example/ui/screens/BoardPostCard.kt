@@ -87,7 +87,9 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.data.BoardPost
 import com.example.data.PublicPilotProfile
 import com.example.ui.components.CloudImage
+import com.example.ui.components.ConfigureEdgeToEdgeDialogWindow
 import com.example.ui.components.PilotAvatarThumb
+import com.example.ui.components.rememberHostWindowSafeInsets
 import com.example.ui.components.SocialPlatform
 import com.example.ui.components.SocialPlatformBadgeIcon
 import com.example.ui.components.SocialSharePayload
@@ -913,13 +915,21 @@ fun PostImageLightboxDialog(
 ) {
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    ConfigureEdgeToEdgeDialogWindow(fullScreen = true)
+    val safeInsets = rememberHostWindowSafeInsets()
     Box(
       modifier =
         Modifier
           .fillMaxSize()
           .background(Color.Black.copy(alpha = 0.94f))
+          .padding(
+            start = safeInsets.start,
+            end = safeInsets.end,
+            top = safeInsets.top,
+            bottom = safeInsets.bottom,
+          )
           .clickable { onDismiss() },
       contentAlignment = Alignment.Center,
     ) {
@@ -927,15 +937,16 @@ fun PostImageLightboxDialog(
         source = imageUrl,
         contentDescription = "Full post photo",
         contentScale = ContentScale.Fit,
-        modifier = Modifier.fillMaxWidth().padding(12.dp),
+        modifier = Modifier.fillMaxSize().padding(12.dp),
       )
       IconButton(
         onClick = onDismiss,
         modifier =
           Modifier
             .align(Alignment.TopEnd)
-            .padding(16.dp)
-            .background(Color.Black.copy(alpha = 0.6f), CircleShape),
+            .padding(14.dp)
+            .size(48.dp)
+            .background(Color.Black.copy(alpha = 0.68f), CircleShape),
       ) {
         Icon(Icons.Default.Close, contentDescription = "Close Photo", tint = Color.White)
       }

@@ -23,9 +23,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -337,11 +339,18 @@ fun CustomVoiceStudioScreen(
       )
     },
   ) { paddingValues ->
-    Column(
+    Box(
       modifier = Modifier
         .fillMaxSize()
-        .padding(paddingValues),
+        .padding(paddingValues)
+        .imePadding(),
+      contentAlignment = Alignment.TopCenter,
     ) {
+      Column(
+        modifier = Modifier
+          .fillMaxSize()
+          .widthIn(max = 860.dp),
+      ) {
       // TABS
       TabRow(
         selectedTabIndex = selectedTab,
@@ -1164,6 +1173,7 @@ fun CustomVoiceStudioScreen(
           }
         }
       }
+    }
     }
   }
 }

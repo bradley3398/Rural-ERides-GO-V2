@@ -26,11 +26,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,6 +82,7 @@ import com.example.data.ActiveNavRoute
 import com.example.data.LiveChargingStation
 import com.example.data.LiveTelemetrySnapshot
 import com.example.data.MasterSettings
+import com.example.ui.components.ConfigureEdgeToEdgeDialogWindow
 import com.example.ui.components.HudSpeedLimitBadge
 import com.example.ui.components.TacticalButton
 import com.example.ui.components.TacticalFilterChip
@@ -90,6 +90,7 @@ import com.example.ui.components.TacticalSlider
 import com.example.ui.components.distUnitLabel
 import com.example.ui.components.formatDistValue
 import com.example.ui.components.formatSpeedValue
+import com.example.ui.components.rememberHostWindowSafeInsets
 import com.example.ui.components.speedUnitLabel
 import com.example.ui.theme.LocalTacticalChrome
 import com.example.viewmodel.RadarViewModel
@@ -219,6 +220,8 @@ fun LiveArHudOverlay(
     onDismissRequest = onDismiss,
     properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    ConfigureEdgeToEdgeDialogWindow(fullScreen = true)
+    val safeInsets = rememberHostWindowSafeInsets()
     BackHandler(onBack = onDismiss)
     Surface(
       color = Color(0xFF05080F),
@@ -452,9 +455,14 @@ fun LiveArHudOverlay(
         modifier =
           Modifier
             .fillMaxWidth()
+            .widthIn(max = 680.dp)
             .align(Alignment.TopCenter)
-            .statusBarsPadding()
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(
+              start = safeInsets.start + 14.dp,
+              end = safeInsets.end + 14.dp,
+              top = safeInsets.top + 10.dp,
+              bottom = 10.dp,
+            ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         Surface(color = Color(0xCC070D17), shape = chrome.cardShape) {
@@ -663,9 +671,14 @@ fun LiveArHudOverlay(
         modifier =
           Modifier
             .fillMaxWidth()
+            .widthIn(max = 680.dp)
             .align(Alignment.BottomCenter)
-            .navigationBarsPadding()
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(
+              start = safeInsets.start + 14.dp,
+              end = safeInsets.end + 14.dp,
+              top = 8.dp,
+              bottom = safeInsets.bottom + 12.dp,
+            ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         Surface(color = Color(0xCC070D17), shape = chrome.cardShape) {
