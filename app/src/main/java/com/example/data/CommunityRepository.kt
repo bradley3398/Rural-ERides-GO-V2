@@ -105,13 +105,26 @@ class CommunityRepository(
         }
 
       val existingUids = mergedProfiles.map { it.userId }.toSet()
+      // Only surface a radar-only beacon if it is actively pinging RIGHT NOW (<= 5 min) or is self;
+      // never resurrect stale orphaned or Pre-Launch test radar_riders docs that lack a real user_profiles record.
       val fromRadar =
         radarList
-          .filter { it.userId !in existingUids }
+          .filter { r ->
+            if (r.userId in existingUids) return@filter false
+            val isSelf = currentUid != null && r.userId == currentUid
+            val updatedSec = r.updatedAt?.seconds ?: 0L
+            val activelyPingingNow =
+              !r.statusTag.equals("OFFLINE", ignoreCase = true) &&
+                updatedSec > 0L &&
+                (nowSec - updatedSec) <= 300L
+            isSelf || activelyPingingNow
+          }
           .map { r ->
+            val updatedSec = r.updatedAt?.seconds ?: 0L
             val radarFresh =
               !r.statusTag.equals("OFFLINE", ignoreCase = true) &&
-                ((r.updatedAt?.seconds ?: 0L) > 0L && (nowSec - (r.updatedAt?.seconds ?: 0L)) <= 360L)
+                updatedSec > 0L &&
+                (nowSec - updatedSec) <= 300L
             PublicPilotProfile(
               id = r.userId,
               userId = r.userId,
@@ -126,7 +139,7 @@ class CommunityRepository(
               vehicleSummary = r.vehicleName.ifBlank { "PEV Rig" },
               visibility = "PUBLIC",
               online = radarFresh,
-              lastSeenMs = (r.updatedAt?.seconds ?: 0L) * 1000L,
+              lastSeenMs = updatedSec * 1000L,
               createdAt = r.createdAt,
               updatedAt = r.updatedAt,
             )
@@ -419,13 +432,13 @@ class CommunityRepository(
     db.collection("radar_riders").whereEqualTo("visibility", "PUBLIC").snapshots().map { snap ->
       val currentUid = auth.currentUser?.uid
       val nowSec = System.currentTimeMillis() / 1000L
-      val freshnessWindowSec = 24L * 3600L // Active in the last 24 hours (or self)
+      val freshnessWindowSec = 3600L // Active in the last 1 hour (or self)
       snap
         .toObjects(RadarRider::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
         .filter { r ->
           val isSelf = currentUid != null && r.userId == currentUid
           val updatedSec = r.updatedAt?.seconds ?: r.createdAt?.seconds ?: 0L
-          val isFresh = isSelf || updatedSec <= 0L || (nowSec - updatedSec) <= freshnessWindowSec
+          val isFresh = isSelf || (updatedSec > 0L && (nowSec - updatedSec) <= freshnessWindowSec)
           val isActiveStatus = !r.statusTag.equals("OFFLINE", ignoreCase = true)
           isFresh &&
             isActiveStatus &&

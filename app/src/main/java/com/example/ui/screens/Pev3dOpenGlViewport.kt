@@ -37,13 +37,11 @@ internal fun Pev3dOpenGlViewport(
     caliperRgb = caliperRgb,
   ),
 ) {
-  LaunchedEffect(Unit) {
-    onBackendChanged("OPENGL ES 3.0 • GGX PBR")
-  }
-  Pev3dComposeShadedViewport(
+  Pev3dHardwareGlViewport(
     archetype = archetype,
     renderMode = renderMode,
     lightingPreset = lightingPreset,
+    techEngine = Pev3dTechEngine.OPENGL_ES3,
     yawDeg = yawDeg,
     pitchDeg = pitchDeg,
     zoom = zoom,
@@ -57,8 +55,8 @@ internal fun Pev3dOpenGlViewport(
     bodyRgb = bodyRgb,
     caliperRgb = caliperRgb,
     ambientTempC = ambientTempC,
+    onBackendChanged = onBackendChanged,
     modifier = modifier,
     finish = finish,
-    techEngine = Pev3dTechEngine.OPENGL_ES3,
   )
 }

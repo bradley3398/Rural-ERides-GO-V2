@@ -345,7 +345,8 @@ fun Pev3dGarageViewer(
   val speedUnitStr = com.example.ui.components.speedUnitLabel(settings.distanceUnit)
   val modelCategories = remember { listOf("All", "e-Moto & Dirt", "Hyper-Scooter", "EUC", "e-Bike & Moped", "Specialty") }
   var selectedCategory by remember { mutableStateOf("All") }
-  val initialModelIdx = remember(activeVehicleName, activeVoltage) {
+  val safeActiveVoltage = if (activeVoltage.isFinite() && activeVoltage > 0.0) activeVoltage else 60.0
+  val initialModelIdx = remember(activeVehicleName, safeActiveVoltage) {
     val nameQuery = activeVehicleName.trim().lowercase()
     val byName = if (nameQuery.length >= 3) {
       AAA_PEV_MODELS.indexOfFirst {
@@ -353,7 +354,7 @@ fun Pev3dGarageViewer(
       }
     } else -1
     if (byName >= 0) byName
-    else AAA_PEV_MODELS.indices.minByOrNull { kotlin.math.abs(AAA_PEV_MODELS[it].voltage - activeVoltage.roundToInt()) } ?: 0
+    else AAA_PEV_MODELS.indices.minByOrNull { kotlin.math.abs(AAA_PEV_MODELS[it].voltage - safeActiveVoltage.roundToInt()) } ?: 0
   }
   var selectedModelIdx by remember(initialModelIdx) { mutableIntStateOf(initialModelIdx) }
   var motorThrottlePct by remember { mutableFloatStateOf(0.35f) }
@@ -396,10 +397,12 @@ fun Pev3dGarageViewer(
     }
   }
   val hasImuSensor = remember(ctx) {
-    val sm = ctx.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-    sm?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR) != null ||
-      sm?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null ||
-      sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null
+    runCatching {
+      val sm = ctx.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+      sm?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR) != null ||
+        sm?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null ||
+        sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null
+    }.getOrDefault(false)
   }
   val availableInspectMethods = remember(hasImuSensor) {
     if (hasImuSensor) Pev3dInspectMethod.entries
@@ -419,10 +422,12 @@ fun Pev3dGarageViewer(
     if (inspectMethod != Pev3dInspectMethod.GYRO_TILT) {
       onDispose { }
     } else {
-      val sm = ctx.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-      val rotSensor = sm?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
-        ?: sm?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        ?: sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+      val sm = runCatching { ctx.getSystemService(Context.SENSOR_SERVICE) as? SensorManager }.getOrNull()
+      val rotSensor = runCatching {
+        sm?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+          ?: sm?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+          ?: sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+      }.getOrNull()
       val listener = object : SensorEventListener {
         private val rotMat = FloatArray(9)
         private val orient = FloatArray(3)
@@ -452,10 +457,10 @@ fun Pev3dGarageViewer(
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
       }
       if (sm != null && rotSensor != null) {
-        sm.registerListener(listener, rotSensor, SensorManager.SENSOR_DELAY_GAME)
+        runCatching { sm.registerListener(listener, rotSensor, SensorManager.SENSOR_DELAY_GAME) }
       }
       onDispose {
-        sm?.unregisterListener(listener)
+        runCatching { sm?.unregisterListener(listener) }
       }
     }
   }
@@ -705,12 +710,12 @@ fun Pev3dGarageViewer(
               val matchedIdx =
                 AAA_PEV_MODELS.indexOfFirst { m -> tokens.any { t -> m.name.lowercase().contains(t) } }
                   .takeIf { it >= 0 }
-                  ?: AAA_PEV_MODELS.indices.minByOrNull { abs(AAA_PEV_MODELS[it].voltage - activeVoltage.toInt()) }
+                  ?: AAA_PEV_MODELS.indices.minByOrNull { abs(AAA_PEV_MODELS[it].voltage - safeActiveVoltage.toInt()) }
                   ?: 0
               selectedCategory = "All"
               selectedModelIdx = matchedIdx
             },
-            label = { Text("Match Rig (${activeVoltage.toInt()}V)", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
+            label = { Text("Match Rig (${safeActiveVoltage.toInt()}V)", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
           )
         }
         items(filteredModelIndices) { idx ->
@@ -865,10 +870,11 @@ fun Pev3dGarageViewer(
       ) {
         when (activeTechEngine) {
           Pev3dTechEngine.STUDIO_3D -> {
-            Pev3dComposeShadedViewport(
+            Pev3dHardwareGlViewport(
               archetype = archetype,
               renderMode = renderMode,
               lightingPreset = lightingPreset,
+              techEngine = Pev3dTechEngine.STUDIO_3D,
               yawDeg = modelYawDeg,
               pitchDeg = modelPitchDeg,
               zoom = modelZoomScale,
@@ -882,6 +888,7 @@ fun Pev3dGarageViewer(
               bodyRgb = finish.bodyRgb,
               caliperRgb = finish.caliperRgb,
               ambientTempC = ambientTempC,
+              onBackendChanged = { gpuBackendLabel = it },
               modifier = Modifier.fillMaxSize().testTag("pev_3d_interactive_canvas"),
               finish = finish,
             )

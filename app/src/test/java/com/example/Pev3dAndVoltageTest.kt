@@ -22,6 +22,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import com.example.ui.compartments.Pev3dLabModal
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -30,6 +35,9 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class Pev3dAndVoltageTest {
+
+  @get:Rule
+  val composeRule = createComposeRule()
 
   @Test
   fun liveTelemetryDefaults48vToExact54_6v() {
@@ -237,4 +245,60 @@ class Pev3dAndVoltageTest {
       assertTrue("Expected non-blank motif title for $mode", spec.motifTitle.isNotBlank())
     }
   }
+
+  @Test
+  fun all88ModelsAnd11BlueprintsBuildValidFiniteMeshesWithSafeIndices() {
+    for (bp in com.example.ui.screens.Pev3dBlueprintType.entries) {
+      val finish = com.example.ui.screens.Pev3dModelFinish(
+        bodyRgb = floatArrayOf(0.8f, 0.2f, 0.2f),
+        accentRgb = floatArrayOf(0.2f, 0.8f, 0.9f),
+        caliperRgb = floatArrayOf(0.9f, 0.1f, 0.1f),
+        blueprintType = bp,
+      )
+      val scene = Pev3dGltfBuilder.buildSceneMeshes(
+        archetype = Pev3dArchetype.EMOTO,
+        finish = finish,
+        lightsOn = true,
+      )
+      assertTrue("Blueprint $bp must produce parts", scene.parts.isNotEmpty())
+      var totalTris = 0
+      for (part in scene.parts) {
+        val vCount = part.vertices.size / 8
+        assertTrue("Part ${part.nodeName} in $bp has vCount=$vCount > 32760", vCount in 1..32760)
+        for (f in part.vertices) {
+          assertTrue("Non-finite vertex float in $bp / ${part.nodeName}: $f", f.isFinite())
+        }
+        for (idx in part.indices) {
+          val u = idx.toInt() and 0xFFFF
+          assertTrue("Index $u out of range [0, $vCount) in $bp / ${part.nodeName}", u in 0 until vCount)
+        }
+        totalTris += part.indices.size / 3
+      }
+      assertTrue("Blueprint $bp must have > 100 triangles, got $totalTris", totalTris > 100)
+    }
+  }
+
+  @Test
+  fun pev3dLabModalOpensAndRendersWithoutCrash() {
+    var dismissed = false
+    composeRule.mainClock.autoAdvance = false
+    composeRule.setContent {
+      com.example.ui.theme.RuralERidesTheme {
+        Pev3dLabModal(
+          activeVehicleName = "isinwheel H7 PRO",
+          activeVoltage = 48.0,
+          gpsLat = 37.7,
+          gpsLng = -122.4,
+          onDismiss = { dismissed = true },
+        )
+      }
+    }
+    composeRule.mainClock.advanceTimeByFrame()
+    composeRule.mainClock.advanceTimeBy(64L)
+    composeRule.onNodeWithTag("aaa_pev_photo_viewport").assertExists()
+    composeRule.onNodeWithTag("exit_3d_lab_btn").performClick()
+    composeRule.mainClock.advanceTimeByFrame()
+    assertTrue("Expected exit button to dismiss 3D Lab modal", dismissed)
+  }
 }
+

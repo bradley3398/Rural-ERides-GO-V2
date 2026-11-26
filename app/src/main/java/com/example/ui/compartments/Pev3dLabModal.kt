@@ -66,6 +66,7 @@ fun Pev3dLabModal(
   onDismiss: () -> Unit,
 ) {
   BackHandler { onDismiss() }
+  val safeVoltage = if (activeVoltage.isFinite() && activeVoltage > 0.0) activeVoltage else 72.0
 
   Surface(
     modifier = Modifier
@@ -122,7 +123,7 @@ fun Pev3dLabModal(
               overflow = TextOverflow.Ellipsis,
             )
             Text(
-              text = "Studio 3D PBR • OpenGL ES • WebGL 2.0 • $activeVehicleName (${activeVoltage.toInt()}V)",
+              text = "Studio 3D PBR • OpenGL ES • WebGL 2.0 • $activeVehicleName (${safeVoltage.toInt()}V)",
               style = MaterialTheme.typography.labelSmall,
               color = Color(0xFFCBD5E1),
               maxLines = 1,
@@ -153,7 +154,7 @@ fun Pev3dLabModal(
       ) {
         Pev3dGarageViewer(
           activeVehicleName = activeVehicleName,
-          activeVoltage = activeVoltage,
+          activeVoltage = safeVoltage,
           gpsLat = gpsLat,
           gpsLng = gpsLng,
         )
@@ -226,8 +227,9 @@ fun Pev3dLabLaunchpadCard(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
+        val safeCardVoltage = if (activeVoltage.isFinite() && activeVoltage > 0.0) activeVoltage else 72.0
         Text(
-          "Paired Rig: $activeVehicleName (${activeVoltage.toInt()}V)",
+          "Paired Rig: $activeVehicleName (${safeCardVoltage.toInt()}V)",
           style = MaterialTheme.typography.labelSmall,
           color = Color(0xFFA855F7),
           fontWeight = FontWeight.Bold,

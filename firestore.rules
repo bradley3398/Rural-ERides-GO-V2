@@ -650,7 +650,7 @@ service cloud.firestore {
     // --- LIVE RIDER RADAR COLLECTIONS ---
     match /radar_riders/{riderId} {
       allow get: if isSignedIn() && isValidId(riderId);
-      allow list: if isSignedIn() && (existing().visibility == 'PUBLIC' || existing().userId == request.auth.uid);
+      allow list: if isSignedIn() && (existing().visibility == 'PUBLIC' || existing().userId == request.auth.uid || isAdmin());
 
       allow create: if isOwner(riderId) &&
                        isValidId(riderId) &&
@@ -666,7 +666,7 @@ service cloud.firestore {
                        isValidUpdateTimestamps(incoming()) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['callsign', 'vehicleName', 'lat', 'lng', 'speedKmh', 'headingDeg', 'batteryPct', 'statusTag', 'visibility', 'updatedAt']);
 
-      allow delete: if isOwner(riderId) && isValidId(riderId);
+      allow delete: if (isOwner(riderId) || isAdmin()) && isValidId(riderId);
     }
 
     match /radar_meetups/{meetupId} {

@@ -37,13 +37,11 @@ internal fun Pev3dWebGlViewport(
     caliperRgb = caliperRgb,
   ),
 ) {
-  LaunchedEffect(Unit) {
-    onBackendChanged("WEBGL 2.0 • GLB PBR")
-  }
-  Pev3dComposeShadedViewport(
+  Pev3dHardwareGlViewport(
     archetype = archetype,
     renderMode = renderMode,
     lightingPreset = lightingPreset,
+    techEngine = Pev3dTechEngine.WEBGL_2,
     yawDeg = yawDeg,
     pitchDeg = pitchDeg,
     zoom = zoom,
@@ -57,8 +55,8 @@ internal fun Pev3dWebGlViewport(
     bodyRgb = bodyRgb,
     caliperRgb = caliperRgb,
     ambientTempC = ambientTempC,
+    onBackendChanged = onBackendChanged,
     modifier = modifier,
     finish = finish,
-    techEngine = Pev3dTechEngine.WEBGL_2,
   )
 }

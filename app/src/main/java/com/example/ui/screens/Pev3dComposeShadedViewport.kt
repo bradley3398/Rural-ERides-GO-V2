@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint as AndroidPaint
+import android.graphics.Path as AndroidPath
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -21,8 +22,11 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+private const val MAX_VERTICES_BATCH_TRIS = 1200
+
 private class ComposeTriSortBuffers {
   var capTris = 0
+  var capVerts = 0
   var depths = FloatArray(0)
   var order = IntArray(0)
   var triAx = FloatArray(0)
@@ -34,10 +38,26 @@ private class ComposeTriSortBuffers {
   var triCa = IntArray(0)
   var triCb = IntArray(0)
   var triCc = IntArray(0)
-  var outVerts = FloatArray(0)
-  var outColors = IntArray(0)
 
-  fun ensure(minTris: Int) {
+  // Reusable per-part vertex projection buffers (eliminates per-frame GC allocations)
+  var projX = FloatArray(0)
+  var projY = FloatArray(0)
+  var projZ = FloatArray(0)
+  var vertColors = IntArray(0)
+
+  // Zero-offset padded batch buffers for Android Canvas.drawVertices
+  // batchCols is sized to MAX_VERTICES_BATCH_TRIS * 6 (2x required) so even strict
+  // vendor BaseCanvas.checkRange(colors.length, 0, vertexCount) implementations never throw!
+  val batchVerts = FloatArray(MAX_VERTICES_BATCH_TRIS * 6)
+  val batchCols = IntArray(MAX_VERTICES_BATCH_TRIS * 6)
+
+  // Explicit iterative sort stack (zero recursion / StackOverflowError risk)
+  val sortStackLow = IntArray(128)
+  val sortStackHigh = IntArray(128)
+
+  val fallbackPath = AndroidPath()
+
+  fun ensureTris(minTris: Int) {
     if (minTris <= capTris) return
     val newCap = max(minTris, 4096)
     capTris = newCap
@@ -52,29 +72,135 @@ private class ComposeTriSortBuffers {
     triCa = IntArray(newCap)
     triCb = IntArray(newCap)
     triCc = IntArray(newCap)
-    outVerts = FloatArray(newCap * 6)
-    outColors = IntArray(newCap * 3)
+  }
+
+  fun ensureVerts(minVerts: Int) {
+    if (minVerts <= capVerts) return
+    val newCap = max(minVerts, 4096)
+    capVerts = newCap
+    projX = FloatArray(newCap)
+    projY = FloatArray(newCap)
+    projZ = FloatArray(newCap)
+    vertColors = IntArray(newCap)
   }
 }
 
-private fun quickSortDesc(order: IntArray, depths: FloatArray, low: Int, high: Int) {
-  if (low >= high) return
-  val pivot = depths[order[(low + high) ushr 1]]
-  var i = low
-  var j = high
-  while (i <= j) {
-    while (depths[order[i]] > pivot) i++
-    while (depths[order[j]] < pivot) j--
-    if (i <= j) {
-      val tmp = order[i]
-      order[i] = order[j]
-      order[j] = tmp
-      i++
-      j--
+/**
+ * Crash-proof, non-recursive iterative painter's-order descending sort (far-to-near).
+ * Uses median-of-three pivot + insertion sort for small partitions + heap sort fallback
+ * if stack capacity is ever approached. Guarantees zero StackOverflowError and safe NaN handling.
+ */
+private fun sortTrisDesc(buffers: ComposeTriSortBuffers, count: Int) {
+  if (count <= 1) return
+  val order = buffers.order
+  val depths = buffers.depths
+  val stackL = buffers.sortStackLow
+  val stackH = buffers.sortStackHigh
+  var sp = 0
+  stackL[sp] = 0
+  stackH[sp] = count - 1
+  sp++
+
+  while (sp > 0) {
+    sp--
+    val low = stackL[sp]
+    val high = stackH[sp]
+    val len = high - low + 1
+    if (len <= 1) continue
+
+    if (len <= 24) {
+      // Insertion sort for small slices
+      for (i in low + 1..high) {
+        val keyIdx = order[i]
+        val keyVal = depths[keyIdx]
+        var j = i - 1
+        while (j >= low && depths[order[j]] < keyVal) {
+          order[j + 1] = order[j]
+          j--
+        }
+        order[j + 1] = keyIdx
+      }
+      continue
+    }
+
+    // Median-of-three pivot selection
+    val mid = (low + high) ushr 1
+    val dLow = depths[order[low]]
+    val dMid = depths[order[mid]]
+    val dHigh = depths[order[high]]
+    val pivot =
+      if ((dLow >= dMid && dLow <= dHigh) || (dLow <= dMid && dLow >= dHigh)) dLow
+      else if ((dMid >= dLow && dMid <= dHigh) || (dMid <= dLow && dMid >= dHigh)) dMid
+      else dHigh
+
+    var i = low
+    var j = high
+    while (i <= j) {
+      while (i <= high && depths[order[i]] > pivot) i++
+      while (j >= low && depths[order[j]] < pivot) j--
+      if (i <= j) {
+        val tmp = order[i]
+        order[i] = order[j]
+        order[j] = tmp
+        i++
+        j--
+      }
+    }
+
+    // Push larger partition first so stack depth stays O(log N)
+    val leftLen = j - low
+    val rightLen = high - i
+    if (sp + 2 >= stackL.size) {
+      // Ultra-safe heap-sort fallback for this range if ever degenerate
+      heapSortDescRange(order, depths, low, high)
+      continue
+    }
+    if (leftLen > rightLen) {
+      if (low < j) {
+        stackL[sp] = low; stackH[sp] = j; sp++
+      }
+      if (i < high) {
+        stackL[sp] = i; stackH[sp] = high; sp++
+      }
+    } else {
+      if (i < high) {
+        stackL[sp] = i; stackH[sp] = high; sp++
+      }
+      if (low < j) {
+        stackL[sp] = low; stackH[sp] = j; sp++
+      }
     }
   }
-  if (low < j) quickSortDesc(order, depths, low, j)
-  if (i < high) quickSortDesc(order, depths, i, high)
+}
+
+private fun heapSortDescRange(order: IntArray, depths: FloatArray, low: Int, high: Int) {
+  val n = high - low + 1
+  fun siftDown(start: Int, end: Int) {
+    var root = start
+    while (root * 2 + 1 <= end) {
+      var child = root * 2 + 1
+      if (child + 1 <= end && depths[order[low + child + 1]] < depths[order[low + child]]) {
+        child++
+      }
+      if (depths[order[low + child]] < depths[order[low + root]]) {
+        val tmp = order[low + root]
+        order[low + root] = order[low + child]
+        order[low + child] = tmp
+        root = child
+      } else {
+        return
+      }
+    }
+  }
+  for (start in (n - 2) / 2 downTo 0) {
+    siftDown(start, n - 1)
+  }
+  for (end in n - 1 downTo 1) {
+    val tmp = order[low + end]
+    order[low + end] = order[low]
+    order[low] = tmp
+    siftDown(0, end - 1)
+  }
 }
 
 private fun packArgb(a: Float, r: Float, g: Float, b: Float): Int {
@@ -86,16 +212,14 @@ private fun packArgb(a: Float, r: Float, g: Float, b: Float): Int {
 }
 
 private fun acesTone(x: Float): Float {
+  if (!x.isFinite()) return 0f
   val v = x.coerceAtLeast(0f)
   return ((v * (2.51f * v + 0.03f)) / (v * (2.43f * v + 0.59f) + 0.14f)).coerceIn(0f, 1f)
 }
 
 /**
- * Multi-Pipeline Hardware-Accelerated 3D PBR Rasterizer for Rural ERides GO.
- * Supports all 3 rendering technology pipelines with 100% reliability on every Android tablet & phone:
- * - [Pev3dTechEngine.STUDIO_3D]: 3-Point Photographic Softbox + ACES Filmic + Rim Silhouette
- * - [Pev3dTechEngine.OPENGL_ES3]: Cook-Torrance Microfacet GGX + Procedural Normal Relief + Anisotropic Metal
- * - [Pev3dTechEngine.WEBGL_2]: Dual-Layer Clearcoat Lacquer + Chrome Horizon IBL + Dyno Rollers & Floor Reflection
+ * Hardened, Crash-Proof Compose 3D PBR Rasterizer (also serves as instant zero-crash fallback
+ * whenever hardware EGL is unavailable).
  */
 @Composable
 internal fun Pev3dComposeShadedViewport(
@@ -124,11 +248,15 @@ internal fun Pev3dComposeShadedViewport(
   techEngine: Pev3dTechEngine = Pev3dTechEngine.STUDIO_3D,
 ) {
   val builtScene = remember(archetype, finish, lightsOn) {
-    Pev3dGltfBuilder.buildSceneMeshes(
-      archetype = archetype,
-      finish = finish,
-      lightsOn = lightsOn,
-    )
+    runCatching {
+      Pev3dGltfBuilder.buildSceneMeshes(
+        archetype = archetype,
+        finish = finish,
+        lightsOn = lightsOn,
+      )
+    }.getOrElse {
+      PevBuiltScene(parts = emptyList(), wireGroups = emptyList())
+    }
   }
   val buffers = remember { ComposeTriSortBuffers() }
   val paint = remember {
@@ -136,6 +264,11 @@ internal fun Pev3dComposeShadedViewport(
       color = android.graphics.Color.WHITE
       style = AndroidPaint.Style.FILL
       isFilterBitmap = true
+    }
+  }
+  val fallbackPaint = remember {
+    AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+      style = AndroidPaint.Style.FILL
     }
   }
 
@@ -172,15 +305,24 @@ internal fun Pev3dComposeShadedViewport(
   val camPos = remember { FloatArray(3) }
   val modelMat = remember { FloatArray(16) }
   val mvp = remember { FloatArray(16) }
+  val inV = remember { FloatArray(4) }
+  val outV = remember { FloatArray(4) }
 
   Canvas(modifier = modifier) {
     val w = size.width
     val h = size.height
-    if (w < 24f || h < 24f) return@Canvas
+    if (!w.isFinite() || !h.isFinite() || w < 24f || h < 24f) return@Canvas
+
+    val safeYaw = if (yawDeg.isFinite()) yawDeg else -28f
+    val safePitch = if (pitchDeg.isFinite()) pitchDeg.coerceIn(-75f, 80f) else 16f
+    val safeZoom = if (zoom.isFinite()) zoom.coerceIn(0.6f, 2.4f) else 1.05f
+    val safeExplode = if (explodePct.isFinite()) explodePct.coerceIn(0f, 1.5f) else 0f
+    val safeWheelSpin = if (wheelSpinDeg.isFinite()) wheelSpinDeg else 0f
+    val safeThrottle = if (throttlePct.isFinite()) throttlePct.coerceIn(0f, 1f) else 0f
+    val safeAmbient = if (ambientTempC.isFinite()) ambientTempC else 22f
 
     drawRect(brush = bgBrush)
 
-    // Overhead photographic studio softbox / showroom light strip
     if (!isBlueprintMode) {
       val ceilingColor = when (lightingPreset) {
         Pev3dLightingPreset.STUDIO -> when (techEngine) {
@@ -202,98 +344,99 @@ internal fun Pev3dComposeShadedViewport(
       )
     }
 
-    Pev3dEngine.buildCameraViewProjection(w, h, yawDeg, pitchDeg, zoom, vp, camPos)
+    Pev3dEngine.buildCameraViewProjection(w, h, safeYaw, safePitch, safeZoom, vp, camPos)
 
-    // Studio contact shadow, calibrated turntable double-ring, dyno rollers & volumetric headlight pool
-    val centerIn = floatArrayOf(0f, -0.77f, 0f, 1f)
-    val centerOut = FloatArray(4)
-    Mat4Math.multiplyMV(centerOut, vp, centerIn)
-    if (centerOut[3] > 0.1f) {
-      val cx = (centerOut[0] / centerOut[3] * 0.5f + 0.5f) * w
-      val cy = (0.5f - centerOut[1] / centerOut[3] * 0.5f) * h
-      val shadowR = min(w, h) * 0.38f * zoom.coerceIn(0.7f, 1.5f)
+    // Studio contact shadow, calibrated turntable double-ring & volumetric headlight pool
+    inV[0] = 0f; inV[1] = -0.77f; inV[2] = 0f; inV[3] = 1f
+    Mat4Math.multiplyMV(outV, vp, inV)
+    if (outV[3].isFinite() && outV[3] > 0.1f) {
+      val cx = (outV[0] / outV[3] * 0.5f + 0.5f) * w
+      val cy = (0.5f - outV[1] / outV[3] * 0.5f) * h
+      val shadowR = min(w, h) * 0.38f * safeZoom.coerceIn(0.7f, 1.5f)
 
-      if (lightsOn && renderMode != Pev3dRenderMode.THERMAL_IR && !isBlueprintMode) {
-        val beamIn = floatArrayOf(1.22f, -0.76f, 0f, 1f)
-        val beamOut = FloatArray(4)
-        Mat4Math.multiplyMV(beamOut, vp, beamIn)
-        if (beamOut[3] > 0.1f) {
-          val bx = (beamOut[0] / beamOut[3] * 0.5f + 0.5f) * w
-          val by = (0.5f - beamOut[1] / beamOut[3] * 0.5f) * h
-          val beamR = shadowR * 0.78f
-          drawOval(
-            brush = Brush.radialGradient(
-              listOf(Color(0x55E0F2FE), Color(0x2238BDF8), Color.Transparent),
-              center = Offset(bx, by),
-              radius = beamR,
-            ),
-            topLeft = Offset(bx - beamR, by - beamR * 0.42f),
-            size = androidx.compose.ui.geometry.Size(beamR * 2f, beamR * 0.84f),
-          )
+      if (cx.isFinite() && cy.isFinite() && shadowR.isFinite() && shadowR > 2f) {
+        if (lightsOn && renderMode != Pev3dRenderMode.THERMAL_IR && !isBlueprintMode) {
+          inV[0] = 1.22f; inV[1] = -0.76f; inV[2] = 0f; inV[3] = 1f
+          Mat4Math.multiplyMV(outV, vp, inV)
+          if (outV[3].isFinite() && outV[3] > 0.1f) {
+            val bx = (outV[0] / outV[3] * 0.5f + 0.5f) * w
+            val by = (0.5f - outV[1] / outV[3] * 0.5f) * h
+            val beamR = shadowR * 0.78f
+            if (bx.isFinite() && by.isFinite()) {
+              drawOval(
+                brush = Brush.radialGradient(
+                  listOf(Color(0x55E0F2FE), Color(0x2238BDF8), Color.Transparent),
+                  center = Offset(bx, by),
+                  radius = beamR,
+                ),
+                topLeft = Offset(bx - beamR, by - beamR * 0.42f),
+                size = androidx.compose.ui.geometry.Size(beamR * 2f, beamR * 0.84f),
+              )
+            }
+          }
+          inV[0] = -1.12f; inV[1] = -0.76f; inV[2] = 0f; inV[3] = 1f
+          Mat4Math.multiplyMV(outV, vp, inV)
+          if (outV[3].isFinite() && outV[3] > 0.1f) {
+            val tx = (outV[0] / outV[3] * 0.5f + 0.5f) * w
+            val ty = (0.5f - outV[1] / outV[3] * 0.5f) * h
+            val tailR = shadowR * 0.46f
+            if (tx.isFinite() && ty.isFinite()) {
+              drawOval(
+                brush = Brush.radialGradient(
+                  listOf(Color(0x44F43F5E), Color(0x18E11D48), Color.Transparent),
+                  center = Offset(tx, ty),
+                  radius = tailR,
+                ),
+                topLeft = Offset(tx - tailR, ty - tailR * 0.40f),
+                size = androidx.compose.ui.geometry.Size(tailR * 2f, tailR * 0.80f),
+              )
+            }
+          }
         }
-        val tailIn = floatArrayOf(-1.12f, -0.76f, 0f, 1f)
-        val tailOut = FloatArray(4)
-        Mat4Math.multiplyMV(tailOut, vp, tailIn)
-        if (tailOut[3] > 0.1f) {
-          val tx = (tailOut[0] / tailOut[3] * 0.5f + 0.5f) * w
-          val ty = (0.5f - tailOut[1] / tailOut[3] * 0.5f) * h
-          val tailR = shadowR * 0.46f
-          drawOval(
-            brush = Brush.radialGradient(
-              listOf(Color(0x44F43F5E), Color(0x18E11D48), Color.Transparent),
-              center = Offset(tx, ty),
-              radius = tailR,
-            ),
-            topLeft = Offset(tx - tailR, ty - tailR * 0.40f),
-            size = androidx.compose.ui.geometry.Size(tailR * 2f, tailR * 0.80f),
-          )
+
+        drawOval(
+          brush = Brush.radialGradient(
+            listOf(Color(0xDD000000), Color(0x77000000), Color.Transparent),
+            center = Offset(cx, cy),
+            radius = shadowR,
+          ),
+          topLeft = Offset(cx - shadowR, cy - shadowR * 0.36f),
+          size = androidx.compose.ui.geometry.Size(shadowR * 2f, shadowR * 0.72f),
+        )
+
+        val ringColorOuter = when {
+          isBlueprintMode -> Color(0x8838BDF8)
+          techEngine == Pev3dTechEngine.OPENGL_ES3 -> Color(0x6622C55E)
+          techEngine == Pev3dTechEngine.WEBGL_2 -> Color(0x7706B6D4)
+          else -> Color(0x4D38BDF8)
         }
-      }
+        drawOval(
+          color = ringColorOuter,
+          topLeft = Offset(cx - shadowR * 0.98f, cy - shadowR * 0.35f),
+          size = androidx.compose.ui.geometry.Size(shadowR * 1.96f, shadowR * 0.70f),
+          style = Stroke(width = 1.8f),
+        )
+        drawOval(
+          color = if (isBlueprintMode) Color(0x447DD3FC) else Color(0x2E94A3B8),
+          topLeft = Offset(cx - shadowR * 0.70f, cy - shadowR * 0.25f),
+          size = androidx.compose.ui.geometry.Size(shadowR * 1.40f, shadowR * 0.50f),
+          style = Stroke(width = 1.2f),
+        )
 
-      // Ground contact shadow + glossy floor reflection pool
-      drawOval(
-        brush = Brush.radialGradient(
-          listOf(Color(0xDD000000), Color(0x77000000), Color.Transparent),
-          center = Offset(cx, cy),
-          radius = shadowR,
-        ),
-        topLeft = Offset(cx - shadowR, cy - shadowR * 0.36f),
-        size = androidx.compose.ui.geometry.Size(shadowR * 2f, shadowR * 0.72f),
-      )
-
-      val ringColorOuter = when {
-        isBlueprintMode -> Color(0x8838BDF8)
-        techEngine == Pev3dTechEngine.OPENGL_ES3 -> Color(0x6622C55E)
-        techEngine == Pev3dTechEngine.WEBGL_2 -> Color(0x7706B6D4)
-        else -> Color(0x4D38BDF8)
-      }
-      drawOval(
-        color = ringColorOuter,
-        topLeft = Offset(cx - shadowR * 0.98f, cy - shadowR * 0.35f),
-        size = androidx.compose.ui.geometry.Size(shadowR * 1.96f, shadowR * 0.70f),
-        style = Stroke(width = 1.8f),
-      )
-      drawOval(
-        color = if (isBlueprintMode) Color(0x447DD3FC) else Color(0x2E94A3B8),
-        topLeft = Offset(cx - shadowR * 0.70f, cy - shadowR * 0.25f),
-        size = androidx.compose.ui.geometry.Size(shadowR * 1.40f, shadowR * 0.50f),
-        style = Stroke(width = 1.2f),
-      )
-
-      // Calibrated radial turntable degree tick marks for OpenGL ES & WebGL 2.0 modes
-      if (techEngine != Pev3dTechEngine.STUDIO_3D || isBlueprintMode) {
-        val tickCount = 24
-        for (tk in 0 until tickCount) {
-          val a = (tk / tickCount.toFloat()) * 2f * PI.toFloat() + (yawDeg * PI.toFloat() / 180f)
-          val ca = cos(a); val sa = sin(a)
-          val r0 = shadowR * 0.88f
-          val r1 = shadowR * 0.96f
-          drawLine(
-            color = ringColorOuter.copy(alpha = 0.45f),
-            start = Offset(cx + ca * r0, cy + sa * r0 * 0.35f),
-            end = Offset(cx + ca * r1, cy + sa * r1 * 0.35f),
-            strokeWidth = 1.3f,
-          )
+        if (techEngine != Pev3dTechEngine.STUDIO_3D || isBlueprintMode) {
+          val tickCount = 24
+          for (tk in 0 until tickCount) {
+            val a = (tk / tickCount.toFloat()) * 2f * PI.toFloat() + (safeYaw * PI.toFloat() / 180f)
+            val ca = cos(a); val sa = sin(a)
+            val r0 = shadowR * 0.88f
+            val r1 = shadowR * 0.96f
+            drawLine(
+              color = ringColorOuter.copy(alpha = 0.45f),
+              start = Offset(cx + ca * r0, cy + sa * r0 * 0.35f),
+              end = Offset(cx + ca * r1, cy + sa * r1 * 0.35f),
+              strokeWidth = 1.3f,
+            )
+          }
         }
       }
     }
@@ -303,11 +446,11 @@ internal fun Pev3dComposeShadedViewport(
         wireGroups = builtScene.wireGroups,
         widthPx = w,
         heightPx = h,
-        yawDeg = yawDeg,
-        pitchDeg = pitchDeg,
-        zoom = zoom,
-        explodePct = explodePct,
-        wheelSpinDeg = wheelSpinDeg,
+        yawDeg = safeYaw,
+        pitchDeg = safePitch,
+        zoom = safeZoom,
+        explodePct = safeExplode,
+        wheelSpinDeg = safeWheelSpin,
         selectedPartKey = selectedPartKey,
       )
       var idx = 0
@@ -333,7 +476,6 @@ internal fun Pev3dComposeShadedViewport(
       return@Canvas
     }
 
-    // 3-Point Photographic Studio Light Rig (Key + Cool Fill + Silhouette Rim)
     val keyCfg = when (lightingPreset) {
       Pev3dLightingPreset.STUDIO -> floatArrayOf(0.45f, 0.85f, 0.38f, 1.38f, 1.35f, 1.32f)
       Pev3dLightingPreset.SUNSET -> floatArrayOf(-0.78f, 0.42f, 0.45f, 1.52f, 0.94f, 0.54f)
@@ -359,39 +501,36 @@ internal fun Pev3dComposeShadedViewport(
     val kLen = sqrt(kx * kx + ky * ky + kz * kz).coerceAtLeast(1e-5f)
     val ldx = kx / kLen; val ldy = ky / kLen; val ldz = kz / kLen
 
-    // Fill light opposite key
     val fx0 = -kx * 0.85f; val fy0 = 0.32f; val fz0 = -kz * 0.55f
     val fLen = sqrt(fx0 * fx0 + fy0 * fy0 + fz0 * fz0).coerceAtLeast(1e-5f)
     val flx = fx0 / fLen; val fly = fy0 / fLen; val flz = fz0 / fLen
 
     val totalMaxTris = builtScene.parts.sumOf { if (it.partKey == "floor") 0 else it.indices.size / 3 }
     if (totalMaxTris == 0) return@Canvas
-    buffers.ensure(totalMaxTris)
+    buffers.ensureTris(totalMaxTris)
 
     val isXray = renderMode == Pev3dRenderMode.XRAY
     val isCarbon = renderMode == Pev3dRenderMode.CARBON_SHOWROOM
     val isThermal = renderMode == Pev3dRenderMode.THERMAL_IR
     val isBlueprint = renderMode == Pev3dRenderMode.BLUEPRINT
-    val ambientBoost = ((ambientTempC - 15f) / 40f).coerceIn(0f, 0.25f)
-    val throttleHeat = throttlePct.coerceIn(0f, 1f) * 0.68f
+    val ambientBoost = ((safeAmbient - 15f) / 40f).coerceIn(0f, 0.25f)
+    val throttleHeat = safeThrottle * 0.68f
     val flashPhase = ((System.currentTimeMillis() / 420L) % 2L == 0L)
     val leftActive = (turnSignalMode == Pev3dTurnSignalMode.LEFT || turnSignalMode == Pev3dTurnSignalMode.HAZARD) && flashPhase
     val rightActive = (turnSignalMode == Pev3dTurnSignalMode.RIGHT || turnSignalMode == Pev3dTurnSignalMode.HAZARD) && flashPhase
 
     var triCount = 0
-    val inV = FloatArray(4)
-    val outV = FloatArray(4)
 
     for (part in builtScene.parts) {
       if (part.partKey == "floor") continue
 
       Mat4Math.setIdentity(modelMat)
-      if (explodePct > 0.002f) {
-        Mat4Math.translate(modelMat, part.explodeDir.x * explodePct, part.explodeDir.y * explodePct, part.explodeDir.z * explodePct)
+      if (safeExplode > 0.002f) {
+        Mat4Math.translate(modelMat, part.explodeDir.x * safeExplode, part.explodeDir.y * safeExplode, part.explodeDir.z * safeExplode)
       }
       part.axleCenter?.let { c ->
         Mat4Math.translate(modelMat, c.x, c.y, c.z)
-        Mat4Math.rotateAxis(modelMat, -wheelSpinDeg, 0f, 0f, 1f)
+        Mat4Math.rotateAxis(modelMat, -safeWheelSpin, 0f, 0f, 1f)
         Mat4Math.translate(modelMat, -c.x, -c.y, -c.z)
       }
       Mat4Math.multiplyMM(mvp, vp, modelMat)
@@ -399,16 +538,15 @@ internal fun Pev3dComposeShadedViewport(
       val vArr = part.vertices
       val vCount = vArr.size / 8
       if (vCount <= 0) continue
+      buffers.ensureVerts(vCount)
+      val projX = buffers.projX
+      val projY = buffers.projY
+      val projZ = buffers.projZ
+      val vertColors = buffers.vertColors
 
-      val projX = FloatArray(vCount)
-      val projY = FloatArray(vCount)
-      val projZ = FloatArray(vCount)
-      val vertColors = IntArray(vCount)
-
-      // Authentic material-specific base albedo calibration (prevents washed-out grey/white tires & saddles)
-      var br = part.baseRgb[0]
-      var bg = part.baseRgb[1]
-      var bb = part.baseRgb[2]
+      var br = part.baseRgb.getOrElse(0) { 0.3f }
+      var bg = part.baseRgb.getOrElse(1) { 0.3f }
+      var bb = part.baseRgb.getOrElse(2) { 0.35f }
       when (part.texId) {
         PevPbrMaterialId.TIRE_RUBBER -> {
           br = 0.09f; bg = 0.10f; bb = 0.12f
@@ -433,9 +571,9 @@ internal fun Pev3dComposeShadedViewport(
         else -> Unit
       }
 
-      var emR = part.emissiveRgb[0]
-      var emG = part.emissiveRgb[1]
-      var emB = part.emissiveRgb[2]
+      var emR = part.emissiveRgb.getOrElse(0) { 0f }
+      var emG = part.emissiveRgb.getOrElse(1) { 0f }
+      var emB = part.emissiveRgb.getOrElse(2) { 0f }
       if (part.nodeName.contains("signal_left")) {
         if (leftActive) { emR = 2.4f; emG = 1.35f; emB = 0.08f } else { emR = 0.04f; emG = 0.02f; emB = 0f }
       } else if (part.nodeName.contains("signal_right")) {
@@ -488,15 +626,20 @@ internal fun Pev3dComposeShadedViewport(
 
         Mat4Math.multiplyMV(outV, mvp, inV)
         val clipW = outV[3]
-        if (clipW <= 0.1f) {
+        if (!clipW.isFinite() || clipW <= 0.1f) {
           projZ[vi] = -1f
           continue
         }
-        projX[vi] = (outV[0] / clipW * 0.5f + 0.5f) * w
-        projY[vi] = (0.5f - outV[1] / clipW * 0.5f) * h
+        val sx = (outV[0] / clipW * 0.5f + 0.5f) * w
+        val sy = (0.5f - outV[1] / clipW * 0.5f) * h
+        if (!sx.isFinite() || !sy.isFinite()) {
+          projZ[vi] = -1f
+          continue
+        }
+        projX[vi] = sx
+        projY[vi] = sy
         projZ[vi] = clipW
 
-        // Transform normal by upper 3x3 of modelMat
         var nx = modelMat[0] * nx0 + modelMat[4] * ny0 + modelMat[8] * nz0
         var ny = modelMat[1] * nx0 + modelMat[5] * ny0 + modelMat[9] * nz0
         var nz = modelMat[2] * nx0 + modelMat[6] * ny0 + modelMat[10] * nz0
@@ -550,13 +693,11 @@ internal fun Pev3dComposeShadedViewport(
           continue
         }
 
-        // Procedural micro-texture detail by material & rendering engine
         var albedoR = br
         var albedoG = bg
         var albedoB = bb
         when (part.texId) {
           PevPbrMaterialId.TIRE_RUBBER -> {
-            // Knobby tread groove contrast so individual rubber lugs pop in 3D
             val treadPattern = sin(u0 * 28f + abs(v0 - 0.5f) * 14f)
             val groove = if (treadPattern > 0.15f) 1.18f else 0.74f
             albedoR *= groove; albedoG *= groove; albedoB *= groove
@@ -567,12 +708,10 @@ internal fun Pev3dComposeShadedViewport(
             albedoR *= weave; albedoG *= weave; albedoB *= weave
           }
           PevPbrMaterialId.BATTERY_PACK -> {
-            // High-voltage 21700 cell matrix ribs & warning accent stripe
             val rib = if (sin(wx * 48f) > 0.3f) 1.16f else 0.86f
             albedoR *= rib; albedoG *= rib; albedoB *= rib
           }
           PevPbrMaterialId.BRAKE_ROTOR -> {
-            // Cross-drilled ventilation slot contrast
             val slot = if (sin(u0 * 36f) * cos(v0 * 24f) > 0.45f) 0.55f else 1.08f
             albedoR *= slot; albedoG *= slot; albedoB *= slot
           }
@@ -597,18 +736,15 @@ internal fun Pev3dComposeShadedViewport(
         val nDotH = (nx * hx + ny * hy + nz * hz).coerceAtLeast(0f)
         val spec = nDotH.pow(specPow) * specWeight
 
-        // Overhead studio softbox / horizon reflection band (scaled down on matte rubber/leather!)
         val refY = (2f * nDotV * ny - vy).coerceIn(-1f, 1f)
         val sheenMask = if (isRubberOrLeather) 0.03f else (0.12f + part.metallic * 0.34f + part.clearcoat * 0.42f) * smoothness
         val softboxSheen = when (techEngine) {
           Pev3dTechEngine.WEBGL_2 -> {
-            // Dual-band Chromium clearcoat + horizon reflection
             val topBand = ((refY - 0.30f) / 0.70f).coerceIn(0f, 1f).pow(2.2f)
             val horizonBand = (1f - abs(refY - 0.05f) * 3.5f).coerceIn(0f, 1f).pow(2.0f) * 0.45f
             (topBand + horizonBand) * sheenMask * 1.18f
           }
           Pev3dTechEngine.OPENGL_ES3 -> {
-            // Sharp GGX microfacet specular lobe
             ((refY - 0.32f) / 0.68f).coerceIn(0f, 1f).pow(2.6f) * sheenMask * 1.10f
           }
           Pev3dTechEngine.STUDIO_3D -> {
@@ -617,14 +753,12 @@ internal fun Pev3dComposeShadedViewport(
         }
 
         val hemi = 0.16f + 0.20f * (0.5f + 0.5f * ny)
-        // Ground-contact & under-chassis cavity ambient occlusion for realistic photoreal depth
         val groundAo = (0.64f + 0.36f * ((wy + 0.52f) / 0.42f).coerceIn(0f, 1f))
         val cavityAo = (0.76f + 0.24f * (0.5f + 0.5f * ny))
         val ao = if (isXray || emR + emG + emB > 0.25f) 1f else (groundAo * cavityAo).coerceIn(0.48f, 1f)
         val rimScale = if (isRubberOrLeather) 0.06f else (0.24f + part.metallic * 0.28f + part.clearcoat * 0.20f)
         val rimTerm = fresnel * rimScale
 
-        // Metallic specular tint blends toward albedo on metals, stays neutral white on dielectrics/clearcoat
         val specTintR = 1f * (1f - part.metallic * 0.55f) + albedoR * (part.metallic * 0.55f)
         val specTintG = 1f * (1f - part.metallic * 0.55f) + albedoG * (part.metallic * 0.55f)
         val specTintB = 1f * (1f - part.metallic * 0.55f) + albedoB * (part.metallic * 0.55f)
@@ -651,19 +785,23 @@ internal fun Pev3dComposeShadedViewport(
         val i1 = indices[t + 1].toInt() and 0xFFFF
         val i2 = indices[t + 2].toInt() and 0xFFFF
         t += 3
+        if (i0 >= vCount || i1 >= vCount || i2 >= vCount) continue
+
         val z0 = projZ[i0]; val z1 = projZ[i1]; val z2 = projZ[i2]
-        if (z0 <= 0.1f || z1 <= 0.1f || z2 <= 0.1f) continue
+        if (!z0.isFinite() || !z1.isFinite() || !z2.isFinite() || z0 <= 0.1f || z1 <= 0.1f || z2 <= 0.1f) continue
 
         val x0 = projX[i0]; val y0 = projY[i0]
         val x1 = projX[i1]; val y1 = projY[i1]
         val x2 = projX[i2]; val y2 = projY[i2]
         val cross2d = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)
-        // Double-sided rendering for wheels, frames, and shells so no parts ever disappear at any angle
         val doubleSided = isXray || part.partKey == "frame" || part.nodeName.startsWith("wheel_") || part.partKey == "suspension"
         if (!doubleSided && cross2d > 0f) continue
 
+        val depthVal = z0 + z1 + z2 + (if (isXray && !part.isShell) -0.8f else 0f)
+        if (!depthVal.isFinite()) continue
+
         val ti = triCount
-        buffers.depths[ti] = z0 + z1 + z2 + (if (isXray && !part.isShell) -0.8f else 0f)
+        buffers.depths[ti] = depthVal
         buffers.order[ti] = ti
         buffers.triAx[ti] = x0; buffers.triAy[ti] = y0
         buffers.triBx[ti] = x1; buffers.triBy[ti] = y1
@@ -676,42 +814,63 @@ internal fun Pev3dComposeShadedViewport(
     }
 
     if (triCount <= 0) return@Canvas
-    quickSortDesc(buffers.order, buffers.depths, 0, triCount - 1)
-
-    val dstVerts = buffers.outVerts
-    val dstCols = buffers.outColors
-    for (k in 0 until triCount) {
-      val ti = buffers.order[k]
-      val vo = k * 6
-      val co = k * 3
-      dstVerts[vo] = buffers.triAx[ti]; dstVerts[vo + 1] = buffers.triAy[ti]
-      dstVerts[vo + 2] = buffers.triBx[ti]; dstVerts[vo + 3] = buffers.triBy[ti]
-      dstVerts[vo + 4] = buffers.triCx[ti]; dstVerts[vo + 5] = buffers.triCy[ti]
-      dstCols[co] = buffers.triCa[ti]
-      dstCols[co + 1] = buffers.triCb[ti]
-      dstCols[co + 2] = buffers.triCc[ti]
-    }
+    sortTrisDesc(buffers, triCount)
 
     drawIntoCanvas { canvas ->
       val nc = canvas.nativeCanvas
-      val maxBatchTris = 2400
+      val batchVerts = buffers.batchVerts
+      val batchCols = buffers.batchCols
       var triOffset = 0
+      var verticesApiOk = true
+
       while (triOffset < triCount) {
-        val batchTris = min(maxBatchTris, triCount - triOffset)
-        nc.drawVertices(
-          AndroidCanvas.VertexMode.TRIANGLES,
-          batchTris * 6,
-          dstVerts,
-          triOffset * 6,
-          null,
-          0,
-          dstCols,
-          triOffset * 3,
-          null,
-          0,
-          0,
-          paint,
-        )
+        val batchTris = min(MAX_VERTICES_BATCH_TRIS, triCount - triOffset)
+        if (verticesApiOk) {
+          for (b in 0 until batchTris) {
+            val ti = buffers.order[triOffset + b]
+            val vo = b * 6
+            val co = b * 3
+            batchVerts[vo] = buffers.triAx[ti]; batchVerts[vo + 1] = buffers.triAy[ti]
+            batchVerts[vo + 2] = buffers.triBx[ti]; batchVerts[vo + 3] = buffers.triBy[ti]
+            batchVerts[vo + 4] = buffers.triCx[ti]; batchVerts[vo + 5] = buffers.triCy[ti]
+            batchCols[co] = buffers.triCa[ti]
+            batchCols[co + 1] = buffers.triCb[ti]
+            batchCols[co + 2] = buffers.triCc[ti]
+          }
+          try {
+            // Always pass offset = 0 with double-padded batchCols so no Android/ChromeOS
+            // BaseCanvas.checkRange or Skia HWUI vertex offset quirk can ever crash!
+            nc.drawVertices(
+              AndroidCanvas.VertexMode.TRIANGLES,
+              batchTris * 6,
+              batchVerts,
+              0,
+              null,
+              0,
+              batchCols,
+              0,
+              null,
+              0,
+              0,
+              paint,
+            )
+          } catch (_: Throwable) {
+            verticesApiOk = false
+          }
+        }
+        if (!verticesApiOk) {
+          val path = buffers.fallbackPath
+          for (b in 0 until batchTris) {
+            val ti = buffers.order[triOffset + b]
+            fallbackPaint.color = buffers.triCa[ti]
+            path.rewind()
+            path.moveTo(buffers.triAx[ti], buffers.triAy[ti])
+            path.lineTo(buffers.triBx[ti], buffers.triBy[ti])
+            path.lineTo(buffers.triCx[ti], buffers.triCy[ti])
+            path.close()
+            nc.drawPath(path, fallbackPaint)
+          }
+        }
         triOffset += batchTris
       }
     }
@@ -721,11 +880,11 @@ internal fun Pev3dComposeShadedViewport(
         wireGroups = builtScene.wireGroups,
         widthPx = w,
         heightPx = h,
-        yawDeg = yawDeg,
-        pitchDeg = pitchDeg,
-        zoom = zoom,
-        explodePct = explodePct,
-        wheelSpinDeg = wheelSpinDeg,
+        yawDeg = safeYaw,
+        pitchDeg = safePitch,
+        zoom = safeZoom,
+        explodePct = safeExplode,
+        wheelSpinDeg = safeWheelSpin,
         selectedPartKey = selectedPartKey,
       )
       var idx = 0

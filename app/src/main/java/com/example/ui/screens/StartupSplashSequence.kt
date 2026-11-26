@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -20,6 +23,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +38,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.Sensors
@@ -58,10 +64,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -71,18 +79,33 @@ import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.R
 import com.example.hardware.VoiceAudioManager
+import com.example.ui.theme.LocalTacticalSettings
+import com.example.ui.theme.drawHolidayBackgroundArt
+import com.example.ui.theme.drawHolidayTopCanopy
+import com.example.ui.theme.holidayDecorationSpec
+import com.example.ui.theme.isHolidayTheme
+import com.example.ui.theme.sanitizeVisualStyleForSeason
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private data class DetectedSensorInventory(
+  val totalHardwareSensors: Int,
+  val subsystemTags: List<String>,
+)
+
 /**
- * Full-screen cinematic startup showcase featuring bespoke rural electric trail artwork
- * with live Ken Burns parallax motion, drifting golden/neon embers, aurora breathing glow,
- * counter-rotating precision compass rings framing the Rural ERides GO brand logo,
- * diagonal glossy emblem sheen, live 7-bar power equalizer, and generous viewing duration (default 7s).
+ * Full-screen upgraded pre-login startup showcase featuring:
+ * - Scenic rural backroad driving-horizon artwork with continuous forward-motion road & parallax animation
+ * - Dynamic background & accent colors matched to the active Material 3 Theme & VisualStyleMode
+ * - Full Holiday assets (top garlands, twinkling string lights, ornaments, and festive particles) when active
+ * - Real Android hardware SensorManager enumeration with progressive "X / Y Sensors Loaded" readout & chips
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StartupSplashSequence(
   hapticsEnabled: Boolean,
@@ -92,92 +115,140 @@ fun StartupSplashSequence(
   durationSec: Int = 7,
   onFinished: () -> Unit,
 ) {
+  val ctx = LocalContext.current
+  val settings = LocalTacticalSettings.current
+  val effectiveStyle = remember(settings.visualStyle) { sanitizeVisualStyleForSeason(settings.visualStyle) }
+  val isHoliday = effectiveStyle.isHolidayTheme() && !settings.nightVisionMode && !settings.sunVisibilityMode
+  val holidaySpec = remember(effectiveStyle, isHoliday) { if (isHoliday) holidayDecorationSpec(effectiveStyle) else null }
+
+  // Real Android hardware sensor inventory
+  val sensorInventory =
+    remember(ctx, activeSensorCount) {
+      val sm = ctx.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+      val allSensors = runCatching { sm?.getSensorList(Sensor.TYPE_ALL).orEmpty() }.getOrDefault(emptyList())
+      val tags = mutableListOf<String>()
+      if (sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) tags += "ACCEL"
+      if (sm?.getDefaultSensor(Sensor.TYPE_GYROSCOPE) != null) tags += "GYRO"
+      if (sm?.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null) tags += "MAG"
+      if (sm?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null) tags += "9-DOF"
+      if (sm?.getDefaultSensor(Sensor.TYPE_PRESSURE) != null) tags += "BARO"
+      if (sm?.getDefaultSensor(Sensor.TYPE_LIGHT) != null) tags += "LIGHT"
+      if (sm?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null) tags += "STEP"
+      tags += "GNSS"
+      val total = maxOf(allSensors.size, activeSensorCount, tags.size)
+      DetectedSensorInventory(totalHardwareSensors = total, subsystemTags = tags.take(6))
+    }
+
   val totalMs = durationSec.coerceIn(4, 12) * 1000L
-  val logoScale = remember { Animatable(0.45f) }
+  val logoScale = remember { Animatable(0.48f) }
   val logoAlpha = remember { Animatable(0f) }
   val progressAnim = remember { Animatable(0f) }
   val overlayAlpha = remember { Animatable(1f) }
-  val bgKenBurnsScale = remember { Animatable(1.02f) }
+  val bgKenBurnsScale = remember { Animatable(1.04f) }
   var stageIndex by remember { mutableIntStateOf(0) }
   var titleVisible by remember { mutableStateOf(false) }
   var badgesVisible by remember { mutableStateOf(false) }
   var finished by remember { mutableStateOf(false) }
 
-  val infinite = rememberInfiniteTransition(label = "splash_artwork_anim")
+  val infinite = rememberInfiniteTransition(label = "splash_driving_anim")
+  // Continuous forward driving road travel loop (0..1)
+  val roadTravel by
+    infinite.animateFloat(
+      initialValue = 0f,
+      targetValue = 1f,
+      animationSpec = infiniteRepeatable(tween(920, easing = LinearEasing), RepeatMode.Restart),
+      label = "road_travel",
+    )
+  // Gentle forward steering sway simulating riding down a winding country road
+  val steerSway by
+    infinite.animateFloat(
+      initialValue = -1f,
+      targetValue = 1f,
+      animationSpec = infiniteRepeatable(tween(4200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+      label = "steer_sway",
+    )
+  // Subtle road-suspension vertical bounce
+  val roadBounce by
+    infinite.animateFloat(
+      initialValue = -1f,
+      targetValue = 1f,
+      animationSpec = infiniteRepeatable(tween(520, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+      label = "road_bounce",
+    )
   val outerSweep by
     infinite.animateFloat(
       initialValue = 0f,
       targetValue = 360f,
-      animationSpec = infiniteRepeatable(tween(4600, easing = LinearEasing), RepeatMode.Restart),
+      animationSpec = infiniteRepeatable(tween(4400, easing = LinearEasing), RepeatMode.Restart),
       label = "outer_sweep",
     )
   val innerCounterSweep by
     infinite.animateFloat(
       initialValue = 360f,
       targetValue = 0f,
-      animationSpec = infiniteRepeatable(tween(7000, easing = LinearEasing), RepeatMode.Restart),
+      animationSpec = infiniteRepeatable(tween(6800, easing = LinearEasing), RepeatMode.Restart),
       label = "inner_counter_sweep",
     )
   val pulseGlow by
     infinite.animateFloat(
-      initialValue = 0.80f,
-      targetValue = 1.18f,
-      animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+      initialValue = 0.84f,
+      targetValue = 1.16f,
+      animationSpec = infiniteRepeatable(tween(1700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
       label = "pulse_glow",
-    )
-  val bgDriftX by
-    infinite.animateFloat(
-      initialValue = -16f,
-      targetValue = 16f,
-      animationSpec = infiniteRepeatable(tween(8000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-      label = "bg_drift_x",
     )
   val gleamPhase by
     infinite.animateFloat(
       initialValue = -0.35f,
       targetValue = 1.35f,
-      animationSpec = infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Restart),
+      animationSpec = infiniteRepeatable(tween(2400, easing = FastOutSlowInEasing), RepeatMode.Restart),
       label = "gleam_phase",
     )
-  val emberPhase by
+  val holidayTwinklePhase by
     infinite.animateFloat(
       initialValue = 0f,
       targetValue = 1f,
-      animationSpec = infiniteRepeatable(tween(6200, easing = LinearEasing), RepeatMode.Restart),
-      label = "ember_phase",
+      animationSpec = infiniteRepeatable(tween(3400, easing = LinearEasing), RepeatMode.Restart),
+      label = "holiday_twinkle_splash",
     )
   val eqWave by
     infinite.animateFloat(
       initialValue = 0f,
       targetValue = (2.0 * PI).toFloat(),
-      animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart),
+      animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart),
       label = "eq_wave",
     )
 
-  val primary = MaterialTheme.colorScheme.primary
-  val secondary = MaterialTheme.colorScheme.secondary
-  val tertiary = MaterialTheme.colorScheme.tertiary
-  val amberGold = Color(0xFFFFB703)
-  val auroraTeal = Color(0xFF00F0FF)
+  // Dynamic colors strictly matched to current Theme & Holiday palette
+  val cs = MaterialTheme.colorScheme
+  val primary = cs.primary
+  val secondary = holidaySpec?.ornamentColor ?: cs.secondary
+  val tertiary = cs.tertiary
+  val themeBg = cs.background
+  val themeSurface = cs.surface
+
+  val loadedSensorsCount =
+    ((sensorInventory.totalHardwareSensors * progressAnim.value).roundToInt())
+      .coerceIn(0, sensorInventory.totalHardwareSensors)
+  val liveTelemetryArmed = maxOf(activeSensorCount, loadedSensorsCount)
 
   val bootStages =
-    remember(activeSensorCount, satellitesVisible) {
+    remember(loadedSensorsCount, sensorInventory.totalHardwareSensors, satellitesVisible) {
       listOf(
-        "Welcome to Rural ERides GO...",
-        "Calibrating 9-DOF Tilt, Compass & Barometer ($activeSensorCount live sensors)...",
+        "Igniting Rural ERides GO Avionics...",
+        "Loading Hardware Sensors ($loadedSensorsCount / ${sensorInventory.totalHardwareSensors} Online)...",
         if (satellitesVisible > 0) "Locking $satellitesVisible GNSS Satellites Overhead..." else "Scanning GPS, GLONASS & Galileo Satellites...",
-        "Warming Up Live AR Camera, AI Helper & Repair Shop...",
-        "All Systems Green — Have a Safe & Scenic Ride!",
+        "Arming 3D PBR Rig Lab, Rider Radar & Gemini AI Mechanic...",
+        "All ${sensorInventory.totalHardwareSensors} Sensors Loaded — Ready to Roll!",
       )
     }
 
   LaunchedEffect(totalMs) {
     voiceAudio.triggerHapticCue(hapticsEnabled, VoiceAudioManager.HapticCue.BOOT_SWEEP)
     launch {
-      bgKenBurnsScale.animateTo(1.13f, animationSpec = tween(totalMs.toInt(), easing = FastOutSlowInEasing))
+      bgKenBurnsScale.animateTo(1.22f, animationSpec = tween(totalMs.toInt(), easing = LinearEasing))
     }
     launch {
-      logoAlpha.animateTo(1f, animationSpec = tween(680, easing = FastOutSlowInEasing))
+      logoAlpha.animateTo(1f, animationSpec = tween(640, easing = FastOutSlowInEasing))
     }
     launch {
       logoScale.animateTo(
@@ -186,18 +257,18 @@ fun StartupSplashSequence(
       )
     }
 
-    val holdTailMs = 1100L
-    val fadeOutMs = 520L
-    val progressDurationMs = (totalMs - holdTailMs - fadeOutMs).coerceAtLeast(2400L)
+    val holdTailMs = 1050L
+    val fadeOutMs = 480L
+    val progressDurationMs = (totalMs - holdTailMs - fadeOutMs).coerceAtLeast(2200L)
     val stageStepMs = progressDurationMs / 5L
 
     launch {
       progressAnim.animateTo(1f, animationSpec = tween(progressDurationMs.toInt(), easing = FastOutSlowInEasing))
     }
 
-    delay(420L)
+    delay(380L)
     titleVisible = true
-    delay((stageStepMs - 420L).coerceAtLeast(280L))
+    delay((stageStepMs - 380L).coerceAtLeast(240L))
     stageIndex = 1
     badgesVisible = true
     delay(stageStepMs)
@@ -220,13 +291,13 @@ fun StartupSplashSequence(
       Modifier
         .fillMaxSize()
         .alpha(overlayAlpha.value)
-        .background(Color(0xFF050B10))
+        .background(themeBg)
         .testTag("startup_splash_overlay"),
   ) {
-    // 1. Bespoke Rural Electric Trail Artwork with animated Ken Burns zoom & gentle drift
+    // 1. Upgraded Rural Driving-Horizon Scenic Artwork with forward driving zoom, sway & subtle suspension feel
     Image(
-      painter = painterResource(id = R.drawable.img_splash_rural_trail_1795300562169),
-      contentDescription = "Rural ERides GO Scenic Electric Trail Artwork",
+      painter = painterResource(id = R.drawable.img_splash_driving_horizon_1795717550413),
+      contentDescription = "Rural ERides GO Driving Horizon Trail Artwork",
       contentScale = ContentScale.Crop,
       modifier =
         Modifier
@@ -234,11 +305,12 @@ fun StartupSplashSequence(
           .graphicsLayer {
             scaleX = bgKenBurnsScale.value
             scaleY = bgKenBurnsScale.value
-            translationX = bgDriftX
+            translationX = steerSway * 22f
+            translationY = roadBounce * 3.5f
           },
     )
 
-    // 2. Atmospheric cinema vignette & aurora tint overlay for crisp foreground readability
+    // 2. Dynamic Theme Color Wash & Atmospheric Vignette matching current Theme / Holiday palette
     Box(
       modifier =
         Modifier
@@ -247,188 +319,270 @@ fun StartupSplashSequence(
             Brush.verticalGradient(
               colorStops =
                 arrayOf(
-                  0.0f to Color(0x9903090E),
-                  0.30f to Color(0x38051015),
-                  0.66f to Color(0x4A061412),
-                  1.0f to Color(0xE0040B0D),
+                  0.0f to themeBg.copy(alpha = 0.78f),
+                  0.28f to primary.copy(alpha = 0.16f),
+                  0.52f to themeBg.copy(alpha = 0.22f),
+                  0.78f to themeSurface.copy(alpha = 0.62f),
+                  1.0f to themeBg.copy(alpha = 0.94f),
                 )
             )
           )
     )
 
-    // 3. Live Animated Overlay Canvas: breathing aurora aura, twinkling stars, drifting firefly embers, compass rings
+    // 3. Moving Driving-Forward Perspective Road, Headlight Beams, Speed Streaks & Theme Compass Rings
     Canvas(modifier = Modifier.fillMaxSize()) {
       val w = size.width
       val h = size.height
-      val emblemCenter = Offset(w / 2f, h * 0.345f)
+      val horizonY = h * 0.56f
+      val vanishX = w * 0.5f + steerSway * (w * 0.055f)
 
-      // Aurora glow halo pulsing behind the logo medallion
-      drawCircle(
+      // Twin LED PEV Headlight Beam Cones casting forward onto the rushing road
+      val headlightPath =
+        Path().apply {
+          moveTo(vanishX - w * 0.05f, horizonY)
+          lineTo(vanishX + w * 0.05f, horizonY)
+          lineTo(w * 0.96f, h)
+          lineTo(w * 0.04f, h)
+          close()
+        }
+      drawPath(
+        path = headlightPath,
         brush =
-          Brush.radialGradient(
+          Brush.verticalGradient(
             colors =
               listOf(
-                primary.copy(alpha = 0.30f),
-                auroraTeal.copy(alpha = 0.14f),
-                Color.Transparent,
+                primary.copy(alpha = 0.05f),
+                primary.copy(alpha = 0.20f * pulseGlow),
+                secondary.copy(alpha = 0.14f),
               ),
-            center = emblemCenter,
-            radius = (w * 0.44f) * pulseGlow,
+            startY = horizonY,
+            endY = h,
           ),
-        radius = (w * 0.44f) * pulseGlow,
-        center = emblemCenter,
       )
 
-      // Animated breathing glow along the winding lower trail
-      drawCircle(
-        brush =
-          Brush.radialGradient(
-            colors =
-              listOf(
-                auroraTeal.copy(alpha = 0.16f * pulseGlow),
-                primary.copy(alpha = 0.08f),
-                Color.Transparent,
-              ),
-            center = Offset(w * 0.50f, h * 0.78f),
-            radius = w * 0.52f,
-          ),
-        radius = w * 0.52f,
-        center = Offset(w * 0.50f, h * 0.78f),
+      // Perspective Road Shoulder Guide Lines converging into the horizon
+      drawLine(
+        color = primary.copy(alpha = 0.45f),
+        start = Offset(vanishX - w * 0.025f, horizonY),
+        end = Offset(w * 0.06f, h),
+        strokeWidth = 3.2f,
+      )
+      drawLine(
+        color = primary.copy(alpha = 0.45f),
+        start = Offset(vanishX + w * 0.025f, horizonY),
+        end = Offset(w * 0.94f, h),
+        strokeWidth = 3.2f,
       )
 
-      // Twinkling upper-sky stars
-      for (i in 0 until 26) {
-        val sx = ((i * 197 + 41) % 100) / 100f * w
-        val sy = ((i * 89 + 13) % 34) / 100f * h
-        val twinkle = 0.18f + 0.65f * ((sin(eqWave + i * 0.85f) + 1f) / 2f)
-        drawCircle(
-          color = Color.White.copy(alpha = twinkle),
-          radius = if (i % 5 == 0) 2.5f else 1.4f,
-          center = Offset(sx, sy),
-        )
-      }
+      // Rushing perspective center dashes & roadside fence/milepost markers creating crisp forward driving motion
+      val numSegments = 9
+      for (i in 0 until numSegments) {
+        val rawT = (i.toFloat() / numSegments + roadTravel) % 1f
+        val depth = rawT.pow(2.35f) // nonlinear perspective acceleration toward camera
+        val depthNext = ((rawT + 0.045f).coerceAtMost(1f)).pow(2.35f)
+        val y1 = horizonY + depth * (h - horizonY)
+        val y2 = horizonY + depthNext * (h - horizonY)
+        val segAlpha = (rawT * 1.15f).coerceIn(0f, 0.88f) * (1f - (rawT - 0.85f).coerceAtLeast(0f) * 5f).coerceIn(0f, 1f)
 
-      // 24 drifting warm golden firefly & neon trail embers rising smoothly
-      for (p in 0 until 24) {
-        val seedX = ((p * 73 + 17) % 100) / 100f
-        val progressY = (emberPhase + p * 0.11f) % 1f
-        val px = seedX * w + sin(progressY * 2f * PI.toFloat() + p * 1.1f) * 30f
-        val py = h * 0.94f - progressY * (h * 0.82f)
-        val alpha = sin(progressY * PI.toFloat()).coerceIn(0f, 1f) * 0.88f
-        val emberColor =
-          when (p % 3) {
-            0 -> amberGold
-            1 -> primary
-            else -> auroraTeal
-          }
-        drawCircle(
-          color = emberColor.copy(alpha = alpha * 0.34f),
-          radius = 9f,
-          center = Offset(px, py),
-        )
-        drawCircle(
-          color = emberColor.copy(alpha = alpha),
-          radius = 2.8f,
-          center = Offset(px, py),
-        )
-      }
-
-      // Precision compass ticks + counter-rotating glowing arcs centered on the logo
-      val outerRadius = (size.minDimension * 0.32f).coerceIn(112f, 192f)
-      val innerRadius = outerRadius * 0.85f
-
-      for (deg in 0 until 360 step 10) {
-        val rad = Math.toRadians(deg.toDouble())
-        val major = deg % 30 == 0
-        val rStart = outerRadius + if (major) 6f else 10f
-        val rEnd = outerRadius + 18f
+        // Rushing glowing center lane dash
+        val dashW = 2.2f + depth * 9.5f
+        val cx1 = vanishX + (w * 0.5f - vanishX) * depth
+        val cx2 = vanishX + (w * 0.5f - vanishX) * depthNext
         drawLine(
-          color = (if (major) primary else Color.White).copy(alpha = if (major) 0.68f else 0.24f),
-          start = Offset(emblemCenter.x + cos(rad).toFloat() * rStart, emblemCenter.y + sin(rad).toFloat() * rStart),
-          end = Offset(emblemCenter.x + cos(rad).toFloat() * rEnd, emblemCenter.y + sin(rad).toFloat() * rEnd),
-          strokeWidth = if (major) 2.5f else 1.2f,
+          color = primary.copy(alpha = segAlpha * 0.85f),
+          start = Offset(cx1, y1),
+          end = Offset(cx2, y2),
+          strokeWidth = dashW,
+          cap = StrokeCap.Round,
+        )
+
+        // Passing left & right roadside trail reflectors / fence posts flying past
+        val halfRoadW = w * (0.03f + depth * 0.47f)
+        val postH = 8f + depth * 42f
+        val postW = 2f + depth * 5.5f
+        val leftX = cx1 - halfRoadW
+        val rightX = cx1 + halfRoadW
+
+        drawLine(
+          color = secondary.copy(alpha = segAlpha * 0.72f),
+          start = Offset(leftX, y1),
+          end = Offset(leftX - depth * 6f, y1 - postH),
+          strokeWidth = postW,
+          cap = StrokeCap.Round,
+        )
+        drawCircle(
+          color = primary.copy(alpha = segAlpha * 0.95f),
+          radius = 2f + depth * 4.5f,
+          center = Offset(leftX - depth * 4f, y1 - postH * 0.82f),
+        )
+        drawLine(
+          color = secondary.copy(alpha = segAlpha * 0.72f),
+          start = Offset(rightX, y1),
+          end = Offset(rightX + depth * 6f, y1 - postH),
+          strokeWidth = postW,
+          cap = StrokeCap.Round,
+        )
+        drawCircle(
+          color = primary.copy(alpha = segAlpha * 0.95f),
+          radius = 2f + depth * 4.5f,
+          center = Offset(rightX + depth * 4f, y1 - postH * 0.82f),
+        )
+      }
+
+      // Radial peripheral driving speed-wind streaks
+      for (s in 0 until 14) {
+        val side = if (s % 2 == 0) -1f else 1f
+        val phase = (roadTravel + s * 0.17f) % 1f
+        val angle = (if (side < 0) 2.35f else 0.78f) + ((s % 5) - 2) * 0.14f
+        val rStart = w * (0.18f + phase * 0.45f)
+        val rEnd = rStart + w * (0.08f + phase * 0.14f)
+        val sx1 = vanishX + cos(angle) * rStart
+        val sy1 = horizonY + sin(angle) * rStart * 0.65f
+        val sx2 = vanishX + cos(angle) * rEnd
+        val sy2 = horizonY + sin(angle) * rEnd * 0.65f
+        val a = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * 0.34f
+        drawLine(
+          color = (if (s % 3 == 0) secondary else primary).copy(alpha = a),
+          start = Offset(sx1, sy1),
+          end = Offset(sx2, sy2),
+          strokeWidth = 1.8f + phase * 2.2f,
           cap = StrokeCap.Round,
         )
       }
 
+      // Theme-Matched Aurora Glow & Counter-Rotating Compass Rings framing the logo medallion
+      val emblemCenter = Offset(w / 2f, h * 0.30f)
+      drawCircle(
+        brush =
+          Brush.radialGradient(
+            colors =
+              listOf(
+                primary.copy(alpha = 0.32f),
+                secondary.copy(alpha = 0.16f),
+                Color.Transparent,
+              ),
+            center = emblemCenter,
+            radius = (w * 0.42f) * pulseGlow,
+          ),
+        radius = (w * 0.42f) * pulseGlow,
+        center = emblemCenter,
+      )
+
+      val outerRadius = (size.minDimension * 0.28f).coerceIn(102f, 174f)
+      val innerRadius = outerRadius * 0.85f
+      for (deg in 0 until 360 step 10) {
+        val rad = Math.toRadians(deg.toDouble())
+        val major = deg % 30 == 0
+        val rStart = outerRadius + if (major) 5f else 9f
+        val rEnd = outerRadius + 16f
+        drawLine(
+          color = (if (major) primary else Color.White).copy(alpha = if (major) 0.72f else 0.26f),
+          start = Offset(emblemCenter.x + cos(rad).toFloat() * rStart, emblemCenter.y + sin(rad).toFloat() * rStart),
+          end = Offset(emblemCenter.x + cos(rad).toFloat() * rEnd, emblemCenter.y + sin(rad).toFloat() * rEnd),
+          strokeWidth = if (major) 2.4f else 1.2f,
+          cap = StrokeCap.Round,
+        )
+      }
       drawArc(
-        color = primary.copy(alpha = 0.92f),
+        color = primary.copy(alpha = 0.94f),
         startAngle = outerSweep,
-        sweepAngle = 110f,
+        sweepAngle = 115f,
         useCenter = false,
         topLeft = Offset(emblemCenter.x - outerRadius, emblemCenter.y - outerRadius),
         size = Size(outerRadius * 2f, outerRadius * 2f),
-        style = Stroke(width = 4.6f, cap = StrokeCap.Round),
+        style = Stroke(width = 4.4f, cap = StrokeCap.Round),
       )
       drawArc(
-        color = amberGold.copy(alpha = 0.82f),
+        color = secondary.copy(alpha = 0.86f),
         startAngle = outerSweep + 185f,
-        sweepAngle = 60f,
+        sweepAngle = 62f,
         useCenter = false,
         topLeft = Offset(emblemCenter.x - outerRadius, emblemCenter.y - outerRadius),
         size = Size(outerRadius * 2f, outerRadius * 2f),
         style = Stroke(width = 3.4f, cap = StrokeCap.Round),
       )
       drawArc(
-        color = auroraTeal.copy(alpha = 0.85f),
+        color = tertiary.copy(alpha = 0.82f),
         startAngle = innerCounterSweep,
-        sweepAngle = 86f,
+        sweepAngle = 88f,
         useCenter = false,
         topLeft = Offset(emblemCenter.x - innerRadius, emblemCenter.y - innerRadius),
         size = Size(innerRadius * 2f, innerRadius * 2f),
         style = Stroke(width = 3.0f, cap = StrokeCap.Round),
       )
-      drawArc(
-        color = tertiary.copy(alpha = 0.60f),
-        startAngle = innerCounterSweep + 165f,
-        sweepAngle = 55f,
-        useCenter = false,
-        topLeft = Offset(emblemCenter.x - innerRadius, emblemCenter.y - innerRadius),
-        size = Size(innerRadius * 2f, innerRadius * 2f),
-        style = Stroke(width = 2.4f, cap = StrokeCap.Round),
-      )
     }
 
-    // 4. Foreground layout (status bar & nav bar safe)
+    // 4. Active Holiday Background Particles & Ornaments (Snow, Leaves, Fireworks, Hearts, Clovers, Stars)
+    if (isHoliday) {
+      Canvas(modifier = Modifier.fillMaxSize()) {
+        drawHolidayBackgroundArt(
+          mode = effectiveStyle,
+          accent = primary,
+          secondary = secondary,
+          twinklePhase = holidayTwinklePhase,
+        )
+      }
+    }
+
+    // 5. Foreground HUD Layout (status bar & nav bar safe)
     Column(
       modifier =
         Modifier
           .fillMaxSize()
           .statusBarsPadding()
           .navigationBarsPadding()
-          .padding(horizontal = 24.dp, vertical = 14.dp),
+          .padding(horizontal = 22.dp, vertical = 14.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-      // Top row: Version badge + Skip Intro button
+      if (isHoliday) {
+        Spacer(Modifier.height(18.dp))
+      }
+
+      // Top bar: Version + Active Theme/Holiday Badge + Skip Intro
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        Surface(
-          color = Color(0x99061216),
-          shape = RoundedCornerShape(50),
-          border = BorderStroke(1.dp, primary.copy(alpha = 0.55f)),
-        ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+          Surface(
+            color = themeSurface.copy(alpha = 0.82f),
+            shape = RoundedCornerShape(50),
+            border = BorderStroke(1.dp, primary.copy(alpha = 0.65f)),
           ) {
-            Icon(Icons.Default.ElectricBolt, contentDescription = null, tint = primary, modifier = Modifier.size(14.dp))
+            Row(
+              modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+              Icon(Icons.Default.ElectricBolt, contentDescription = null, tint = primary, modifier = Modifier.size(14.dp))
+              Text(
+                text = "v${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+                color = cs.onSurface,
+              )
+            }
+          }
+          Surface(
+            color = secondary.copy(alpha = 0.22f),
+            shape = RoundedCornerShape(50),
+            border = BorderStroke(1.dp, secondary.copy(alpha = 0.6f)),
+          ) {
             Text(
-              text = "v${BuildConfig.VERSION_NAME}",
+              text = effectiveStyle.name.replace("HOLIDAY_", "").replace("RURAL_", "").replace("_", " "),
               style = MaterialTheme.typography.labelSmall,
               fontWeight = FontWeight.Bold,
               color = Color.White,
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             )
           }
         }
 
         Surface(
-          color = Color(0x88061216),
+          color = themeSurface.copy(alpha = 0.78f),
           shape = RoundedCornerShape(50),
-          border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+          border = BorderStroke(1.dp, cs.onSurface.copy(alpha = 0.28f)),
         ) {
           TextButton(
             onClick = {
@@ -440,28 +594,28 @@ fun StartupSplashSequence(
             },
             modifier = Modifier.testTag("skip_startup_splash_button"),
           ) {
-            Text("Skip Intro", color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text("Skip Intro", color = cs.onSurface, fontWeight = FontWeight.SemiBold)
           }
         }
       }
 
-      Spacer(Modifier.weight(0.55f))
+      Spacer(Modifier.weight(0.32f))
 
-      // Center Brand Medallion sitting cleanly inside the celestial circle
+      // Center Brand Medallion framed inside theme-matched compass rings
       Box(
         contentAlignment = Alignment.Center,
         modifier =
           Modifier
-            .size(176.dp)
+            .size(158.dp)
             .scale(logoScale.value)
             .alpha(logoAlpha.value),
       ) {
         Surface(
           shape = CircleShape,
-          color = Color(0xFF071210),
+          color = themeBg,
           border = BorderStroke(3.dp, primary.copy(alpha = 0.95f)),
           shadowElevation = 28.dp,
-          modifier = Modifier.size(166.dp),
+          modifier = Modifier.size(148.dp),
         ) {
           Box(Modifier.fillMaxSize().clip(CircleShape)) {
             Image(
@@ -470,19 +624,13 @@ fun StartupSplashSequence(
               contentScale = ContentScale.Crop,
               modifier = Modifier.fillMaxSize().clip(CircleShape),
             )
-            // Sweeping glossy gleam across the brand emblem
             Canvas(modifier = Modifier.fillMaxSize()) {
               val bandW = size.width * 0.36f
               val startX = gleamPhase * (size.width + bandW) - bandW
               drawRect(
                 brush =
                   Brush.linearGradient(
-                    colors =
-                      listOf(
-                        Color.Transparent,
-                        Color.White.copy(alpha = 0.36f),
-                        Color.Transparent,
-                      ),
+                    colors = listOf(Color.Transparent, Color.White.copy(alpha = 0.38f), Color.Transparent),
                     start = Offset(startX, 0f),
                     end = Offset(startX + bandW, size.height),
                   )
@@ -492,106 +640,139 @@ fun StartupSplashSequence(
         }
       }
 
-      Spacer(Modifier.height(24.dp))
+      Spacer(Modifier.height(18.dp))
 
-      // Glassmorphic Title & Live Telemetry Card over the scenic trail
+      // Glassmorphic Title + Live Hardware Sensor Counter & Armed Sensor Chips
       AnimatedVisibility(
         visible = titleVisible,
-        enter = fadeIn(tween(580)),
+        enter = fadeIn(tween(520)),
         exit = fadeOut(),
       ) {
         Surface(
-          color = Color(0xA6061217),
+          color = themeSurface.copy(alpha = 0.80f),
           shape = RoundedCornerShape(22.dp),
-          border = BorderStroke(1.dp, primary.copy(alpha = 0.42f)),
+          border = BorderStroke(1.2.dp, (holidaySpec?.ornamentColor ?: primary).copy(alpha = 0.55f)),
           modifier = Modifier.fillMaxWidth(),
         ) {
           Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
           ) {
             Text(
               text = "RURAL ERIDES GO",
               style = MaterialTheme.typography.headlineMedium,
               fontWeight = FontWeight.Black,
-              letterSpacing = 2.6.sp,
-              color = Color.White,
+              letterSpacing = 2.4.sp,
+              color = cs.onSurface,
               textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(5.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
-              text = "LIVE GPS • 9-DOF SENSORS • AR CAMERA • AI HELPER",
-              style = MaterialTheme.typography.labelMedium,
+              text = "LIVE GPS • 9-DOF SENSORS • 3D LAB • GEMINI AI",
+              style = MaterialTheme.typography.labelSmall,
               letterSpacing = 1.1.sp,
               color = primary,
               fontWeight = FontWeight.Bold,
               textAlign = TextAlign.Center,
             )
-            AnimatedVisibility(visible = badgesVisible, enter = fadeIn(tween(480))) {
+
+            AnimatedVisibility(visible = badgesVisible, enter = fadeIn(tween(420))) {
               Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(top = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 10.dp),
               ) {
                 Row(
                   horizontalArrangement = Arrangement.spacedBy(8.dp),
                   verticalAlignment = Alignment.CenterVertically,
                 ) {
                   Surface(
-                    color = primary.copy(alpha = 0.16f),
+                    color = primary.copy(alpha = 0.18f),
                     shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.dp, primary.copy(alpha = 0.50f)),
+                    border = BorderStroke(1.dp, primary.copy(alpha = 0.62f)),
+                    modifier = Modifier.testTag("splash_sensors_loaded_badge"),
                   ) {
                     Row(
-                      modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                      modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
                       verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(6.dp),
+                      horizontalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
                       Icon(Icons.Default.Sensors, contentDescription = null, tint = primary, modifier = Modifier.size(14.dp))
                       Text(
-                        text = "$activeSensorCount Live Sensors",
+                        text = "$liveTelemetryArmed / ${sensorInventory.totalHardwareSensors} Sensors Loaded",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
+                        color = cs.onSurface,
+                        fontWeight = FontWeight.ExtraBold,
                       )
                     }
                   }
                   Surface(
-                    color = auroraTeal.copy(alpha = 0.16f),
+                    color = secondary.copy(alpha = 0.18f),
                     shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.dp, auroraTeal.copy(alpha = 0.50f)),
+                    border = BorderStroke(1.dp, secondary.copy(alpha = 0.58f)),
                   ) {
                     Row(
-                      modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                      modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                       verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(6.dp),
+                      horizontalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
-                      Icon(Icons.Default.SatelliteAlt, contentDescription = null, tint = auroraTeal, modifier = Modifier.size(14.dp))
+                      Icon(Icons.Default.SatelliteAlt, contentDescription = null, tint = secondary, modifier = Modifier.size(14.dp))
                       Text(
-                        text = if (satellitesVisible > 0) "$satellitesVisible Sats Ready" else "GNSS Scanning",
+                        text = if (satellitesVisible > 0) "$satellitesVisible Sats Lock" else "GNSS Ready",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
+                        color = cs.onSurface,
+                        fontWeight = FontWeight.Bold,
                       )
                     }
                   }
                 }
 
-                // Live 7-bar power/signal equalizer
+                // Live detected hardware sensor chips lighting up progressively
+                FlowRow(
+                  horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                  verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                  sensorInventory.subsystemTags.forEachIndexed { idx, tag ->
+                    val armed = progressAnim.value >= (idx.toFloat() / sensorInventory.subsystemTags.size.coerceAtLeast(1))
+                    Surface(
+                      color = if (armed) primary.copy(alpha = 0.22f) else themeBg.copy(alpha = 0.45f),
+                      shape = RoundedCornerShape(8.dp),
+                      border = BorderStroke(0.9.dp, if (armed) primary.copy(alpha = 0.72f) else cs.outline.copy(alpha = 0.35f)),
+                    ) {
+                      Row(
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                      ) {
+                        if (armed) {
+                          Icon(Icons.Default.CheckCircle, contentDescription = null, tint = primary, modifier = Modifier.size(10.dp))
+                        }
+                        Text(
+                          text = tag,
+                          fontSize = 10.sp,
+                          fontWeight = FontWeight.Bold,
+                          color = if (armed) cs.onSurface else cs.onSurface.copy(alpha = 0.55f),
+                        )
+                      }
+                    }
+                  }
+                }
+
+                // Live 7-bar theme-matched equalizer
                 Row(
                   horizontalArrangement = Arrangement.spacedBy(5.dp),
                   verticalAlignment = Alignment.Bottom,
-                  modifier = Modifier.height(20.dp),
+                  modifier = Modifier.height(16.dp),
                 ) {
                   for (bar in 0 until 7) {
-                    val hFrac = (0.32f + 0.68f * ((sin(eqWave + bar * 0.78f) + 1f) / 2f)).coerceIn(0.25f, 1f)
+                    val hFrac = (0.30f + 0.70f * ((sin(eqWave + bar * 0.78f) + 1f) / 2f)).coerceIn(0.24f, 1f)
                     Box(
                       modifier =
                         Modifier
                           .width(5.dp)
-                          .height((20f * hFrac).dp)
+                          .height((16f * hFrac).dp)
                           .clip(RoundedCornerShape(3.dp))
-                          .background(if (bar % 2 == 0) primary else auroraTeal)
+                          .background(if (bar % 2 == 0) primary else secondary)
                     )
                   }
                 }
@@ -601,42 +782,56 @@ fun StartupSplashSequence(
         }
       }
 
-      Spacer(Modifier.weight(1.0f))
+      Spacer(Modifier.weight(0.68f))
 
-      // Bottom boot progress panel over the glowing rural trail
+      // Bottom boot progress panel themed to match current palette
       Surface(
-        color = Color(0xBF050F14),
+        color = themeSurface.copy(alpha = 0.86f),
         shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        border = BorderStroke(1.dp, primary.copy(alpha = 0.36f)),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
       ) {
         Column(
-          modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
           horizontalAlignment = Alignment.CenterHorizontally,
         ) {
           LinearProgressIndicator(
             progress = { progressAnim.value },
             modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(50)),
             color = primary,
-            trackColor = Color.White.copy(alpha = 0.18f),
+            trackColor = cs.onSurface.copy(alpha = 0.16f),
           )
-          Spacer(Modifier.height(10.dp))
+          Spacer(Modifier.height(9.dp))
           Text(
             text = bootStages.getOrElse(stageIndex) { bootStages.last() },
             style = MaterialTheme.typography.bodySmall,
-            color = Color.White,
+            color = cs.onSurface,
             textAlign = TextAlign.Center,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
           )
-          Spacer(Modifier.height(6.dp))
+          Spacer(Modifier.height(4.dp))
           Text(
-            text = "Created by Lord Bradley Callison",
+            text = "Created by Lord Bradley Callison • KEEP IT RURAL Y'ALL",
             style = MaterialTheme.typography.labelSmall,
-            letterSpacing = 0.8.sp,
-            color = Color.White.copy(alpha = 0.72f),
+            letterSpacing = 0.7.sp,
+            color = cs.onSurface.copy(alpha = 0.72f),
             textAlign = TextAlign.Center,
           )
         }
+      }
+    }
+
+    // 6. Active Holiday Top Canopy (garlands, twinkling string lights & hanging ornaments)
+    if (isHoliday) {
+      Canvas(
+        modifier =
+          Modifier
+            .align(Alignment.TopCenter)
+            .statusBarsPadding()
+            .fillMaxWidth()
+            .height(34.dp),
+      ) {
+        drawHolidayTopCanopy(mode = effectiveStyle, twinklePhase = holidayTwinklePhase)
       }
     }
   }
