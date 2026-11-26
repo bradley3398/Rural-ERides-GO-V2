@@ -527,6 +527,9 @@ fun Pev3dGarageViewer(
   val estMotorTempC = (ambientTempC + motorThrottlePct * 68f).roundToInt()
   val primaryCol = MaterialTheme.colorScheme.primary
 
+  // Top-level 3D Lab vs PEV Knowledge Test Tab Switcher
+  var activeLabTab by remember { mutableIntStateOf(0) } // 0 = 3D CAD & Dyno Lab, 1 = PEV Knowledge Test
+
   Column(
     verticalArrangement = Arrangement.spacedBy(12.dp),
     modifier = Modifier
@@ -534,6 +537,58 @@ fun Pev3dGarageViewer(
       .verticalScroll(rememberScrollState())
       .padding(horizontal = 14.dp, vertical = 12.dp),
   ) {
+    // Top Tab Switcher: 3D CAD & Dyno Lab | PEV Knowledge Test
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      FilterChip(
+        selected = activeLabTab == 0,
+        onClick = { activeLabTab = 0 },
+        leadingIcon = { Icon(Icons.Default.ViewInAr, null, Modifier.size(16.dp)) },
+        label = {
+          Text(
+            "3D CAD & Dyno Lab (${AAA_PEV_MODELS.size})",
+            fontWeight = FontWeight.Black,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+          )
+        },
+        colors = FilterChipDefaults.filterChipColors(
+          selectedContainerColor = Color(0xFF22C55E).copy(alpha = 0.24f),
+          selectedLabelColor = Color(0xFF4ADE80),
+        ),
+        modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("3d_lab_main_tab_cad"),
+      )
+      FilterChip(
+        selected = activeLabTab == 1,
+        onClick = { activeLabTab = 1 },
+        leadingIcon = { Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) },
+        label = {
+          Text(
+            "PEV Knowledge Test",
+            fontWeight = FontWeight.Black,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+          )
+        },
+        colors = FilterChipDefaults.filterChipColors(
+          selectedContainerColor = Color(0xFF0EA5E9).copy(alpha = 0.24f),
+          selectedLabelColor = Color(0xFF38BDF8),
+        ),
+        modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("3d_lab_main_tab_quiz"),
+      )
+    }
+
+    if (activeLabTab == 1) {
+      PevKnowledgeTestView(
+        activeVehicleName = currentModel.name,
+        activeVoltage = currentModel.voltage,
+      )
+      Spacer(Modifier.height(24.dp))
+      return@Column
+    }
+
     TacticalCard(highlight = true, title = "MULTI-TECH 3D RIG LAB (${AAA_PEV_MODELS.size} MODELS)") {
       // 1. 3D RENDERING TECHNOLOGY SWITCHER
       Text(

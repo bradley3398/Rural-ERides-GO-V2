@@ -154,10 +154,19 @@ private fun IncomingCallBanner(
   onDecline: () -> Unit,
   onQuickDeclineDm: (String) -> Unit,
 ) {
-  Box(
-    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-    contentAlignment = Alignment.TopCenter,
+  androidx.compose.ui.window.Dialog(
+    onDismissRequest = {},
+    properties =
+      androidx.compose.ui.window.DialogProperties(
+        dismissOnBackPress = false,
+        dismissOnClickOutside = false,
+        usePlatformDefaultWidth = false,
+      ),
   ) {
+    Box(
+      modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 14.dp, vertical = 24.dp),
+      contentAlignment = Alignment.TopCenter,
+    ) {
     TacticalCard(
       highlight = true,
       title = "INCOMING ${session.callType} DISPATCH",
@@ -222,6 +231,7 @@ private fun IncomingCallBanner(
           )
         }
       }
+    }
     }
   }
 }

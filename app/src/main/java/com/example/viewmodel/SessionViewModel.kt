@@ -1253,7 +1253,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     matchSettings: MasterSettings,
   ) {
     val active = activeUser.value ?: return
-    val callsign = _profile.value?.callsign?.ifBlank { active.displayName } ?: return
+    val callsign =
+      _profile.value?.callsign?.ifBlank { active.displayName }?.ifBlank { "PILOT_${active.uid.take(5).uppercase()}" }
+        ?: "PILOT_${active.uid.take(5).uppercase()}"
     val encodedSummary =
       RiderMatchEngine.encodePilotMatchSummary(
         vehicleName = vehicleName,
@@ -1266,7 +1268,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
       )
     viewModelScope.launch {
       if (active.firebaseAuthenticated) {
-        riderRepo.updatePublicVehicleSummary(active.uid, encodedSummary)
+        riderRepo.updatePublicVehicleSummary(active.uid, encodedSummary, fallbackCallsign = callsign)
       } else {
         val sbToken = supabaseSession.value?.accessToken.orEmpty()
         if (sbToken.isNotBlank()) {

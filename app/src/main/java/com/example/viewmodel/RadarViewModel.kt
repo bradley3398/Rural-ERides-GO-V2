@@ -455,9 +455,8 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
     visible: Boolean,
     force: Boolean = false,
   ) {
-    if (lat == 0.0 && lng == 0.0) return
     val center = _geoFenceCenter.value
-    if (center != null) {
+    if (center != null && (lat != 0.0 || lng != 0.0)) {
       val distM = haversineKm(center.first, center.second, lat, lng) * 1000.0
       _geoFenceBreached.value = distM > _geoFenceRadiusM.value
     } else {

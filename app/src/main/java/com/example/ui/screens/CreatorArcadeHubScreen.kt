@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Stop
@@ -127,6 +128,7 @@ private enum class StudioHubTab(val label: String, val icon: ImageVector, val ac
   SEARCH_MAPS("Maps & Web", Icons.Default.Public, Color(0xFFF59E0B)),
   MUSIC_LAB("Music Lab", Icons.Default.MusicNote, Color(0xFFEC4899)),
   ARCADE_GAME("Volt Game", Icons.Default.SportsEsports, Color(0xFF10B981)),
+  PEV_QUIZ("PEV Test", Icons.Default.School, Color(0xFF38BDF8)),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -994,6 +996,34 @@ fun CreatorArcadeHubScreen(
                   Text("LAUNCH FULL-SCREEN ARCADE GAME", fontWeight = FontWeight.Black)
                 }
               }
+            }
+          }
+
+          StudioHubTab.PEV_QUIZ -> {
+            item {
+              PevKnowledgeTestView(
+                activeVehicleName = activeVehicle?.name ?: "Sur-Ron Ultra Bee eMoto",
+                activeVoltage = activeVehicle?.voltage?.toInt() ?: 72,
+                onShareScoreToBoard = { scorePct, rankTitle, summary ->
+                  socialVm.createPost(
+                    callsign = profile?.callsign?.ifBlank { "PILOT" } ?: "PILOT",
+                    badge = rankTitle,
+                    category = "TIPS",
+                    title = "Earned $rankTitle ($scorePct%) on PEV Knowledge Test!",
+                    body = "$summary Tested on ${activeVehicle?.name ?: "my PEV rig"}!",
+                    bitmap = null,
+                    pollQuestion = "",
+                    pollOptions = emptyList(),
+                    priceUsd = 0.0,
+                    location = liveLocationLabel,
+                    telemetrySummary = "$scorePct% PEV Certification • $rankTitle",
+                    helpNeeded = false,
+                    speedTrap = false,
+                    stolenAlert = false,
+                    onDone = { Toast.makeText(ctx, "PEV Certification posted to Porch Board!", Toast.LENGTH_SHORT).show() },
+                  )
+                },
+              )
             }
           }
         }

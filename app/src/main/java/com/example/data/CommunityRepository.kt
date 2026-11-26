@@ -11,6 +11,7 @@ import com.google.firebase.firestore.snapshots
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
@@ -47,26 +48,67 @@ class CommunityRepository(
   // PUBLIC PILOT PROFILES & STANDINGS (100% REAL AUTHENTICATED RIDERS ONLY)
   // --------------------------------------------------------------------------
   fun observePublicPilots(): Flow<List<PublicPilotProfile>> =
-    db.collection("user_profiles").whereEqualTo("visibility", "PUBLIC").snapshots().map { snap ->
+    combine(
+      db.collection("user_profiles").whereEqualTo("visibility", "PUBLIC").snapshots(),
+      db.collection("radar_riders").whereEqualTo("visibility", "PUBLIC").snapshots(),
+    ) { profileSnap, radarSnap ->
       val currentUid = auth.currentUser?.uid
       val nowSec = System.currentTimeMillis() / 1000L
-      snap
-        .toObjects(
-          PublicPilotProfile::class.java,
-          DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
-        )
-        .filter { p ->
-          PilotAuthenticityGuard.isDisplayablePilotProfile(
-            p = p,
-            currentUid = currentUid,
-            requireFirebaseUid = true,
-            maxStaleDays = 30L,
-            nowSec = nowSec,
+      val fromProfiles =
+        profileSnap
+          .toObjects(
+            PublicPilotProfile::class.java,
+            DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
           )
-        }
+          .filter { p ->
+            PilotAuthenticityGuard.isDisplayablePilotProfile(
+              p = p,
+              currentUid = currentUid,
+              requireFirebaseUid = false,
+              maxStaleDays = 90L,
+              nowSec = nowSec,
+            )
+          }
+
+      val existingUids = fromProfiles.map { it.userId }.toSet()
+      val fromRadar =
+        radarSnap
+          .toObjects(
+            RadarRider::class.java,
+            DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
+          )
+          .filter { r ->
+            r.userId.isNotBlank() &&
+              r.userId !in existingUids &&
+              isAuthenticPilot(
+                userId = r.userId,
+                callsign = r.callsign,
+                docId = r.id,
+                requireFirebaseUid = false,
+              )
+          }
+          .map { r ->
+            PublicPilotProfile(
+              id = r.userId,
+              userId = r.userId,
+              callsign = r.callsign.ifBlank { "PILOT_${r.userId.take(5).uppercase()}" },
+              rankBadge = "Live Radar Pilot",
+              xpPoints = 25L,
+              totalKm = 0.0,
+              ridesCount = 0L,
+              verified = false,
+              banned = false,
+              trustScore = 100L,
+              vehicleSummary = r.vehicleName.ifBlank { "PEV Rig" },
+              visibility = "PUBLIC",
+              createdAt = r.createdAt,
+              updatedAt = r.updatedAt,
+            )
+          }
+
+      (fromProfiles + fromRadar)
         .sortedByDescending { it.xpPoints }
         .distinctBy { it.userId }
-        .distinctBy { it.callsign.trim().uppercase() }
     }
 
   // --------------------------------------------------------------------------
@@ -347,23 +389,21 @@ class CommunityRepository(
     db.collection("radar_riders").whereEqualTo("visibility", "PUBLIC").snapshots().map { snap ->
       val currentUid = auth.currentUser?.uid
       val nowSec = System.currentTimeMillis() / 1000L
-      val freshnessWindowSec = 2L * 3600L // Strictly live riders active in the last 2 hours (or self)
+      val freshnessWindowSec = 24L * 3600L // Active in the last 24 hours (or self)
       snap
         .toObjects(RadarRider::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
         .filter { r ->
           val isSelf = currentUid != null && r.userId == currentUid
-          val hasCoords = r.lat != 0.0 || r.lng != 0.0
           val updatedSec = r.updatedAt?.seconds ?: r.createdAt?.seconds ?: 0L
-          val isFresh = isSelf || (updatedSec > 0L && (nowSec - updatedSec) <= freshnessWindowSec)
+          val isFresh = isSelf || updatedSec <= 0L || (nowSec - updatedSec) <= freshnessWindowSec
           val isActiveStatus = !r.statusTag.equals("OFFLINE", ignoreCase = true)
-          hasCoords &&
-            isFresh &&
+          isFresh &&
             isActiveStatus &&
             isAuthenticPilot(
               userId = r.userId,
               callsign = r.callsign,
               docId = r.id,
-              requireFirebaseUid = true,
+              requireFirebaseUid = false,
             )
         }
         .distinctBy { it.userId }
@@ -405,12 +445,13 @@ class CommunityRepository(
         if (statusTag in listOf("CRUISING", "CHARGING", "SOS", "ASSEMBLE", "OFFLINE")) statusTag
         else "CRUISING"
       val vis = if (visible) "PUBLIC" else "HIDDEN"
+      val cleanCs = callsign.take(32).ifBlank { "PILOT_${uid.take(5).uppercase()}" }
       if (!snap.exists()) {
         ref
           .set(
             mapOf(
               "userId" to uid,
-              "callsign" to callsign.take(32).ifBlank { "PILOT" },
+              "callsign" to cleanCs,
               "vehicleName" to vehicleName.take(60),
               "lat" to lat.coerceIn(-90.0, 90.0),
               "lng" to lng.coerceIn(-180.0, 180.0),
@@ -428,7 +469,7 @@ class CommunityRepository(
         ref
           .update(
             mapOf(
-              "callsign" to callsign.take(32).ifBlank { "PILOT" },
+              "callsign" to cleanCs,
               "vehicleName" to vehicleName.take(60),
               "lat" to lat.coerceIn(-90.0, 90.0),
               "lng" to lng.coerceIn(-180.0, 180.0),
@@ -839,13 +880,6 @@ class CommunityRepository(
       .map { snap ->
         snap
           .toObjects(DmThread::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
-          .filter { th ->
-            val otherIdx = th.participantUids.indexOfFirst { it != userId }
-            if (otherIdx < 0) return@filter true
-            val otherUid = th.participantUids.getOrElse(otherIdx) { "" }
-            val otherCs = th.participantCallsigns.getOrElse(otherIdx) { "" }
-            isAuthenticPilot(userId = otherUid, callsign = otherCs, requireFirebaseUid = true)
-          }
           .sortedByDescending { it.updatedAt?.seconds ?: 0L }
       }
 
@@ -941,45 +975,46 @@ class CommunityRepository(
   }
 
   fun observeMyCallSessions(userId: String): Flow<List<CallSession>> =
-    db.collection("call_sessions")
-      .where(
-        Filter.or(
-          Filter.equalTo("callerUid", userId),
-          Filter.equalTo("calleeUid", userId),
+    combine(
+      db.collection("call_sessions").whereEqualTo("calleeUid", userId).snapshots(),
+      db.collection("call_sessions").whereEqualTo("callerUid", userId).snapshots(),
+    ) { asCalleeSnap, asCallerSnap ->
+      val calleeCalls =
+        asCalleeSnap.toObjects(
+          CallSession::class.java,
+          DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
         )
-      )
-      .snapshots()
-      .map { snap ->
-        snap
-          .toObjects(CallSession::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
-          .filter { s ->
-            val otherUid = if (s.callerUid == userId) s.calleeUid else s.callerUid
-            val otherCs = if (s.callerUid == userId) s.calleeCallsign else s.callerCallsign
-            s.status != "ENDED" &&
-              (otherUid.isBlank() || isAuthenticPilot(userId = otherUid, callsign = otherCs, requireFirebaseUid = false))
-          }
-      }
+      val callerCalls =
+        asCallerSnap.toObjects(
+          CallSession::class.java,
+          DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
+        )
+      (calleeCalls + callerCalls)
+        .distinctBy { it.id }
+        .filter { s -> s.status != "ENDED" }
+        .sortedByDescending { it.updatedAt?.seconds ?: it.createdAt?.seconds ?: 0L }
+    }
 
   fun observeRecentCallHistory(userId: String): Flow<List<CallSession>> =
-    db.collection("call_sessions")
-      .where(
-        Filter.or(
-          Filter.equalTo("callerUid", userId),
-          Filter.equalTo("calleeUid", userId),
+    combine(
+      db.collection("call_sessions").whereEqualTo("calleeUid", userId).snapshots(),
+      db.collection("call_sessions").whereEqualTo("callerUid", userId).snapshots(),
+    ) { asCalleeSnap, asCallerSnap ->
+      val calleeCalls =
+        asCalleeSnap.toObjects(
+          CallSession::class.java,
+          DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
         )
-      )
-      .snapshots()
-      .map { snap ->
-        snap
-          .toObjects(CallSession::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
-          .filter { s ->
-            val otherUid = if (s.callerUid == userId) s.calleeUid else s.callerUid
-            val otherCs = if (s.callerUid == userId) s.calleeCallsign else s.callerCallsign
-            otherUid.isBlank() || isAuthenticPilot(userId = otherUid, callsign = otherCs, requireFirebaseUid = false)
-          }
-          .sortedByDescending { it.updatedAt?.seconds ?: it.createdAt?.seconds ?: 0L }
-          .take(30)
-      }
+      val callerCalls =
+        asCallerSnap.toObjects(
+          CallSession::class.java,
+          DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
+        )
+      (calleeCalls + callerCalls)
+        .distinctBy { it.id }
+        .sortedByDescending { it.updatedAt?.seconds ?: it.createdAt?.seconds ?: 0L }
+        .take(30)
+    }
 
   suspend fun startCallSession(
     callerCallsign: String,

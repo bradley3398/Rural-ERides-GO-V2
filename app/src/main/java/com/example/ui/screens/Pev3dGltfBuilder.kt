@@ -937,18 +937,18 @@ internal object Pev3dGltfBuilder {
     }
 
     // Authentic automotive & PEV hardware finishes (sRGB swatches, linearized at glTF packing)
-    val rubberNeutral = floatArrayOf(0.95f, 0.95f, 0.96f) // Tire texture already carries deep matte rubber tone
-    val cncAluminum = floatArrayOf(0.84f, 0.86f, 0.89f)
-    val satinTitanium = floatArrayOf(0.42f, 0.45f, 0.49f)
-    val anodizedBlack = floatArrayOf(0.24f, 0.26f, 0.29f)
-    val matteCarbon = floatArrayOf(0.46f, 0.48f, 0.51f)
-    val saddleVinyl = floatArrayOf(0.94f, 0.94f, 0.95f)
-    val batteryAlloy = floatArrayOf(0.92f, 0.94f, 0.96f) // Texture carries realistic dark graphite extruded aluminum
-    val motorHousing = floatArrayOf(0.32f, 0.34f, 0.38f) // Satin dark gunmetal motor casing
-    val statorBronze = floatArrayOf(0.76f, 0.50f, 0.24f) // Real copper/bronze stator ring accent
-    val focHeatsink = floatArrayOf(0.50f, 0.53f, 0.58f) // CNC billet silver-titanium controller heatsink
-    val steelChain = floatArrayOf(0.58f, 0.55f, 0.48f)
-    val tftWhite = floatArrayOf(1.0f, 1.0f, 1.0f)
+    val rubberNeutral = floatArrayOf(0.11f, 0.12f, 0.14f) // Deep vulcanized off-road tire compound
+    val cncAluminum = floatArrayOf(0.84f, 0.87f, 0.91f)
+    val satinTitanium = floatArrayOf(0.50f, 0.54f, 0.60f)
+    val anodizedBlack = floatArrayOf(0.16f, 0.18f, 0.22f)
+    val matteCarbon = floatArrayOf(0.18f, 0.20f, 0.24f)
+    val saddleVinyl = floatArrayOf(0.14f, 0.13f, 0.15f) // Rich stitched moto saddle leather
+    val batteryAlloy = floatArrayOf(0.22f, 0.25f, 0.30f) // Dark graphite extruded aluminum battery enclosure
+    val motorHousing = floatArrayOf(0.24f, 0.27f, 0.32f) // Satin dark gunmetal motor casing
+    val statorBronze = floatArrayOf(0.82f, 0.54f, 0.22f) // Real copper/bronze stator ring accent
+    val focHeatsink = floatArrayOf(0.58f, 0.62f, 0.68f) // CNC billet silver-titanium controller heatsink
+    val steelChain = floatArrayOf(0.66f, 0.62f, 0.52f)
+    val tftWhite = floatArrayOf(0.12f, 0.86f, 0.96f)
 
     // Automotive Photo-Studio Polished Concrete Showroom Floor + Machined Steel Turntable Plinth
     newBucket(
@@ -1003,19 +1003,44 @@ internal object Pev3dGltfBuilder {
       explodeDirs[nodeName] = hsMap[motorKey]?.explodeDir ?: Vec3(0f, 0f, 0f)
       val innerR = outerR * 0.62f
 
-      // Smooth High-Resolution Sculpted Rubber Tire (48x20 carcass + high-res V-chevron PBR tread)
+      // High-Resolution Sculpted Off-Road Rubber Tire + 3D Knobby Tread Lugs
       newBucket(
         nodeName = nodeName,
         partKey = motorKey,
         texId = PevPbrMaterialId.TIRE_RUBBER,
         baseRgb = rubberNeutral,
         metallic = 0.03f,
-        roughness = 0.86f,
+        roughness = 0.88f,
       ) {
         addSculptedTire(cx, cy, cz, outerR, innerR, width, 48)
+        // Raised 3D knobby center & shoulder tread blocks around circumference
+        val lugCount = 24
+        val lugR = outerR + 0.009f
+        val hw = width * 0.34f
+        for (k in 0 until lugCount) {
+          val a0 = (k / lugCount.toFloat()) * (2f * PI.toFloat())
+          val a1 = ((k + 0.48f) / lugCount.toFloat()) * (2f * PI.toFloat())
+          val ca = cos(a0); val sa = sin(a0)
+          val cb = cos(a1); val sb = sin(a1)
+          // Center paddle lug
+          addTube(
+            Vec3(cx + lugR * ca, cy + lugR * sa, cz - hw * 0.42f),
+            Vec3(cx + lugR * ca, cy + lugR * sa, cz + hw * 0.42f),
+            0.013f,
+            6,
+          )
+          // Alternating left/right shoulder side-bite knobs
+          val zSide = if (k % 2 == 0) hw * 0.88f else -hw * 0.88f
+          addTube(
+            Vec3(cx + (outerR * 0.985f) * cb, cy + (outerR * 0.985f) * sb, cz + zSide * 0.45f),
+            Vec3(cx + (outerR * 0.955f) * cb, cy + (outerR * 0.955f) * sb, cz + zSide),
+            0.012f,
+            6,
+          )
+        }
       }
 
-      // Deep-Dish Anodized Alloy Rim Barrel + Hub Motor Shell + 16 Cross-Laced Wire Spokes
+      // Deep-Dish Anodized Alloy Rim Barrel + Hub Motor Shell + Cross-Laced Wire Spokes
       val rimRgb = if (isPowered) anodizedBlack else satinTitanium
       newBucket(
         nodeName = nodeName,
@@ -1024,30 +1049,43 @@ internal object Pev3dGltfBuilder {
         baseRgb = rimRgb,
         metallic = 0.92f,
         roughness = 0.22f,
-        clearcoat = 0.30f,
+        clearcoat = 0.35f,
       ) {
         addRimBarrel(cx, cy, cz, innerR, width, 36)
-        // Hub motor housing or forged front hub with beveled end caps
         val hubR = if (isPowered) innerR * 0.58f else innerR * 0.32f
         addDisc(cx, cy, cz, hubR, width * 0.72f, 32)
-        addDisc(cx, cy, cz, hubR * 0.65f, width * 0.90f, 28)
+        addDisc(cx, cy, cz, hubR * 0.65f, width * 0.92f, 28)
       }
 
-      // Stainless Wire Spokes + Anodized Rim Pinstripe Accent
+      // Copper stator ring inside powered hub motor
+      if (isPowered) {
+        newBucket(
+          nodeName = nodeName,
+          partKey = motorKey,
+          texId = PevPbrMaterialId.BRUSHED_METAL,
+          baseRgb = statorBronze,
+          metallic = 0.94f,
+          roughness = 0.20f,
+        ) {
+          addDisc(cx, cy, cz, innerR * 0.46f, width * 0.82f, 28)
+        }
+      }
+
+      // Stainless Wire Spokes + Axle Locknuts
       newBucket(
         nodeName = nodeName,
         partKey = motorKey,
         texId = PevPbrMaterialId.BRUSHED_METAL,
         baseRgb = cncAluminum,
-        metallic = 0.95f,
-        roughness = 0.16f,
+        metallic = 0.96f,
+        roughness = 0.15f,
       ) {
-        val spokeCount = 16
+        val spokeCount = 20
         val hubAnchorR = if (isPowered) innerR * 0.54f else innerR * 0.28f
         for (s in 0 until spokeCount) {
           val a = (s / spokeCount.toFloat()) * (2f * PI.toFloat())
           val zSide = if (s % 2 == 0) width * 0.24f else -width * 0.24f
-          val crossAngle = if (s % 2 == 0) 0.18f else -0.18f
+          val crossAngle = if (s % 2 == 0) 0.20f else -0.20f
           addTube(
             Vec3(cx + hubAnchorR * cos(a), cy + hubAnchorR * sin(a), cz + zSide),
             Vec3(cx + innerR * 0.95f * cos(a + crossAngle), cy + innerR * 0.95f * sin(a + crossAngle), cz),
@@ -1062,47 +1100,57 @@ internal object Pev3dGltfBuilder {
         partKey = motorKey,
         texId = PevPbrMaterialId.BRUSHED_METAL,
         baseRgb = finish.accentRgb,
-        metallic = 0.90f,
-        roughness = 0.18f,
-        clearcoat = 0.45f,
+        metallic = 0.92f,
+        roughness = 0.16f,
+        clearcoat = 0.55f,
       ) {
         val lipPtsF = (0..36).map { i ->
           val a = (i / 36f) * (2f * PI.toFloat())
           Vec3(cx + innerR * 0.99f * cos(a), cy + innerR * 0.99f * sin(a), cz + width * 0.37f)
         }
-        addSweptTube(lipPtsF, List(lipPtsF.size) { 0.008f }, 6, false)
+        addSweptTube(lipPtsF, List(lipPtsF.size) { 0.0085f }, 6, false)
         val lipPtsB = (0..36).map { i ->
           val a = (i / 36f) * (2f * PI.toFloat())
           Vec3(cx + innerR * 0.99f * cos(a), cy + innerR * 0.99f * sin(a), cz - width * 0.37f)
         }
-        addSweptTube(lipPtsB, List(lipPtsB.size) { 0.008f }, 6, false)
+        addSweptTube(lipPtsB, List(lipPtsB.size) { 0.0085f }, 6, false)
       }
 
-      // Floating Slotted & Cross-Drilled Stainless Steel Brake Rotor (spins with wheel)
+      // Floating Wave-Slotted Stainless Steel Brake Rotor + Anodized Carrier Spider (spins with wheel)
       val bz = cz + width * 0.48f + 0.024f
+      val rotorR = outerR * 0.52f
       newBucket(
         nodeName = nodeName,
         partKey = "brakes",
         texId = PevPbrMaterialId.BRAKE_ROTOR,
         baseRgb = cncAluminum,
-        metallic = 0.95f,
-        roughness = 0.18f,
+        metallic = 0.96f,
+        roughness = 0.14f,
       ) {
-        addDisc(cx, cy, bz, outerR * 0.50f, 0.014f, 36)
+        addDisc(cx, cy, bz, rotorR, 0.012f, 36)
+        for (arm in 0 until 6) {
+          val a = (arm / 6f) * (2f * PI.toFloat())
+          addTube(
+            Vec3(cx + rotorR * 0.28f * cos(a), cy + rotorR * 0.28f * sin(a), bz),
+            Vec3(cx + rotorR * 0.94f * cos(a + 0.24f), cy + rotorR * 0.94f * sin(a + 0.24f), bz),
+            0.009f,
+            6,
+          )
+        }
       }
 
-      // Sculpted Monobloc Radial 4-Piston Brake Caliper (organic pod + carrier bracket)
+      // Sculpted Monobloc Radial 4-Piston Brake Caliper (organic pod + dual piston caps + carrier bracket)
       newBucket(
         nodeName = "brakes",
         partKey = "brakes",
         texId = PevPbrMaterialId.BRUSHED_METAL,
         baseRgb = finish.caliperRgb,
-        metallic = 0.86f,
-        roughness = 0.22f,
-        clearcoat = 0.65f,
+        metallic = 0.88f,
+        roughness = 0.20f,
+        clearcoat = 0.72f,
       ) {
-        addSculptedPod(cx + outerR * 0.34f, cy + outerR * 0.26f, bz, 0.068f, 0.056f, 0.038f, exp = 0.55f, rings = 8, segs = 14)
-        addRoundedBlock(cx + outerR * 0.23f, cy + outerR * 0.18f, bz - 0.022f, 0.036f, 0.030f, 0.016f, exp = 0.55f)
+        addSculptedPod(cx + outerR * 0.34f, cy + outerR * 0.26f, bz, 0.072f, 0.058f, 0.040f, exp = 0.55f, rings = 8, segs = 14)
+        addRoundedBlock(cx + outerR * 0.23f, cy + outerR * 0.18f, bz - 0.022f, 0.038f, 0.032f, 0.016f, exp = 0.55f)
       }
     }
 

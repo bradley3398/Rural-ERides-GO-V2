@@ -549,13 +549,12 @@ fun BoardScreen(
             .map { it.key to it.value }
         }
       val activeCrew =
-        remember(pilots, posts) {
-          val authorIds = posts.map { it.userId }.toSet()
+        remember(pilots, myUid) {
           pilots
-            .filter { p -> p.ridesCount > 0L || p.totalKm >= 0.5 || p.verified || authorIds.contains(p.userId) }
+            .filter { p -> p.userId.isNotBlank() }
             .distinctBy { it.userId }
-            .sortedByDescending { it.totalKm }
-            .take(10)
+            .sortedWith(compareByDescending<PublicPilotProfile> { it.userId != myUid }.thenByDescending { it.totalKm })
+            .take(25)
         }
 
       // 3. MAIN FULL-VIEWPORT CONTENT (POST FEED OWNS 85-90% OF SCREEN!)
@@ -645,14 +644,10 @@ fun BoardScreen(
 
         4 -> {
           val activeRealPilots =
-            remember(pilots, posts, myUid) {
-              val authorIds = posts.map { it.userId }.toSet()
+            remember(pilots, myUid) {
               pilots
-                .filter { p ->
-                  p.userId == myUid || p.ridesCount > 0L || p.totalKm >= 0.5 || p.verified || authorIds.contains(p.userId)
-                }
+                .filter { p -> p.userId.isNotBlank() }
                 .distinctBy { it.userId }
-                .distinctBy { it.callsign.trim().uppercase() }
             }
           BoardStandingsTab(
             pilots = activeRealPilots,
@@ -991,7 +986,7 @@ fun BoardScreen(
                     if (activeCrew.isNotEmpty()) {
                       if (trendingTags.isNotEmpty()) Spacer(Modifier.height(8.dp))
                       Text(
-                        "ACTIVE TRAIL CREW (${activeCrew.size})",
+                        "ACTIVE TRAIL CREW — TAP TO FRIEND, DM OR CALL (${activeCrew.size})",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.secondary,
@@ -999,6 +994,8 @@ fun BoardScreen(
                       Spacer(Modifier.height(6.dp))
                       LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(activeCrew, key = { "crew_${it.userId}" }) { pilot ->
+                          val isMe = pilot.userId == myUid
+                          val isFollowing = followedPilotIds.contains(pilot.userId)
                           Surface(
                             onClick = {
                               playCue(VoiceAudioManager.TouchCue.BUTTON_TAP)
@@ -1006,17 +1003,20 @@ fun BoardScreen(
                             },
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                             shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                            border = BorderStroke(
+                              0.8.dp,
+                              if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                            ),
                           ) {
                             Row(
                               modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                               verticalAlignment = Alignment.CenterVertically,
                               horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                              PilotAvatarThumb(avatarSource = pilot.avatarBase64, callsign = pilot.callsign, size = 26.dp)
+                              PilotAvatarThumb(avatarSource = pilot.avatarBase64, callsign = pilot.callsign, size = 28.dp)
                               Column {
                                 Text(
-                                  pilot.callsign.ifBlank { "PILOT" },
+                                  if (isMe) "${pilot.callsign.ifBlank { "PILOT" }} (YOU)" else pilot.callsign.ifBlank { "PILOT" },
                                   style = MaterialTheme.typography.labelSmall,
                                   fontWeight = FontWeight.Bold,
                                   maxLines = 1,
@@ -1030,6 +1030,109 @@ fun BoardScreen(
                                   softWrap = false,
                                 )
                               }
+                              if (!isMe) {
+                                Surface(
+                                  onClick = {
+                                    playCue(VoiceAudioManager.TouchCue.BUTTON_TAP)
+                                    socialVm.toggleFollowPilot(myUid, pilot.userId)
+                                  },
+                                  color = if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                  shape = RoundedCornerShape(8.dp),
+                                ) {
+                                  Text(
+                                    if (isFollowing) "✓ Friend" else "+ Friend",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isFollowing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                                  )
+                                }
+                                IconButton(
+                                  onClick = {
+                                    dmInitialPeer = pilot
+                                    showDms = true
+                                  },
+                                  modifier = Modifier.size(28.dp),
+                                ) {
+                                  Icon(Icons.Default.Mail, contentDescription = "DM ${pilot.callsign}", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                }
+                                IconButton(
+                                  onClick = {
+                                    socialVm.startOutgoingCall(myUid, callsign, pilot.userId, pilot.callsign, "AUDIO")
+                                  },
+                                  modifier = Modifier.size(28.dp),
+                                ) {
+                                  Icon(Icons.Default.Call, contentDescription = "Call ${pilot.callsign}", tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            } else if (activeSubTab == 1 && activeCrew.isNotEmpty()) {
+              item(key = "board_trail_crew_directory") {
+                TacticalCard(modifier = Modifier.padding(horizontal = 14.dp).testTag("board_trail_crew_directory")) {
+                  Text(
+                    "DISCOVER & FRIEND RIDERS (${activeCrew.size})",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary,
+                  )
+                  Spacer(Modifier.height(6.dp))
+                  LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(activeCrew, key = { "trail_crew_${it.userId}" }) { pilot ->
+                      val isMe = pilot.userId == myUid
+                      val isFollowing = followedPilotIds.contains(pilot.userId)
+                      Surface(
+                        onClick = { inspectedPilot = pilot },
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(0.8.dp, if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                      ) {
+                        Row(
+                          modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                          PilotAvatarThumb(avatarSource = pilot.avatarBase64, callsign = pilot.callsign, size = 28.dp)
+                          Column {
+                            Text(
+                              if (isMe) "${pilot.callsign.ifBlank { "PILOT" }} (YOU)" else pilot.callsign.ifBlank { "PILOT" },
+                              style = MaterialTheme.typography.labelSmall,
+                              fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                              pilot.vehicleSummary.ifBlank { "PEV Pilot" }.take(22),
+                              style = MaterialTheme.typography.labelSmall,
+                              color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                          }
+                          if (!isMe) {
+                            Surface(
+                              onClick = { socialVm.toggleFollowPilot(myUid, pilot.userId) },
+                              color = if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                              shape = RoundedCornerShape(8.dp),
+                            ) {
+                              Text(
+                                if (isFollowing) "✓ Friend" else "+ Friend",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isFollowing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                              )
+                            }
+                            IconButton(
+                              onClick = {
+                                dmInitialPeer = pilot
+                                showDms = true
+                              },
+                              modifier = Modifier.size(28.dp),
+                            ) {
+                              Icon(Icons.Default.Mail, contentDescription = "DM ${pilot.callsign}", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                             }
                           }
                         }

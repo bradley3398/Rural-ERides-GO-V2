@@ -153,6 +153,8 @@ fun GravelVoltGameScreen(
   val haptics = LocalHapticFeedback.current
   var phase by remember { mutableStateOf(VoltGamePhase.TITLE) }
   var muted by remember { mutableStateOf(false) }
+  var activeVehicleName by remember(vehicleName) { mutableStateOf(vehicleName.ifBlank { "Sur-Ron Ultra Bee eMoto" }) }
+  var showKnowledgeTest by remember { mutableStateOf(false) }
 
   var score by remember { mutableIntStateOf(0) }
   var bestScore by remember { mutableIntStateOf(0) }
@@ -558,7 +560,7 @@ fun GravelVoltGameScreen(
     }
     var gameBackendBadge by remember { mutableStateOf("OPENGL ES 3D") }
     GravelVoltGlViewport(
-      vehicleName = vehicleName,
+      vehicleName = activeVehicleName,
       lanePos = lanePos,
       jumpHeight = jumpHeight,
       turnBankDeg = turnBankDeg,
@@ -615,9 +617,9 @@ fun GravelVoltGameScreen(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Surface(shape = CircleShape, color = Color(0xBB0B132B), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))) {
-          IconButton(onClick = { if (phase == VoltGamePhase.PLAYING) phase = VoltGamePhase.PAUSED else onBack() }, modifier = Modifier.testTag("game_back_pause_btn")) {
+          IconButton(onClick = { if (showKnowledgeTest) showKnowledgeTest = false else if (phase == VoltGamePhase.PLAYING) phase = VoltGamePhase.PAUSED else onBack() }, modifier = Modifier.testTag("game_back_pause_btn")) {
             Icon(
-              imageVector = if (phase == VoltGamePhase.PLAYING) Icons.Default.Pause else Icons.AutoMirrored.Filled.ArrowBack,
+              imageVector = if (phase == VoltGamePhase.PLAYING && !showKnowledgeTest) Icons.Default.Pause else Icons.AutoMirrored.Filled.ArrowBack,
               contentDescription = "Back or Pause",
               tint = Color.White,
             )
@@ -643,20 +645,36 @@ fun GravelVoltGameScreen(
             }
           }
         } else {
-          Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = Color(0xCC0B132B),
-            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.65f)),
-          ) {
-            Text(
-              gameBackendBadge,
-              color = Color.White,
-              fontSize = 10.sp,
-              fontWeight = FontWeight.Black,
-              maxLines = 1,
-              softWrap = false,
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-            )
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+              onClick = { showKnowledgeTest = false },
+              shape = RoundedCornerShape(10.dp),
+              color = if (!showKnowledgeTest) Color(0xFF14532D) else Color(0xCC0B132B),
+              border = BorderStroke(1.dp, if (!showKnowledgeTest) Color(0xFF39FF14) else Color.White.copy(alpha = 0.25f)),
+            ) {
+              Text(
+                "3D Runner",
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+              )
+            }
+            Surface(
+              onClick = { showKnowledgeTest = true },
+              shape = RoundedCornerShape(10.dp),
+              color = if (showKnowledgeTest) Color(0xFF311042) else Color(0xCC0B132B),
+              border = BorderStroke(1.dp, if (showKnowledgeTest) Color(0xFFD946EF) else Color(0xFF38BDF8).copy(alpha = 0.65f)),
+              modifier = Modifier.testTag("game_pev_test_tab_btn"),
+            ) {
+              Text(
+                "PEV Knowledge Test",
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+              )
+            }
           }
         }
 
@@ -845,82 +863,77 @@ fun GravelVoltGameScreen(
       }
     }
 
-    // TITLE SCREEN OVERLAY WITH MISSION PICKER
-    if (phase == VoltGamePhase.TITLE) {
+    // PEV KNOWLEDGE TEST FULL-SCREEN TAB INSIDE GAME
+    if (showKnowledgeTest && phase != VoltGamePhase.PLAYING) {
+      Surface(
+        color = Color(0xF5050814),
+        modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 56.dp),
+      ) {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
+          PevKnowledgeTestView(
+            activeVehicleName = activeVehicleName,
+            activeVoltage = 72,
+            onShareScoreToBoard = { scorePct, _, _ ->
+              onShareHighScore(scorePct * 100, 1.0)
+            },
+          )
+        }
+      }
+    }
+
+    // TITLE SCREEN OVERLAY WITH 3D RIG PICKER & MISSION PICKER
+    if (phase == VoltGamePhase.TITLE && !showKnowledgeTest) {
+      val rigPresets = remember(vehicleName) {
+        listOf(
+          vehicleName.ifBlank { "Sur-Ron Ultra Bee eMoto" } to "My Garage Rig",
+          "Sur-Ron Ultra Bee eMoto" to "Sur-Ron eMoto",
+          "Dualtron X Limited Hyperscooter" to "Dualtron X Scooter",
+          "Veteran Sherman-S Suspension EUC" to "Sherman-S EUC",
+          "Super73-RX Mojave Edition e-Bike" to "Super73-RX eBike",
+          "Stark Varg EX Electric Motocross" to "Stark Varg MX",
+          "Fliteboard Ultra eFoil" to "Fliteboard eFoil",
+        ).distinctBy { it.first }
+      }
       Surface(
         shape = RoundedCornerShape(24.dp),
         color = Color(0xE60B132B),
         border = BorderStroke(1.5.dp, Color(0xFF39FF14)),
-        modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.90f),
+        modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.92f),
       ) {
         Column(
-          modifier = Modifier.padding(22.dp),
+          modifier = Modifier.padding(18.dp),
           horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.spacedBy(9.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Icon(Icons.Default.Bolt, contentDescription = null, tint = Color(0xFF39FF14), modifier = Modifier.size(42.dp))
+          Icon(Icons.Default.Bolt, contentDescription = null, tint = Color(0xFF39FF14), modifier = Modifier.size(36.dp))
           Text(
-            "GRAVEL VOLT RUNNER",
+            "GRAVEL VOLT RUNNER 3D",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Black,
             color = Color.White,
             textAlign = TextAlign.Center,
           )
           Text(
-            "Pilot $callsign • $vehicleName",
+            "Pilot $callsign • $activeVehicleName",
             style = MaterialTheme.typography.labelLarge,
             color = Color(0xFF38BDF8),
             fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
           )
           Text(
-            "$gameBackendBadge • Turn onto any street • Complete rotating Trail Missions • Fire 72V Boost!",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFFCBD5E1),
-            textAlign = TextAlign.Center,
+            "SELECT 3D PEV RIG (LIVE 3D PREVIEW ON ROAD)",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Black,
+            color = Color(0xFF39FF14),
           )
-          (gameAssetState as? Pev3dAssetLoadState.EngineUnavailable)?.let { gpuErr ->
-            Surface(
-              shape = RoundedCornerShape(10.dp),
-              color = Color(0xFF331419),
-              border = BorderStroke(1.dp, Color(0xFFF43F5E)),
-              modifier = Modifier.fillMaxWidth(),
-            ) {
-              Text(
-                "3D GPU notice: ${gpuErr.reason}. You can go back cleanly or use standard telemetry views.",
-                color = Color(0xFFFDA4AF),
-                fontSize = 10.sp,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+          LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(rigPresets, key = { it.first }) { (fullRigName, shortLabel) ->
+              FilterChip(
+                selected = activeVehicleName == fullRigName,
+                onClick = { activeVehicleName = fullRigName },
+                label = { Text(shortLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false) },
               )
-            }
-          }
-          (gameAssetState as? Pev3dAssetLoadState.MissingGlb)?.let { missing ->
-            Surface(
-              shape = RoundedCornerShape(10.dp),
-              color = Color(0xFF141E30),
-              border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.55f)),
-              modifier = Modifier.fillMaxWidth(),
-            ) {
-              Column(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-              ) {
-                Text(
-                  "3D Player Rig: Drop .glb in assets/models/",
-                  color = Color(0xFF93C5FD),
-                  fontSize = 9.sp,
-                  fontWeight = FontWeight.Bold,
-                )
-                Text(
-                  missing.expectedAssetPath,
-                  color = Color(0xFF38BDF8),
-                  fontSize = 10.sp,
-                  fontFamily = FontFamily.Monospace,
-                  fontWeight = FontWeight.Bold,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis,
-                )
-              }
             }
           }
           Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -940,15 +953,21 @@ fun GravelVoltGameScreen(
           if (bestScore > 0) {
             Text("Personal Best: $bestScore PTS", color = Color(0xFFFACC15), fontWeight = FontWeight.Black)
           }
-          Spacer(Modifier.height(4.dp))
           Button(
             onClick = { resetRun() },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF39FF14), contentColor = Color.Black),
-            modifier = Modifier.fillMaxWidth().height(52.dp).testTag("game_start_cta"),
+            modifier = Modifier.fillMaxWidth().height(50.dp).testTag("game_start_cta"),
           ) {
             Icon(Icons.Default.PlayArrow, contentDescription = null)
             Spacer(Modifier.width(6.dp))
-            Text("START TRAIL RUN", fontWeight = FontWeight.Black)
+            Text("START 3D TRAIL RUN", fontWeight = FontWeight.Black)
+          }
+          OutlinedButton(
+            onClick = { showKnowledgeTest = true },
+            border = BorderStroke(1.dp, Color(0xFFD946EF)),
+            modifier = Modifier.fillMaxWidth().height(42.dp).testTag("game_open_pev_quiz_cta"),
+          ) {
+            Text("TAKE PEV KNOWLEDGE & CERTIFICATION TEST", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color(0xFFF0ABFC))
           }
         }
       }

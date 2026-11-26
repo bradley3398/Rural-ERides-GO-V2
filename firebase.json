@@ -1,7 +1,7 @@
 {
   "firestore": [
     {
-      "database": "(default)",
+      "database": "ai-studio-android-volttrai-e4546593-bf25-48ba-aec4-c0e7d622a323",
       "rules": "firestore.rules"
     }
   ],

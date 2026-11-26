@@ -2,6 +2,14 @@
 
 All notable changes to **Rural ERides GO** (`com.aistudio.volttrail.kqrmvx`) are documented in this file.
 
+## [56.0] (Build 56) — November 2026
+### Massive 3D CAD & Dyno Lab Realistic Model Upgrade, PEV Knowledge Test, 3D Game & Multi-Device Radar/Board/Calling Sync
+- **Realistic 3D PEV Models & 3D Knobby Tires (88 Models)**: Upgraded `Pev3dGltfBuilder.kt` and `Pev3dComposeShadedViewport.kt` with 24 raised 3D center and shoulder knobby tread lugs per wheel, deep vulcanized dark tread rubber (`#12161F`), 6-arm wave-slotted cross-drilled floating brake rotors, 20 cross-laced stainless wire spokes, and a copper direct-drive stator core inside the hub.
+- **100% Zero-Blank-Viewport Multi-Pipeline 3D Rendering**: All 3 rendering tabs (`Studio 3D PBR`, `OpenGL ES 3.0 GGX PBR`, and `WebGL 2.0 GLB Clearcoat`) render reliably across every Android tablet and phone GPU with carbon-weave micro-detail, battery cell-matrix ribs, glowing cyan TFT cockpit screens, and calibrated turntable degree rings.
+- **Interactive PEV Knowledge & Certification Test Tab**: Added `PevKnowledgeTestTab.kt` inside the **3D CAD & Dyno Lab**, the **Studio & Arcade Hub**, and the **Gravel Volt Runner 3D Game** with 16+ engineering/safety questions across 4 tracks (*Battery & BMS*, *e-Moto & Scooter*, *EUC Dynamics*, *Trail & Safety*), Certification Rank Badges, Porch Board score sharing, and a live **Firebase AI Logic (Gemini Multi-Model AI)** custom question generator tailored to your PEV.
+- **Upgraded Gravel Volt Runner 3D Game**: Upgraded `GravelVoltGlViewport.kt` and `GravelVoltGameScreen.kt` with spinning 3D knobby tire tread paddles, alloy rims, brake rotors & red 4-piston calipers, inverted gold USD forks, perimeter frame, battery core, rear coil shock, handlebars with handguards, glowing TFT dashboard, and a live Title Screen 3D Rig Selector.
+- **Symmetric Multi-Device Rider Radar, Boards Friending & Full-Screen Incoming Calls**: Enabled instant indoor/outdoor Rider Radar beacon publishing without requiring an outdoor GPS satellite lock, removed radius filtering for indoor peers, surfaced all signed-in accounts (including 0-ride accounts) and live Radar beacons on **Porch Feed**, **Trail Crew**, **Top Riders**, and **Rider Radar** with 1-tap `+ Friend`, `DM`, and `Call` buttons, and wrapped `IncomingCallBanner` in a top-level full-screen overlay `Dialog` with a high-priority system notification.
+
 ## [47.0] (Build 47) — November 2026
 ### Filament OpenGL PBR 3D Lab, Crash-Proof Ride Inspector, Holiday Ornaments & Release Workflows
 - **Google Filament 1.56.0 OpenGL ES PBR 3D Rig Lab**: Removed Vulkan PBR completely; upgraded procedural `.glb` PEV models with 7-level roughness-prefiltered Studio Softbox IBL, ACES Filmic tone mapping, FXAA + SSAO, and automatic OpenGL ES fallback.

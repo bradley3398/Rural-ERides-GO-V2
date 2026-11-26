@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rural ERides GO v47.0 — PEV Telemetry, Filament 3D Rig Lab &amp; Rider Radar</title>
-  <meta name="description" content="Rural ERides GO v47.0 by Lord Bradley Callison. Native Android PEV companion featuring Google Filament OpenGL PBR 3D Rig Lab, 11-Window Telemetry Studio, Crash-Proof Ride Inspector, 9-DOF AHRS Cockpit, Privacy-First Rider Radar, Gemini AI Mechanic, and 11 Ornamented Holiday Themes." />
-  <meta name="keywords" content="Rural ERides GO, PEV app, electric unicycle, Sur-Ron, Dualtron, hyper-scooter, e-bike telemetry, Google Filament OpenGL PBR, 3D Rig Lab, Ride Inspector, Rider Radar, Firebase Firestore, Gemini AI Mechanic, Lord Bradley Callison" />
+  <title>Rural ERides GO v56.0 — 88-Model 3D PBR Rig Lab, PEV Knowledge Test &amp; Rider Radar</title>
+  <meta name="description" content="Rural ERides GO v56.0 by Lord Bradley Callison. Native Android PEV companion featuring an 88-Model Multi-Tech 3D PBR Rig Lab with 3D Knobby Tires, Interactive PEV Knowledge &amp; Certification Test, Upgraded Gravel Volt Runner 3D Game, 11-Window Telemetry Studio, 9-DOF AHRS Cockpit, Multi-Device Rider Radar &amp; Audio/Video Calling, and Gemini AI Mechanic." />
+  <meta name="keywords" content="Rural ERides GO, PEV app, electric unicycle, Sur-Ron, Dualtron, hyper-scooter, e-bike telemetry, Studio 3D PBR, OpenGL ES, WebGL 2.0, 3D Rig Lab, PEV Knowledge Test, Gravel Volt Runner 3D, Ride Inspector, Rider Radar, Firebase Firestore, Gemini AI Mechanic, Lord Bradley Callison" />
   <meta name="author" content="Lord Bradley Callison" />
 
   <!-- Open Graph -->
-  <meta property="og:title" content="Rural ERides GO v47.0 — Ultimate PEV Avionics &amp; 3D Rig Lab" />
-  <meta property="og:description" content="Google Filament OpenGL PBR 3D vehicle inspection, 11-window Telemetry Studio, Crash-Proof Ride Inspector, 9-DOF AHRS cockpit, Rider Radar, and Gemini AI Mechanic." />
+  <meta property="og:title" content="Rural ERides GO v56.0 — 88-Model 3D Rig Lab, PEV Knowledge Test &amp; Avionics" />
+  <meta property="og:description" content="88 Realistic 3D PEV Models with 3D Knobby Tires, PEV Knowledge &amp; Certification Test, Upgraded 3D Gravel Volt Runner Game, 11-Window Telemetry Studio, Multi-Device Rider Radar &amp; Calling, and Gemini AI Mechanic." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://bradley3398.github.io/Rural-Erides-GO/" />
   <meta property="og:image" content="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/splash.png" />
 
-  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/icon.png" />
+  <link rel="icon" type="image/png" href="./assets/icon.png" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
   <style>
@@ -33,7 +33,7 @@
     <div class="max-w-7xl mx-auto px-5 sm:px-6 h-20 flex items-center justify-between gap-4">
       <a href="#top" class="flex items-center gap-3 group">
         <img
-          src="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/icon.png"
+          src="./assets/icon.png"
           alt="Rural ERides GO Icon"
           class="w-11 h-11 rounded-xl border border-emerald-400/40 shadow-lg shadow-emerald-500/20 object-cover group-hover:scale-105 transition"
         />
@@ -41,7 +41,7 @@
           <span class="text-lg sm:text-xl font-black tracking-wider text-white block leading-none">
             RURAL ERIDES <span class="text-emerald-400">GO</span>
           </span>
-          <span class="text-[11px] font-mono-tech text-slate-400 tracking-widest uppercase">v47.0 • Keep It Rural Yall</span>
+          <span class="text-[11px] font-mono-tech text-slate-400 tracking-widest uppercase">v56.0 • Build 56 • Keep It Rural Yall</span>
         </div>
       </a>
 
@@ -68,7 +68,7 @@
           rel="noopener noreferrer"
           class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm transition shadow-lg shadow-emerald-500/25"
         >
-          Download v47
+          Download v56
         </a>
       </div>
     </div>
@@ -80,7 +80,7 @@
       <div class="lg:col-span-7 space-y-7">
         <div class="inline-flex items-center gap-2.5 bg-emerald-950/80 border border-emerald-500/40 px-4 py-1.5 rounded-full text-emerald-300 text-xs font-bold tracking-wide uppercase">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>v47.0 Release • Filament OpenGL PBR • Android 14/15 Ready</span>
+          <span>v56.0 Release (Build 56) • 88 Realistic 3D PEVs • PEV Knowledge Test • Multi-Device Radar &amp; Calls</span>
         </div>
 
         <h1 class="text-4xl sm:text-6xl font-black tracking-tight text-white leading-[1.05]">
@@ -91,11 +91,12 @@
         </h1>
 
         <p class="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
-          Built for riders on rural backroads, trails, and highways. Rural ERides GO unites a
-          <strong class="text-white">Google Filament OpenGL PBR 3D Rig Lab</strong>, an
-          <strong class="text-white">11-Window Telemetry Studio &amp; Ride Inspector</strong>,
-          <strong class="text-white">9-DOF AHRS Telemetry</strong>,
-          <strong class="text-white">Privacy-First Rider Radar</strong>, and
+          Built for riders on rural backroads, trails, and highways. Rural ERides GO unites an
+          <strong class="text-white">88-Model Multi-Tech 3D PBR Rig Lab with 3D Knobby Tires</strong>, an interactive
+          <strong class="text-white">PEV Knowledge &amp; Certification Test</strong>, an upgraded
+          <strong class="text-white">Gravel Volt Runner 3D Game</strong>,
+          <strong class="text-white">11-Window Telemetry Studio</strong>,
+          <strong class="text-white">Multi-Device Rider Radar &amp; Live Audio/Video Calling</strong>, and
           <strong class="text-white">Gemini AI Vision Diagnostics</strong>—powered 100% by live sensors and cloud services.
         </p>
 
@@ -123,20 +124,20 @@
         <!-- Quick Highlights Strip -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
           <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
-            <div class="text-xl font-black text-emerald-400">11</div>
-            <div class="text-xs text-slate-400 font-semibold">Fleet Graph Windows</div>
+            <div class="text-xl font-black text-emerald-400">88 Models</div>
+            <div class="text-xs text-slate-400 font-semibold">3D Knobby Tire Rig Lab</div>
           </div>
           <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
-            <div class="text-xl font-black text-cyan-400">Filament</div>
-            <div class="text-xs text-slate-400 font-semibold">OpenGL ES PBR 3D</div>
+            <div class="text-xl font-black text-cyan-400">PEV Test</div>
+            <div class="text-xs text-slate-400 font-semibold">Quiz + AI Cert Exam</div>
           </div>
           <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
-            <div class="text-xl font-black text-indigo-400">26+</div>
-            <div class="text-xs text-slate-400 font-semibold">Themes &amp; 11 Holidays</div>
+            <div class="text-xl font-black text-indigo-400">3D Game</div>
+            <div class="text-xs text-slate-400 font-semibold">Gravel Volt Runner 3D</div>
           </div>
           <div class="card-glass border border-slate-800 rounded-2xl p-3.5">
-            <div class="text-xl font-black text-amber-400">17 Bays</div>
-            <div class="text-xs text-slate-400 font-semibold">PEV Engineering Lab</div>
+            <div class="text-xl font-black text-amber-400">Live Mesh</div>
+            <div class="text-xs text-slate-400 font-semibold">Radar + 1-Tap Calls</div>
           </div>
         </div>
       </div>
@@ -146,7 +147,7 @@
         <div class="absolute -inset-1 rounded-3xl bg-gradient-to-tr from-emerald-500/30 via-cyan-500/20 to-indigo-500/30 blur-2xl"></div>
         <div class="relative card-glass border border-slate-700/80 rounded-3xl overflow-hidden shadow-2xl">
           <img
-            src="https://raw.githubusercontent.com/bradley3398/Rural-Erides-GO/main/public/assets/splash.png"
+            src="./assets/splash.png"
             alt="Rural ERides GO Splash Artwork"
             class="w-full h-56 object-cover border-b border-slate-800"
           />
@@ -154,26 +155,26 @@
             <div class="flex items-center justify-between">
               <div>
                 <span class="text-[11px] font-mono-tech uppercase tracking-widest text-emerald-400 font-bold block">Architecture Summary</span>
-                <h2 class="text-lg font-black text-white">Rural ERides GO • Build 47</h2>
+                <h2 class="text-lg font-black text-white">Rural ERides GO • Build 56</h2>
               </div>
               <span class="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold">Zero Mockups</span>
             </div>
             <div class="grid grid-cols-2 gap-3 text-xs">
               <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
                 <span class="text-slate-500 font-bold block uppercase text-[10px]">3D Rendering</span>
-                <span class="text-cyan-300 font-bold">Filament OpenGL PBR</span>
+                <span class="text-cyan-300 font-bold">Studio 3D + OpenGL + WebGL</span>
               </div>
               <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
-                <span class="text-slate-500 font-bold block uppercase text-[10px]">Telemetry Mode</span>
-                <span class="text-indigo-300 font-bold">5-Module Ride Inspector</span>
+                <span class="text-slate-500 font-bold block uppercase text-[10px]">PEV Exam &amp; Game</span>
+                <span class="text-indigo-300 font-bold">PEV Test + 3D Volt Runner</span>
               </div>
               <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
                 <span class="text-slate-500 font-bold block uppercase text-[10px]">Cloud &amp; AI</span>
                 <span class="text-amber-300 font-bold">Firestore + Gemini AI</span>
               </div>
               <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
-                <span class="text-slate-500 font-bold block uppercase text-[10px]">Radar Privacy</span>
-                <span class="text-emerald-300 font-bold">Beacon Off by Default</span>
+                <span class="text-slate-500 font-bold block uppercase text-[10px]">Squad Comms</span>
+                <span class="text-emerald-300 font-bold">1-Tap Friend + Audio/Video Call</span>
               </div>
             </div>
             <div class="text-xs text-slate-400 pt-1 flex items-center justify-between border-t border-slate-800">
@@ -189,13 +190,16 @@
     <section id="explorer" class="max-w-7xl mx-auto px-5 sm:px-6 py-20 border-t border-slate-800/80">
       <div class="max-w-3xl space-y-3 mb-10">
         <span class="text-xs font-mono-tech uppercase tracking-widest text-emerald-400 font-bold">Interactive Module Explorer</span>
-        <h2 class="text-3xl sm:text-4xl font-black text-white">Explore Every Core Subsystem in v47.0</h2>
+        <h2 class="text-3xl sm:text-4xl font-black text-white">Explore Every Core Subsystem in v56.0</h2>
         <p class="text-slate-400">Select any subsystem below to inspect how Rural ERides GO powers real rides from trailhead to workbench.</p>
       </div>
 
       <div class="flex flex-wrap gap-2.5 mb-8" role="tablist" aria-label="Rural ERides GO Subsystems">
         <button type="button" data-tab="riglab" class="feature-tab tab-btn-active px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
-          3D Filament PBR Lab
+          88-Model 3D Rig Lab
+        </button>
+        <button type="button" data-tab="quizgame" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
+          PEV Knowledge Test &amp; 3D Game
         </button>
         <button type="button" data-tab="graphs" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
           Graphs &amp; Ride Inspector
@@ -204,13 +208,13 @@
           9-DOF AHRS Cockpit
         </button>
         <button type="button" data-tab="radar" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
-          Rider Radar &amp; Weather
+          Rider Radar &amp; Live Calls
         </button>
         <button type="button" data-tab="ai" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
           AI Mechanic &amp; Co-Pilot
         </button>
         <button type="button" data-tab="community" class="feature-tab bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 px-4 py-2.5 rounded-xl border border-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer">
-          Porch Board &amp; Stories
+          Porch Board &amp; Crew
         </button>
       </div>
 
@@ -299,20 +303,20 @@
       <div class="space-y-4">
         <div class="card-glass border border-emerald-500/40 rounded-2xl p-6">
           <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <h3 class="text-lg font-black text-emerald-300">v47.0 — Filament OpenGL PBR 3D Lab, Ride Inspector, Holiday Ornaments &amp; Live Command Suite</h3>
+            <h3 class="text-lg font-black text-emerald-300">v56.0 (Build 56) — Massive 3D Rig Lab Upgrade, PEV Knowledge Test, 3D Game &amp; Multi-Device Radar/Calls</h3>
             <span class="font-mono-tech text-xs px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300">CURRENT</span>
           </div>
           <p class="text-sm text-slate-300 leading-relaxed">
-            Removed Vulkan PBR in favor of Google Filament 1.56.0 OpenGL ES PBR with 7-level Studio Softbox IBL and calibrated glTF materials; replaced the crashing stacked Per-Ride Deep Dive with the crash-proof 5-module Ride Inspector and Personal Records Ribbon; upgraded all 11 Holiday themes with visible canopies, lights, and hanging ornaments; removed duplicate action buttons; added 50-module Interactive Command Directory, 24h Rider Stories, and live HTTP endpoint probes.
+            Upgraded all 88 3D PEV models with 24 raised 3D knobby tire tread lugs, dark vulcanized rubber, cross-drilled brake rotors, copper stator cores, and 100% zero-blank-screen multi-pipeline rendering across Studio 3D PBR, OpenGL ES 3.0 PBR, and WebGL 2.0 GLB. Added the interactive PEV Knowledge &amp; Certification Test tab (with live Gemini AI question generation), upgraded Gravel Volt Runner 3D player models &amp; live Rig Selector, symmetric indoor/outdoor multi-device Rider Radar beacon discovery, 1-tap Board/Radar friending, and full-screen incoming audio/video call alerts.
           </p>
         </div>
         <div class="card-glass border border-slate-800 rounded-2xl p-6">
-          <h3 class="text-base font-bold text-white mb-1">v36.0–v43.0 — Compartmentalized Architecture, Voice Studio &amp; Multi-Engine 3D</h3>
-          <p class="text-sm text-slate-400">Isolated Cockpit, Radar, Mechanic, Co-Pilot, Community, 3D CAD Lab, and Telemetry Studio compartments; added Custom Synthesized AI Voice Studio, zero-latency streaming TTS buffer, and Gravel Volt 3D Runner.</p>
+          <h3 class="text-base font-bold text-white mb-1">v51.0 (Build 51) — Direct Repo Build Notifications &amp; Play-Compliant Update Center</h3>
+          <p class="text-sm text-slate-400">New-build notifications open the GitHub repository release page directly in your browser with zero restricted install permissions (100% Google Play Creator Program compliant).</p>
         </div>
         <div class="card-glass border border-slate-800 rounded-2xl p-6">
-          <h3 class="text-base font-bold text-white mb-1">v14.0–v21.0 — Rural Heritage, Live "Bench Eyes" Camera, Ride Analytics &amp; Optical Morse</h3>
-          <p class="text-sm text-slate-400">Added CameraX workbench visual inspection, 14 switchable Cockpit HUD skins, RainViewer Doppler storm radar, zero-trust Firestore sync, and optical flashlight/camera Morse transceiver.</p>
+          <h3 class="text-base font-bold text-white mb-1">v36.0–v49.0 — Compartmentalized Architecture, Voice Studio &amp; Crash-Proof Ride Inspector</h3>
+          <p class="text-sm text-slate-400">Isolated Cockpit, Radar, Mechanic, Co-Pilot, Community, 3D CAD Lab, and Telemetry Studio compartments; added Custom Synthesized AI Voice Studio, 5-module Ride Inspector, and 11 Holiday themes.</p>
         </div>
       </div>
     </section>
@@ -332,7 +336,7 @@
             class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-8 py-4 rounded-2xl transition shadow-xl shadow-emerald-500/30 flex items-center gap-2.5"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-            <span>Download v47.0 Release</span>
+            <span>Download v56.0 Release</span>
           </a>
           <a
             href="https://github.com/bradley3398/Rural-Erides-GO"
@@ -377,26 +381,43 @@
   <script>
     const FEATURES = {
       riglab: {
-        badge: 'Google Filament 1.56.0 • OpenGL ES 3.0',
-        title: 'Filament OpenGL PBR 3D Rig Lab',
-        desc: 'Vulkan PBR has been completely retired in favor of Google Filament on OpenGL ES for maximum Android device stability and photorealistic automotive lighting. Inspect realistic procedural .glb PEV models in real time.',
+        badge: '88 Curated PEVs • Studio 3D PBR + OpenGL ES 3.0 + WebGL 2.0',
+        title: 'Massive 88-Model Multi-Tech 3D Rig Lab with 3D Knobby Tires',
+        desc: 'Inspect 88 real-world PEV models across 3 zero-blank-screen 3D rendering technologies with authentic 24-lug 3D off-road knobby tires, deep vulcanized rubber, wave-slotted cross-drilled rotors, copper stator cores, and 7 interactive subsystem hotspots.',
         bullets: [
-          '7-level roughness-prefiltered Studio Softbox IBL cubemap + 3-band SH indirect lighting',
-          'ACES Filmic tone mapping, FXAA anti-aliasing, SSAO ambient occlusion, and 3-point shadow rig',
-          '4 realistic PEV archetypes: e-Moto, Hyper-Scooter, Fat-Tire e-Bike, and Electric Unicycle',
-          '7 interactive subsystem hotspots, exploded CAD teardown slider, Carbon Gloss, Wireframe, X-Ray, and live turn signal optics'
+          '3 Zero-Blank-Viewport 3D Engines: Studio 3D PBR, OpenGL ES 3.0 GGX PBR, and WebGL 2.0 GLB Clearcoat',
+          'Realistic 3D Wheel Geometry: 24 raised 3D knobby center & shoulder tread lugs, 20 cross-laced spokes, and copper stator hubs',
+          '88 Models across 5 Categories: e-Moto & Dirt (23), Hyper-Scooter (26), EUC (19), e-Bike & Moped (17), and Specialty (3)',
+          '4 Inspection Modes: Touch Orbit, Gyro Tilt (live IMU tilt), Dyno Sweep (5–65 MPH + Thermal IR), and Explode CAD Teardown'
         ],
         specs: [
-          ['Backend', 'Engine.Backend.OPENGL (No Vulkan)'],
-          ['Asset Pipeline', 'Procedural glTF 2.0 (.glb) + UbershaderProvider'],
-          ['Materials', 'Calibrated metallic/roughness, normal & AO maps'],
-          ['Safety Net', 'Automatic fallback to OpenGL ES PBR viewport']
+          ['3D Pipelines', 'Studio 3D PBR • OpenGL ES 3.0 GGX • WebGL 2.0 Clearcoat'],
+          ['Wheel Detail', '24 3D Knobby Lugs + 6-Arm Floating Wave Rotors'],
+          ['Materials', 'Vulcanized Rubber, Woven Carbon & Copper Stator'],
+          ['Reliability', '100% Zero Blank Viewports on Tablets & Phones']
+        ]
+      },
+      quizgame: {
+        badge: 'PEV Certification Exam + OpenGL ES 3D Trail Runner',
+        title: 'PEV Knowledge & Certification Test + Gravel Volt Runner 3D',
+        desc: 'Test your PEV engineering and safety knowledge with 16+ curated questions and unlimited Gemini AI custom questions, then hit the rural roads in Gravel Volt Runner 3D with realistic multi-part 3D PEV rigs.',
+        bullets: [
+          'PEV Knowledge Test Tab in 3D Lab, Studio Hub & Game: 4 tracks (Battery & BMS, e-Moto & Scooter, EUC Dynamics, Trail Safety)',
+          'Live Gemini AI Custom Question Generator tailored to your exact PEV model and voltage + Certification Rank Badges',
+          'Upgraded Gravel Volt Runner 3D Player Rigs: spinning 3D knobby tires, alloy rims, red 4-piston calipers, USD forks, and glowing TFT dash',
+          'Live Title-Screen 3D Rig Selector, 4-way open-street intersections ("turn on any street"), and rotating Trail Missions'
+        ],
+        specs: [
+          ['Exam Tracks', 'Battery/BMS • e-Moto/Scooter • EUC • Trail Safety'],
+          ['AI Generator', 'Firebase AI Logic (Multi-Model Gemini Custom Questions)'],
+          ['3D Game Engine', 'Native OpenGL ES 3D with Multi-Part PEV Rigs'],
+          ['Social Integration', '1-Tap Share Certification & High Scores to Porch Board']
         ]
       },
       graphs: {
         badge: 'Telemetry Studio • 11 Fleet Windows + Ride Inspector',
         title: 'Upgraded Graphs & Crash-Proof Ride Inspector',
-        desc: 'Analyze fleet-wide efficiency and inspect individual rides without memory spikes. The new 5-module Ride Inspector replaces the old stacked Per-Ride Deep Dive with fast, crash-proof single-module switching.',
+        desc: 'Analyze fleet-wide efficiency and inspect individual rides without memory spikes. The 5-module Ride Inspector replaces the old stacked Per-Ride Deep Dive with fast, crash-proof single-module switching.',
         bullets: [
           '11 Fleet Graph Windows with live KPI subtitles (Speed, Climb, Efficiency/Voltage, Distance/Wh, 5-Slice Pie, Scatter, Duration, Watts/Amps, Radar, Gas ROI, AI Coach)',
           'Personal Records Ribbon: 1-tap jump to Fastest Peak, Longest Trip, Biggest Climb, and Best Efficiency',
@@ -416,7 +437,7 @@
         desc: 'Turn your Android phone into a high-contrast PEV avionics instrument panel with live sensor fusion, real battery sag physics, and 14 selectable HUD layouts.',
         bullets: [
           '9-DOF Sensor Fusion: Pitch, Roll with peak lean hold & lean alert, 360° Yaw compass, and Artificial Horizon',
-          'Exact NMC & LiFePO4 battery voltage curves (36V–134V) with live under-load sag estimation',
+          'Exact NMC & LiFePO4 battery voltage curves (36V–151V) with live under-load sag estimation',
           '10Hz–50Hz IMU crash detection with auto-cancelable SOS SMS dispatch & emergency siren',
           'Road speed limit alerts, Return-to-Base homing beacon, and optical flashlight/CameraX Morse transceiver'
         ],
@@ -428,20 +449,20 @@
         ]
       },
       radar: {
-        badge: 'Privacy-First Mesh • Live Maps & Storm Radar',
-        title: 'Rider Radar, PEV Navigation & Weather',
-        desc: 'Coordinate rural convoy rides safely with an opt-in Firestore radar mesh, live Doppler weather overlays, and PEV-aware turn-by-turn routing.',
+        badge: 'Multi-Device Mesh • Indoor/Outdoor Beacon + Audio/Video Calls',
+        title: 'Rider Radar, Cross-Device Calling & Weather',
+        desc: 'Coordinate rural convoy rides across phones and tablets with symmetric indoor/outdoor beacon sync, 1-tap friend & audio/video calling, live Doppler storm overlays, and PEV turn-by-turn routing.',
         bullets: [
-          'Your live Rider Beacon is OFF by default — toggle visibility whenever you join a group ride',
-          'Live RainViewer Doppler storm radar + Open-Meteo 6-tab PEV weather matrix (headwind, grip, cold derate)',
-          'Turn-by-Turn PEV GPS routing with OSRM / OpenRouteService fallback and rural trail waypoint drops',
-          'EV & PEV public charger finder (Overpass OSM) + Push-to-Talk Squad Walkie-Talkie'
+          'Symmetric Indoor & Outdoor Beacon Discovery: devices publish when Visible is ON even indoors before a GPS lock',
+          '1-Tap Audio & Video Calling + + Friend buttons on every Rider Radar pilot card with full-screen incoming call alert dialog',
+          'True Fullscreen Map mode with 1-tap collapsible telemetry & group ride HUD pills',
+          'Live RainViewer Doppler storm radar, Open-Meteo 6-tab PEV weather matrix, and Push-to-Talk Squad Walkie-Talkie'
         ],
         specs: [
-          ['Map Engine', 'OSMDroid with smooth pan/fling inertia'],
-          ['Storm Data', 'Live RainViewer precipitation tiles'],
+          ['Map Engine', 'OSMDroid with True Fullscreen Collapsible HUD'],
+          ['Live Calling', 'Cross-device Audio/Video Call Overlay + Notification'],
           ['Comms', 'Firestore mesh + real-time PCM Push-to-Talk'],
-          ['Privacy', 'Zero-trust Firestore rules + opt-in beacon']
+          ['Discovery', 'Indoor & outdoor multi-device beacon sync']
         ]
       },
       ai: {
@@ -462,18 +483,18 @@
         ]
       },
       community: {
-        badge: 'Zero-Trust Firestore • Verified Authentic Riders',
-        title: 'Porch Community Board, 24h Stories & Trail TV',
-        desc: 'Connect with verified PEV riders—no synthetic profiles, no stock-face bots. Share live 24-hour trail stories, trail conditions, parts listings, and videos.',
+        badge: 'Zero-Trust Firestore • Instant Multi-Device Crew Friending',
+        title: 'Porch Community Board, 1-Tap Friending, 24h Stories & Trail TV',
+        desc: 'Find and friend your other devices or squad riders immediately on Porch Feed, Trail Crew, and Top Riders—even on brand-new accounts with 0 rides logged.',
         bullets: [
+          'Instant Crew Discovery: all signed-in accounts and live Rider Radar beacons appear on Porch Feed & Trail Crew with 1-tap + Friend, DM, and Call buttons',
           'Live 24-Hour Rider Timeline Stories with zero-permission Photo Picker uploads and battery telemetry badges',
           'Porch Board posts with Rural Trail Condition tags, polls, marketplace pricing, SOS triage, and threaded comments',
-          'Direct Messages and verified Google Sign-In via Jetpack Credential Manager',
           'Integrated Trail TV YouTube video/music mini-player and live PEV News Wire'
         ],
         specs: [
           ['Auth', 'Google Sign-In via Jetpack Credential Manager'],
-          ['Media Picker', 'Zero-permission Android Photo Picker'],
+          ['Crew Discovery', 'Combines user_profiles + live radar_riders mesh'],
           ['Sync', 'Real-time Firestore snapshot listeners'],
           ['Integrity', 'Strict authentic-pilot verification (no fake users)']
         ]

@@ -247,12 +247,32 @@ fun RiderRadarScreen(
     }
   }
 
-  LaunchedEffect(telemetry.lat, telemetry.lng, telemetry.speedKmh, statusTag, radarVisible, encodedRigSpec) {
+  val effectiveMyLat = if (telemetry.lat != 0.0 || telemetry.lng != 0.0) telemetry.lat else settings.customWeatherLat
+  val effectiveMyLng = if (telemetry.lat != 0.0 || telemetry.lng != 0.0) telemetry.lng else settings.customWeatherLng
+
+  LaunchedEffect(activeUser?.uid, radarVisible, callsign) {
+    if (activeUser != null) {
+      radarVm.publishBeaconIfDue(
+        callsign = callsign,
+        vehicleName = encodedRigSpec,
+        lat = effectiveMyLat,
+        lng = effectiveMyLng,
+        speedKmh = telemetry.speedKmh,
+        headingDeg = telemetry.bearingDeg.toDouble(),
+        batteryPct = telemetry.batteryPct,
+        statusTag = statusTag,
+        visible = radarVisible,
+        force = true,
+      )
+    }
+  }
+
+  LaunchedEffect(effectiveMyLat, effectiveMyLng, telemetry.speedKmh, statusTag, radarVisible, encodedRigSpec) {
     radarVm.publishBeaconIfDue(
       callsign = callsign,
       vehicleName = encodedRigSpec,
-      lat = telemetry.lat,
-      lng = telemetry.lng,
+      lat = effectiveMyLat,
+      lng = effectiveMyLng,
       speedKmh = telemetry.speedKmh,
       headingDeg = telemetry.bearingDeg.toDouble(),
       batteryPct = telemetry.batteryPct,
@@ -273,6 +293,7 @@ fun RiderRadarScreen(
     }
   }
 
+  val followedPilotIds by socialVm.followedPilotIds.collectAsStateWithLifecycle()
   val mutedPeerIds by socialVm.mutedPeerIds.collectAsStateWithLifecycle()
   val pilotsByUid = remember(pilots) { pilots.associateBy { it.userId } }
   val radiusFilteredRiders =
@@ -287,9 +308,10 @@ fun RiderRadarScreen(
               callsign = r.callsign,
               currentUid = myUid.takeIf { it.isNotBlank() },
             )
+        val peerHasCoords = r.lat != 0.0 || r.lng != 0.0
         authentic &&
           (isSelf || !mutedPeerIds.contains(r.userId)) &&
-          (!hasGpsFix || RadarViewModel.haversineKm(telemetry.lat, telemetry.lng, r.lat, r.lng) <= maxKm)
+          (isSelf || !hasGpsFix || !peerHasCoords || RadarViewModel.haversineKm(telemetry.lat, telemetry.lng, r.lat, r.lng) <= maxKm)
       }
     }
   val nearbyRidersWithMatch =
@@ -857,10 +879,12 @@ fun RiderRadarScreen(
               }
               if (radarLayers.showRiders) {
                 nearbyRiders.forEach { r ->
-                  map.overlays.add(Marker(map).apply {
-                    position = GeoPoint(r.lat, r.lng)
-                    title = "${r.callsign} • ${r.statusTag} • ${r.batteryPct}%"
-                  })
+                  if (r.lat != 0.0 || r.lng != 0.0) {
+                    map.overlays.add(Marker(map).apply {
+                      position = GeoPoint(r.lat, r.lng)
+                      title = "${r.callsign} • ${r.statusTag} • ${r.batteryPct}%"
+                    })
+                  }
                 }
               }
               if (radarLayers.showMeetups) {
@@ -1348,11 +1372,14 @@ fun RiderRadarScreen(
             }
           }
           items(nearbyRidersWithMatch, key = { it.first.userId }) { (r, peerSpec, matchScore) ->
+            val peerHasCoords = r.lat != 0.0 || r.lng != 0.0
             val distInfo =
-              if (hasGpsFix) {
+              if (hasGpsFix && peerHasCoords) {
                 val dKm = RadarViewModel.haversineKm(telemetry.lat, telemetry.lng, r.lat, r.lng)
                 val brg = RadarViewModel.bearingDeg(telemetry.lat, telemetry.lng, r.lat, r.lng).toInt()
                 " • ${"%.1f".format(formatDistValue(dKm, settings.distanceUnit))}${distUnitLabel(settings.distanceUnit)} @ ${brg}°"
+              } else if (!peerHasCoords) {
+                " • Live Beacon (Indoors / Awaiting GPS)"
               } else ""
             val spdInfo = "${"%.0f".format(formatSpeedValue(r.speedKmh, settings.distanceUnit))} ${speedUnitLabel(settings.distanceUnit)}"
             TacticalCard(highlight = lockedUid == r.userId || r.statusTag == "SOS") {
@@ -1402,6 +1429,20 @@ fun RiderRadarScreen(
                   horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                   if (cloudSyncReady && r.userId != myUid && r.userId.isNotBlank()) {
+                    val isFriend = followedPilotIds.contains(r.userId)
+                    TacticalOutlinedButton(
+                      onClick = { socialVm.toggleFollowPilot(myUid, r.userId) },
+                      contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                      modifier = Modifier.testTag("radar_friend_${r.userId}"),
+                    ) {
+                      Text(
+                        if (isFriend) "✓ Crew Friend" else "+ Friend",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                      )
+                    }
                     TacticalIconButton(
                       onClick = { dmPeer = PublicPilotProfile(userId = r.userId, callsign = r.callsign, vehicleSummary = r.vehicleName) },
                       modifier = Modifier.testTag("radar_dm_${r.userId}"),
@@ -1421,14 +1462,16 @@ fun RiderRadarScreen(
                       Icon(Icons.Default.Videocam, contentDescription = "Video Call ${r.callsign}", tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
                     }
                   }
-                  TacticalIconButton(
-                    onClick = {
-                      userPannedMap = true
-                      sessionVm.updateSettings { it.copy(radarAutoFollow = false) }
-                      mapViewRef?.controller?.animateTo(GeoPoint(r.lat, r.lng), 15.8, 500L)
-                    },
-                  ) {
-                    Icon(Icons.Default.CenterFocusStrong, contentDescription = "Center Map on ${r.callsign}", modifier = Modifier.size(18.dp))
+                  if (peerHasCoords) {
+                    TacticalIconButton(
+                      onClick = {
+                        userPannedMap = true
+                        sessionVm.updateSettings { it.copy(radarAutoFollow = false) }
+                        mapViewRef?.controller?.animateTo(GeoPoint(r.lat, r.lng), 15.8, 500L)
+                      },
+                    ) {
+                      Icon(Icons.Default.CenterFocusStrong, contentDescription = "Center Map on ${r.callsign}", modifier = Modifier.size(18.dp))
+                    }
                   }
                   Spacer(Modifier.weight(1f))
                   TacticalOutlinedButton(onClick = { radarVm.toggleTargetLock(r.userId) }) {

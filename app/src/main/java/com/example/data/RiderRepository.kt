@@ -112,8 +112,6 @@ class RiderRepository(
       val pubRef = db.collection("user_profiles").document(userId)
       val existingPub = pubRef.get().await()
       if (!existingPub.exists()) {
-        // Keep brand-new 0-ride accounts PRIVATE until the rider completes a real ride
-        // so automated Google Play Test Lab crawlers never pollute the public Riders directory.
         pubRef
           .set(
             mapOf(
@@ -127,7 +125,7 @@ class RiderRepository(
               "banned" to false,
               "trustScore" to 100L,
               "vehicleSummary" to "PEV Unit",
-              "visibility" to "PRIVATE",
+              "visibility" to "PUBLIC",
               "createdAt" to FieldValue.serverTimestamp(),
               "updatedAt" to FieldValue.serverTimestamp(),
             )
@@ -146,8 +144,7 @@ class RiderRepository(
             "banned" to (existingPub.getBoolean("banned") ?: false),
             "trustScore" to (existingPub.getLong("trustScore") ?: 100L).coerceIn(0L, 100L),
             "vehicleSummary" to existingPub.getString("vehicleSummary").orEmpty().take(100).ifBlank { "PEV Unit" },
-            "visibility" to
-              (existingPub.getString("visibility")?.takeIf { it in listOf("PUBLIC", "PRIVATE") } ?: "PRIVATE"),
+            "visibility" to "PUBLIC",
             "updatedAt" to FieldValue.serverTimestamp(),
           )
         if (existingPubCallsign.isBlank()) {
@@ -209,6 +206,7 @@ class RiderRepository(
           .update(
             mapOf(
               "avatarBase64" to cleanAvatar,
+              "visibility" to "PUBLIC",
               "updatedAt" to FieldValue.serverTimestamp(),
             )
           )
@@ -222,18 +220,51 @@ class RiderRepository(
       Result.failure(e)
     }
 
-  suspend fun updatePublicVehicleSummary(userId: String, summary: String): Result<Unit> =
+  suspend fun updatePublicVehicleSummary(
+    userId: String,
+    summary: String,
+    fallbackCallsign: String = "",
+  ): Result<Unit> =
     try {
       requireUid(userId)
-      db.collection("user_profiles")
-        .document(userId)
-        .update(
-          mapOf(
-            "vehicleSummary" to summary.trim().take(100),
+      val pubRef = db.collection("user_profiles").document(userId)
+      val existingPub = pubRef.get().await()
+      val cleanSummary = summary.trim().take(100).ifBlank { "PEV Unit" }
+      if (!existingPub.exists()) {
+        val cleanCallsign =
+          fallbackCallsign.trim().take(32).ifBlank { "PILOT_${userId.take(5).uppercase()}" }
+        pubRef
+          .set(
+            mapOf(
+              "userId" to userId,
+              "callsign" to cleanCallsign,
+              "rankBadge" to "Rookie Pilot",
+              "xpPoints" to 0L,
+              "totalKm" to 0.0,
+              "ridesCount" to 0L,
+              "verified" to false,
+              "banned" to false,
+              "trustScore" to 100L,
+              "vehicleSummary" to cleanSummary,
+              "visibility" to "PUBLIC",
+              "createdAt" to FieldValue.serverTimestamp(),
+              "updatedAt" to FieldValue.serverTimestamp(),
+            )
+          )
+          .await()
+      } else {
+        val updates =
+          mutableMapOf<String, Any>(
+            "vehicleSummary" to cleanSummary,
+            "visibility" to "PUBLIC",
             "updatedAt" to FieldValue.serverTimestamp(),
           )
-        )
-        .await()
+        val existingCs = existingPub.getString("callsign").orEmpty().trim()
+        if (existingCs.isBlank() && fallbackCallsign.isNotBlank()) {
+          updates["callsign"] = fallbackCallsign.trim().take(32)
+        }
+        pubRef.update(updates).await()
+      }
       Result.success(Unit)
     } catch (e: CancellationException) {
       throw e

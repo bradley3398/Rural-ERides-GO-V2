@@ -488,6 +488,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
         _activeCallSession.value = refreshed
       }
     }
+    val prevIncomingId = _incomingCallSession.value?.id
     val incoming =
       liveCalls.firstOrNull {
         it.calleeUid == uid &&
@@ -496,6 +497,14 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
           it.id != _activeCallSession.value?.id
       }
     _incomingCallSession.value = incoming
+    if (incoming != null && incoming.id != prevIncomingId) {
+      ReminderScheduler.postSocialNotification(
+        context = ctx,
+        title = "Incoming ${incoming.callType} Call • ${incoming.callerCallsign.ifBlank { "Pilot" }}",
+        body = "Tap to answer live P2P ${incoming.callType.lowercase()} call from ${incoming.callerCallsign.ifBlank { "Pilot" }}",
+        targetTab = "RADAR",
+      )
+    }
   }
 
   fun refreshSupabaseBoard() {

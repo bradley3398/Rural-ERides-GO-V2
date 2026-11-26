@@ -30,11 +30,15 @@ object GeminiModelCatalog {
   const val GEMINI_4_ARGON = "gemini-4-argon"
   const val GEMINI_NANO_BANANA_2_1 = "gemini-nano-banana-2.1"
 
+  const val GEMINI_2_0_FLASH = "gemini-2.0-flash"
+  const val GEMINI_2_0_FLASH_LITE = "gemini-2.0-flash-lite"
+
   val availableModels =
     listOf(
       GEMINI_3_8_FLASH to "Gemini 3.8 Flash (Balanced Default)",
       GEMINI_3_5_FLASH_LITE to "Gemini 3.5 Flash-Lite (Ultra Fast)",
       GEMINI_4_ARGON to "Gemini 4 Argon (Deep Reasoning)",
+      GEMINI_2_0_FLASH to "Gemini 2.0 Flash (Universal Key Compatible)",
     )
 
   fun fallbackChain(preferred: String): List<String> =
@@ -42,6 +46,9 @@ object GeminiModelCatalog {
       preferred.ifBlank { GEMINI_3_8_FLASH }.let { if (it.contains("2.5") || it.contains("3.1-flash-lite")) GEMINI_3_8_FLASH else it },
       GEMINI_3_8_FLASH,
       GEMINI_3_5_FLASH_LITE,
+      GEMINI_4_ARGON,
+      GEMINI_2_0_FLASH,
+      GEMINI_2_0_FLASH_LITE,
     ).distinct()
 }
 
@@ -151,8 +158,10 @@ class GeminiAiRepository {
       val isUnavailableModel =
         msg.contains("not found") ||
           msg.contains("404") ||
+          msg.contains("400") ||
           msg.contains("not supported") ||
           msg.contains("unknown model") ||
+          msg.contains("permission") ||
           (msg.contains("model") && msg.contains("invalid"))
       if (isQuotaOrRateLimit || isUnavailableModel) {
         return true
@@ -1532,6 +1541,35 @@ class GeminiAiRepository {
           withTimeout(30_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty().ifBlank { "Telemetry analysis complete." })
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+
+  suspend fun generatePevQuizQuestion(
+    vehicleName: String,
+    voltage: Int,
+    category: String,
+    modelId: String = GeminiModelCatalog.GEMINI_3_8_FLASH,
+  ): Result<String> =
+    try {
+      val prompt =
+        """
+        Create 1 multiple-choice technical PEV quiz question tailored to "$vehicleName" (${voltage}V) in the "$category" domain.
+        Format your response strictly as 6 lines separated by newlines:
+        LINE1: Question text
+        LINE2: Option A
+        LINE3: Option B
+        LINE4: Option C
+        LINE5: Option D
+        LINE6: Correct option index (0, 1, 2, or 3) | Detailed 1-sentence engineering explanation
+        """.trimIndent()
+      val res =
+        withModelFallback(modelId) { activeModel ->
+          withTimeout(30_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+        }
+      Result.success(res.text?.trim().orEmpty())
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {

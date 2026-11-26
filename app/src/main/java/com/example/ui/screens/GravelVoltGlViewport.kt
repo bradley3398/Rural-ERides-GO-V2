@@ -97,7 +97,7 @@ private class GravelVoltGlRenderer(
       void main() {
         vec4 wp = uModel * vec4(aPos, 1.0);
         vWorldPos = wp.xyz;
-        vWorldNorm = normalize(mat3(uModel) * aNorm);
+        vWorldNorm = normalize((uModel * vec4(aNorm, 0.0)).xyz);
         gl_Position = uMvp * vec4(aPos, 1.0);
       }
       """.trimIndent()
@@ -235,7 +235,7 @@ private class GravelVoltGlRenderer(
       }
     }
 
-    // 5. Blueprint-Accurate Player PEV Rig + Headlight Ground Pool + Spinning Wheels
+    // 5. Realistic Multi-Part 3D Player PEV Rig + Headlight Ground Pool + Spinning Knobby Wheels & Brake Rotors
     val px = laneX
     val py = 0.42f + state.jumpHeight * 2.2f
     val pz = 0f
@@ -243,61 +243,159 @@ private class GravelVoltGlRenderer(
     val finish = Pev3dEngine.finishForModel(state.vehicleName, "", 72)
     val bCol = finish.bodyRgb
     val aCol = finish.accentRgb
-    val boostCol = if (state.boostActive) floatArrayOf(0.15f, 0.92f, 1.0f) else floatArrayOf(0.95f, 0.32f, 0.14f)
+    val cCol = finish.caliperRgb
+    val boostCol = if (state.boostActive) floatArrayOf(0.15f, 0.92f, 1.0f) else floatArrayOf(0.95f, 0.22f, 0.14f)
 
     // Projected forward headlight beam cone on asphalt road ahead
-    drawBox(px, -0.05f, pz - 4.4f, 1.9f, 0.03f, 6.2f, 0.82f, 0.93f, 1.0f, 0.14f, 0.9f)
+    drawBox(px, -0.05f, pz - 4.4f, 1.9f, 0.03f, 6.2f, 0.82f, 0.93f, 1.0f, 0.16f, 0.9f)
+
+    fun drawDetailedGameWheel(wx: Float, wy: Float, wz: Float, radius: Float, width: Float) {
+      // Deep vulcanized off-road tire carcass
+      drawPartRotated(wx, wy, wz, width, radius * 2f, radius * 2f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
+      // 8 raised 3D knobby off-road tread paddles spinning around the tire
+      for (k in 0 until 8) {
+        val angRad = ((state.wheelSpinDeg + k * 45f) * PI / 180.0).toFloat()
+        val ty = wy + cos(angRad) * (radius * 0.96f)
+        val tz = wz - sin(angRad) * (radius * 0.96f)
+        drawPartRotated(wx, ty, tz, width * 1.06f, 0.06f, 0.06f, 0f, bankRad, 0.07f, 0.08f, 0.10f, 0f)
+      }
+      // Anodized alloy rim barrel & hub motor core
+      drawPartRotated(wx, wy, wz, width * 1.08f, radius * 1.24f, radius * 1.24f, state.wheelSpinDeg, bankRad, aCol[0], aCol[1], aCol[2], 0.25f, isCyl = true)
+      drawPartRotated(wx, wy, wz, width * 1.14f, radius * 0.68f, radius * 0.68f, state.wheelSpinDeg, bankRad, 0.24f, 0.27f, 0.32f, 0.15f, isCyl = true)
+      // Cross-drilled stainless steel brake rotor + 4-piston caliper pod
+      drawPartRotated(wx + width * 0.58f, wy, wz, 0.03f, radius * 0.96f, radius * 0.96f, state.wheelSpinDeg, bankRad, 0.82f, 0.86f, 0.92f, 0.35f, isCyl = true)
+      drawPartRotated(wx + width * 0.62f, wy + radius * 0.38f, wz - radius * 0.22f, 0.06f, 0.11f, 0.13f, 0f, bankRad, cCol[0], cCol[1], cCol[2], 0.45f)
+    }
 
     when (finish.blueprintType) {
       Pev3dBlueprintType.EUC_ARMORED_ROLLCAGE,
       Pev3dBlueprintType.EUC_AERO_TRAIL, -> {
-        drawPartRotated(px, py + 0.05f, pz, 0.24f, 0.44f, 0.44f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
-        drawPartRotated(px - 0.16f, py + 0.20f, pz, 0.12f, 0.62f, 0.56f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.15f)
-        drawPartRotated(px + 0.16f, py + 0.20f, pz, 0.12f, 0.62f, 0.56f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.15f)
-        drawPartRotated(px, py + 0.56f, pz, 0.36f, 0.12f, 0.44f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.3f)
-        drawPartRotated(px, py + 0.44f, pz - 0.32f, 0.20f, 0.14f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f)
-        drawPartRotated(px, py + 0.40f, pz + 0.32f, 0.22f, 0.10f, 0.08f, 0f, bankRad, boostCol[0], boostCol[1], boostCol[2], 1.0f)
+        // 20" Fat Off-Road Knobby EUC Wheel + Copper Hub Motor
+        drawDetailedGameWheel(px, py + 0.05f, pz, 0.30f, 0.24f)
+        // Twin High-Voltage Side Battery Towers (dark graphite + livery fairings)
+        drawPartRotated(px - 0.17f, py + 0.22f, pz, 0.10f, 0.58f, 0.54f, 0f, bankRad, 0.18f, 0.20f, 0.25f, 0.12f)
+        drawPartRotated(px + 0.17f, py + 0.22f, pz, 0.10f, 0.58f, 0.54f, 0f, bankRad, 0.18f, 0.20f, 0.25f, 0.12f)
+        drawPartRotated(px - 0.22f, py + 0.24f, pz, 0.04f, 0.44f, 0.46f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.28f)
+        drawPartRotated(px + 0.22f, py + 0.24f, pz, 0.04f, 0.44f, 0.46f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.28f)
+        // Contoured Shin & Calf Power Pads
+        drawPartRotated(px - 0.25f, py + 0.24f, pz - 0.14f, 0.05f, 0.36f, 0.12f, 0f, bankRad, 0.13f, 0.13f, 0.16f, 0.05f)
+        drawPartRotated(px + 0.25f, py + 0.24f, pz - 0.14f, 0.05f, 0.36f, 0.12f, 0f, bankRad, 0.13f, 0.13f, 0.16f, 0.05f)
+        drawPartRotated(px - 0.25f, py + 0.22f, pz + 0.14f, 0.05f, 0.34f, 0.12f, 0f, bankRad, 0.13f, 0.13f, 0.16f, 0.05f)
+        drawPartRotated(px + 0.25f, py + 0.22f, pz + 0.14f, 0.05f, 0.34f, 0.12f, 0f, bankRad, 0.13f, 0.13f, 0.16f, 0.05f)
+        // CNC Spiked Honeycomb Pedals (Left & Right)
+        drawPartRotated(px - 0.32f, py - 0.05f, pz, 0.18f, 0.04f, 0.38f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.35f)
+        drawPartRotated(px + 0.32f, py - 0.05f, pz, 0.18f, 0.04f, 0.38f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.35f)
+        // Anodized Vertical Fastace Suspension Stanchions & Rear Coil Shock
+        drawPartRotated(px - 0.19f, py + 0.28f, pz + 0.18f, 0.06f, 0.64f, 0.06f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f)
+        drawPartRotated(px + 0.19f, py + 0.28f, pz + 0.18f, 0.06f, 0.64f, 0.06f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f)
+        // External Tubular Steel Roll Cage Bumpers + Top CNC Handle & Glowing TFT Display
+        drawPartRotated(px, py + 0.56f, pz, 0.38f, 0.09f, 0.48f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.35f)
+        drawPartRotated(px, py + 0.62f, pz - 0.05f, 0.18f, 0.03f, 0.18f, 0f, bankRad, 0.08f, 0.85f, 0.98f, 0.95f)
+        // Bi-LED Projector Headlight & Ruby Taillight Bar
+        drawPartRotated(px, py + 0.44f, pz - 0.32f, 0.22f, 0.14f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f)
+        drawPartRotated(px, py + 0.40f, pz + 0.32f, 0.26f, 0.10f, 0.08f, 0f, bankRad, boostCol[0], boostCol[1], boostCol[2], 1.0f)
       }
       Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD,
       Pev3dBlueprintType.SCOOTER_TUBULAR_RACING,
       Pev3dBlueprintType.SCOOTER_MONOCOQUE_AERO, -> {
-        drawPartRotated(px, py - 0.22f, pz - 0.64f, 0.16f, 0.24f, 0.24f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
-        drawPartRotated(px, py - 0.22f, pz + 0.64f, 0.16f, 0.24f, 0.24f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
-        drawPartRotated(px, py - 0.10f, pz, 0.46f, 0.16f, 1.18f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.18f)
+        // Front & Rear Wide All-Terrain Hyper-Scooter Wheels + Dual Brake Rotors
+        drawDetailedGameWheel(px, py - 0.18f, pz - 0.66f, 0.18f, 0.18f)
+        drawDetailedGameWheel(px, py - 0.18f, pz + 0.66f, 0.18f, 0.18f)
+        // Forged Carbon Wide Battery Deck + Grip Pad + Side Livery Rails + LED Deck Underglow Strips
+        drawPartRotated(px, py - 0.10f, pz, 0.46f, 0.14f, 1.18f, 0f, bankRad, 0.16f, 0.18f, 0.22f, 0.12f)
+        drawPartRotated(px, py - 0.02f, pz, 0.40f, 0.03f, 1.06f, 0f, bankRad, 0.10f, 0.11f, 0.13f, 0.05f)
+        drawPartRotated(px - 0.24f, py - 0.10f, pz, 0.04f, 0.11f, 1.12f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.35f)
+        drawPartRotated(px + 0.24f, py - 0.10f, pz, 0.04f, 0.11f, 1.12f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.35f)
+        // Rear Kicktail Spoiler Footrest + Anodized C-Arm Swingarms & Coil Shocks
+        drawPartRotated(px, py + 0.04f, pz + 0.52f, 0.36f, 0.14f, 0.24f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.30f)
+        drawPartRotated(px - 0.14f, py - 0.14f, pz + 0.56f, 0.05f, 0.10f, 0.32f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f)
+        drawPartRotated(px + 0.14f, py - 0.14f, pz + 0.56f, 0.05f, 0.10f, 0.32f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f)
+        // Dual Crown Fork Stems or Aero Monocoque Neck + Triple Clamps + Steering Damper
         if (finish.blueprintType == Pev3dBlueprintType.SCOOTER_DUAL_STEM_OFFROAD) {
-          drawPartRotated(px - 0.11f, py + 0.54f, pz - 0.48f, 0.08f, 1.10f, 0.08f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.2f)
-          drawPartRotated(px + 0.11f, py + 0.54f, pz - 0.48f, 0.08f, 1.10f, 0.08f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.2f)
+          drawPartRotated(px - 0.12f, py + 0.48f, pz - 0.50f, 0.07f, 1.16f, 0.07f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.35f)
+          drawPartRotated(px + 0.12f, py + 0.48f, pz - 0.50f, 0.07f, 1.16f, 0.07f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.35f)
+          drawPartRotated(px, py + 0.32f, pz - 0.50f, 0.34f, 0.06f, 0.12f, 0f, bankRad, 0.20f, 0.22f, 0.26f, 0.20f)
+          drawPartRotated(px, py + 0.72f, pz - 0.49f, 0.34f, 0.06f, 0.12f, 0f, bankRad, 0.20f, 0.22f, 0.26f, 0.20f)
         } else {
-          drawPartRotated(px, py + 0.54f, pz - 0.48f, 0.12f, 1.10f, 0.12f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.2f)
+          drawPartRotated(px, py + 0.48f, pz - 0.50f, 0.13f, 1.14f, 0.14f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.30f)
         }
-        drawPartRotated(px, py + 1.08f, pz - 0.48f, 0.82f, 0.07f, 0.09f, 0f, bankRad, 0.90f, 0.92f, 0.96f, 0.4f)
-        drawPartRotated(px, py + 0.34f, pz - 0.56f, 0.20f, 0.12f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f)
-        drawPartRotated(px, py - 0.02f, pz + 0.62f, 0.26f, 0.09f, 0.08f, 0f, bankRad, boostCol[0], boostCol[1], boostCol[2], 1.0f)
+        // Wide Riser Handlebars + Rubber Grips + Center Smart TFT Dash + Twin Bi-LED Headlights
+        drawPartRotated(px, py + 1.06f, pz - 0.48f, 0.86f, 0.06f, 0.07f, 0f, bankRad, 0.85f, 0.88f, 0.94f, 0.40f)
+        drawPartRotated(px - 0.36f, py + 1.06f, pz - 0.48f, 0.18f, 0.08f, 0.09f, 0f, bankRad, 0.11f, 0.12f, 0.14f, 0.05f)
+        drawPartRotated(px + 0.36f, py + 1.06f, pz - 0.48f, 0.18f, 0.08f, 0.09f, 0f, bankRad, 0.11f, 0.12f, 0.14f, 0.05f)
+        drawPartRotated(px, py + 1.12f, pz - 0.46f, 0.18f, 0.10f, 0.06f, 0f, bankRad, 0.08f, 0.86f, 0.98f, 0.95f)
+        drawPartRotated(px, py + 0.38f, pz - 0.58f, 0.24f, 0.12f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f)
+        drawPartRotated(px, py - 0.02f, pz + 0.64f, 0.28f, 0.09f, 0.08f, 0f, bankRad, boostCol[0], boostCol[1], boostCol[2], 1.0f)
       }
       Pev3dBlueprintType.HYDROFOIL_EFOIL -> {
-        drawPartRotated(px, py + 0.06f, pz, 0.72f, 0.12f, 1.55f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.22f)
-        drawPartRotated(px, py - 0.22f, pz + 0.15f, 0.08f, 0.52f, 0.20f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.25f)
-        drawPartRotated(px, py - 0.44f, pz + 0.10f, 0.82f, 0.06f, 0.22f, 0f, bankRad, 0.20f, 0.85f, 0.95f, 0.45f)
-        drawPartRotated(px, py + 0.16f, pz - 0.68f, 0.22f, 0.08f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f)
+        drawPartRotated(px, py + 0.08f, pz, 0.72f, 0.11f, 1.58f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.28f)
+        drawPartRotated(px, py + 0.14f, pz + 0.06f, 0.54f, 0.03f, 1.18f, 0f, bankRad, 0.11f, 0.12f, 0.14f, 0.05f)
+        drawPartRotated(px, py - 0.22f, pz + 0.15f, 0.07f, 0.54f, 0.22f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.30f)
+        drawPartRotated(px, py - 0.44f, pz + 0.10f, 0.88f, 0.05f, 0.24f, 0f, bankRad, 0.20f, 0.85f, 0.95f, 0.45f)
+        drawPartRotated(px, py + 0.16f, pz - 0.72f, 0.24f, 0.08f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f)
       }
       else -> {
-        drawPartRotated(px, py - 0.15f, pz - 0.68f, 0.20f, 0.34f, 0.34f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
-        drawPartRotated(px, py - 0.15f, pz + 0.68f, 0.20f, 0.34f, 0.34f, state.wheelSpinDeg, bankRad, 0.10f, 0.11f, 0.13f, 0f, isCyl = true)
-        drawPartRotated(px, py + 0.12f, pz, 0.34f, 0.28f, 1.35f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.15f)
-        drawPartRotated(px, py + 0.26f, pz - 0.08f, 0.38f, 0.26f, 0.58f, 0f, bankRad, 0.18f, 0.88f, 0.48f, 0.35f)
-        drawPartRotated(px, py + 0.52f, pz - 0.46f, 0.14f, 0.56f, 0.14f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.25f)
-        drawPartRotated(px, py + 0.78f, pz - 0.46f, 0.78f, 0.08f, 0.10f, 0f, bankRad, 0.88f, 0.92f, 0.96f, 0.4f)
-        drawPartRotated(px, py + 0.58f, pz - 0.62f, 0.18f, 0.14f, 0.08f, 0f, bankRad, 0.95f, 0.98f, 1.0f, 1.0f)
-        drawPartRotated(px, py + 0.26f, pz + 0.72f, 0.24f, 0.10f, 0.08f, 0f, bankRad, boostCol[0], boostCol[1], boostCol[2], 1.0f)
+        // Authentic e-Moto / Dirt Bike / Scrambler (Sur-Ron Ultra Bee / Talaria / Stark Varg / Super73)
+        val isScrambler = finish.blueprintType == Pev3dBlueprintType.EBIKE_SCRAMBLER_MOPED
+        val wheelR = if (isScrambler) 0.22f else 0.25f
+        val tireW = if (isScrambler) 0.18f else 0.15f
+        // Front & Rear Full-Size Off-Road Knobby Wheels + Floating Brake Rotors & Calipers
+        drawDetailedGameWheel(px, py - 0.13f, pz - 0.70f, wheelR, tireW)
+        drawDetailedGameWheel(px, py - 0.13f, pz + 0.70f, wheelR, tireW)
+
+        // Forged Twin-Spar Aluminum Perimeter Frame + Swingarm + Skid Plate
+        drawPartRotated(px - 0.11f, py + 0.14f, pz - 0.08f, 0.06f, 0.24f, 0.86f, 0f, bankRad, 0.18f, 0.20f, 0.24f, 0.15f)
+        drawPartRotated(px + 0.11f, py + 0.14f, pz - 0.08f, 0.06f, 0.24f, 0.86f, 0f, bankRad, 0.18f, 0.20f, 0.24f, 0.15f)
+        // Rear Dual-Sided Swingarm + CNC Chain Sprocket + Footpegs
+        drawPartRotated(px - 0.12f, py - 0.08f, pz + 0.44f, 0.05f, 0.09f, 0.56f, 0f, bankRad, 0.24f, 0.27f, 0.32f, 0.18f)
+        drawPartRotated(px + 0.12f, py - 0.08f, pz + 0.44f, 0.05f, 0.09f, 0.56f, 0f, bankRad, 0.24f, 0.27f, 0.32f, 0.18f)
+        drawPartRotated(px, py - 0.14f, pz + 0.08f, 0.48f, 0.04f, 0.07f, 0f, bankRad, 0.65f, 0.68f, 0.74f, 0.25f)
+        // Rear Coil-Over Shock Absorber (Anodized Spring)
+        drawPartRotated(px, py + 0.06f, pz + 0.28f, 0.10f, 0.28f, 0.10f, 0f, bankRad, cCol[0], cCol[1], cCol[2], 0.45f)
+
+        // High-Voltage 72V/84V Central Battery Pack Core + Finned FOC Controller + Mid-Drive Motor Case
+        drawPartRotated(px, py + 0.14f, pz - 0.08f, 0.22f, 0.32f, 0.38f, 0f, bankRad, 0.16f, 0.19f, 0.24f, 0.15f)
+        drawPartRotated(px, py - 0.06f, pz + 0.02f, 0.26f, 0.18f, 0.20f, 0f, bankRad, 0.55f, 0.38f, 0.20f, 0.30f, isCyl = true)
+
+        // Sculpted OEM Livery Tank Shrouds, Side Number Plates & Rear Tail Fairing
+        drawPartRotated(px, py + 0.34f, pz - 0.16f, 0.28f, 0.18f, 0.48f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.32f)
+        drawPartRotated(px - 0.15f, py + 0.28f, pz - 0.14f, 0.04f, 0.22f, 0.44f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.38f)
+        drawPartRotated(px + 0.15f, py + 0.28f, pz - 0.14f, 0.04f, 0.22f, 0.44f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.38f)
+        drawPartRotated(px, py + 0.34f, pz + 0.48f, 0.20f, 0.10f, 0.42f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.34f)
+
+        // Quilted Moto Saddle Bench Seat
+        drawPartRotated(px, py + 0.39f, pz + 0.22f, 0.22f, 0.10f, 0.54f, 0f, bankRad, 0.12f, 0.12f, 0.15f, 0.06f)
+
+        // Inverted Anodized USD Front Suspension Forks + Chrome Lower Stanchions + Triple Clamps + High MX Front Fender Beak
+        drawPartRotated(px - 0.12f, py + 0.40f, pz - 0.54f, 0.07f, 0.54f, 0.07f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.45f)
+        drawPartRotated(px + 0.12f, py + 0.40f, pz - 0.54f, 0.07f, 0.54f, 0.07f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.45f)
+        drawPartRotated(px - 0.12f, py + 0.04f, pz - 0.64f, 0.05f, 0.36f, 0.05f, 0f, bankRad, 0.82f, 0.86f, 0.90f, 0.35f)
+        drawPartRotated(px + 0.12f, py + 0.04f, pz - 0.64f, 0.05f, 0.36f, 0.05f, 0f, bankRad, 0.82f, 0.86f, 0.90f, 0.35f)
+        drawPartRotated(px, py + 0.52f, pz - 0.52f, 0.32f, 0.05f, 0.11f, 0f, bankRad, 0.20f, 0.22f, 0.26f, 0.25f)
+        drawPartRotated(px, py + 0.32f, pz - 0.68f, 0.16f, 0.05f, 0.34f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.36f)
+
+        // Front Number Plate + Wide Fatbar Handlebars + Grips + Handguards + Glowing TFT Dash
+        drawPartRotated(px, py + 0.58f, pz - 0.58f, 0.20f, 0.20f, 0.05f, 0f, bankRad, bCol[0], bCol[1], bCol[2], 0.32f)
+        drawPartRotated(px, py + 0.74f, pz - 0.48f, 0.84f, 0.06f, 0.07f, 0f, bankRad, 0.86f, 0.90f, 0.95f, 0.40f)
+        drawPartRotated(px - 0.35f, py + 0.74f, pz - 0.48f, 0.18f, 0.08f, 0.09f, 0f, bankRad, 0.10f, 0.11f, 0.13f, 0.05f)
+        drawPartRotated(px + 0.35f, py + 0.74f, pz - 0.48f, 0.18f, 0.08f, 0.09f, 0f, bankRad, 0.10f, 0.11f, 0.13f, 0.05f)
+        drawPartRotated(px - 0.38f, py + 0.76f, pz - 0.54f, 0.14f, 0.09f, 0.04f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f)
+        drawPartRotated(px + 0.38f, py + 0.76f, pz - 0.54f, 0.14f, 0.09f, 0.04f, 0f, bankRad, aCol[0], aCol[1], aCol[2], 0.40f)
+        drawPartRotated(px, py + 0.79f, pz - 0.46f, 0.16f, 0.09f, 0.05f, 0f, bankRad, 0.08f, 0.86f, 0.98f, 0.95f)
+
+        // Bi-LED Headlight Bar & Rear Tail/Brake Optic
+        drawPartRotated(px, py + 0.48f, pz - 0.62f, 0.20f, 0.12f, 0.08f, 0f, bankRad, 0.96f, 0.98f, 1.0f, 1.0f)
+        drawPartRotated(px, py + 0.33f, pz + 0.70f, 0.22f, 0.08f, 0.08f, 0f, bankRad, boostCol[0], boostCol[1], boostCol[2], 1.0f)
       }
     }
     if (state.boostActive) {
-      drawPartRotated(px, py + 0.22f, pz + 1.05f, 0.22f, 0.22f, 0.55f, 0f, bankRad, 0.15f, 0.95f, 1.0f, 1.0f)
+      drawPartRotated(px, py + 0.22f, pz + 1.05f, 0.24f, 0.22f, 0.58f, 0f, bankRad, 0.15f, 0.95f, 1.0f, 1.0f)
     }
 
     if (state.turnSignalActive && state.turnSignalDir != 0) {
       val sx = if (state.turnSignalDir < 0) px - 0.44f else px + 0.44f
-      drawPartRotated(sx, py + 0.74f, pz - 0.46f, 0.12f, 0.12f, 0.12f, 0f, bankRad, 1.0f, 0.68f, 0.05f, 1.0f)
+      drawPartRotated(sx, py + 0.72f, pz - 0.46f, 0.12f, 0.09f, 0.10f, 0f, bankRad, 1.0f, 0.68f, 0.05f, 1.0f)
+      drawPartRotated(sx * 0.65f, py + 0.32f, pz + 0.68f, 0.10f, 0.08f, 0.08f, 0f, bankRad, 1.0f, 0.68f, 0.05f, 1.0f)
     }
   }
 
