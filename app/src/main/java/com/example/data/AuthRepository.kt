@@ -67,24 +67,16 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
   val currentUser: FirebaseUser?
     get() = auth.currentUser
 
-  private fun isSystemOrTabletCredManagerAbort(msg: String, elapsedMs: Long): Boolean {
-    // On Android 14 tablets with broken/disabled OS Credential Manager services,
-    // getCredential() throws GetCredentialCancellationException almost instantaneously (< 700ms)
-    // or carries OEM/Play Services failure text instead of a genuine user back press.
-    if (elapsedMs < 700L) return true
+  private fun isSystemOrTabletCredManagerAbort(msg: String): Boolean {
     return msg.contains("reauth", ignoreCase = true) ||
       msg.contains("blocked", ignoreCase = true) ||
       msg.contains("cannot find", ignoreCase = true) ||
       msg.contains("developer", ignoreCase = true) ||
       msg.contains("[16]", ignoreCase = true) ||
       msg.contains("16:", ignoreCase = true) ||
-      msg.contains("failed", ignoreCase = true) ||
       msg.contains("sync account", ignoreCase = true) ||
       msg.contains("provider", ignoreCase = true) ||
       msg.contains("unsupported", ignoreCase = true) ||
-      msg.contains("credential", ignoreCase = true) ||
-      msg.contains("unable", ignoreCase = true) ||
-      msg.contains("timeout", ignoreCase = true) ||
       msg.contains("no such", ignoreCase = true)
   }
 
@@ -96,25 +88,22 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
       return signInWithGoogleWebOAuth(activity)
     }
 
-    val wrappedContext = MutableContextWrapper(activity)
-    val credentialManager = CredentialManager.create(wrappedContext)
+    val credentialManager = CredentialManager.create(activity)
     var fallbackReason = ""
 
-    // 1. Primary path: Jetpack Credential Manager GetSignInWithGoogleOption
+    // 1. Primary path: Jetpack Credential Manager GetSignInWithGoogleOption (original Build 23/26 flow)
     val primaryOutcome: SignInResult? =
       run {
-        val startMs = SystemClock.elapsedRealtime()
         try {
           val option = GetSignInWithGoogleOption.Builder(webClientId).build()
           val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-          val result = credentialManager.getCredential(context = wrappedContext, request = request)
+          val result = credentialManager.getCredential(context = activity, request = request)
           handleCredentialResponse(result.credential)
         } catch (e: GetCredentialCancellationException) {
-          val elapsed = SystemClock.elapsedRealtime() - startMs
           val msg = e.errorMessage?.toString() ?: e.message.orEmpty()
-          Log.w(TAG, "GetSignInWithGoogleOption cancelled after ${elapsed}ms: $msg", e)
-          if (isSystemOrTabletCredManagerAbort(msg, elapsed)) {
-            fallbackReason = msg.ifBlank { "OS Credential Manager aborted (${elapsed}ms)" }
+          Log.w(TAG, "GetSignInWithGoogleOption cancelled: $msg", e)
+          if (isSystemOrTabletCredManagerAbort(msg)) {
+            fallbackReason = msg.ifBlank { "OS Credential Manager unavailable" }
             null
           } else {
             SignInResult.Cancelled
@@ -149,7 +138,6 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     // 2. Secondary Credential Manager path: unfiltered GetGoogleIdOption
     val secondaryOutcome: SignInResult? =
       run {
-        val startMs = SystemClock.elapsedRealtime()
         try {
           val googleIdOption =
             GetGoogleIdOption.Builder()
@@ -158,13 +146,12 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
               .setAutoSelectEnabled(false)
               .build()
           val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
-          val result = credentialManager.getCredential(context = wrappedContext, request = request)
+          val result = credentialManager.getCredential(context = activity, request = request)
           handleCredentialResponse(result.credential)
         } catch (e: GetCredentialCancellationException) {
-          val elapsed = SystemClock.elapsedRealtime() - startMs
           val msg = e.errorMessage?.toString() ?: e.message.orEmpty()
-          Log.w(TAG, "GetGoogleIdOption cancelled after ${elapsed}ms: $msg", e)
-          if (isSystemOrTabletCredManagerAbort(msg, elapsed)) {
+          Log.w(TAG, "GetGoogleIdOption cancelled: $msg", e)
+          if (isSystemOrTabletCredManagerAbort(msg)) {
             if (fallbackReason.isBlank()) fallbackReason = msg.ifBlank { "Credential Manager aborted" }
             null
           } else {
@@ -185,8 +172,7 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 
     if (secondaryOutcome != null) return secondaryOutcome
 
-    // 3. Hand off to native Google Play Services GoogleSignIn Account Picker (works on Android 14 tablets
-    // even when OS Credential Manager or Chrome Custom Tabs is broken/disabled).
+    // 3. Hand off to native Google Play Services GoogleSignIn Account Picker
     return SignInResult.FallbackToLegacyPicker(
       fallbackReason.ifBlank { "Switching to Google Play Services Account Picker" }
     )
@@ -364,8 +350,7 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 
   suspend fun trySilentGoogleSignIn(activity: Activity): SignInResult {
     return try {
-      val wrappedContext = MutableContextWrapper(activity)
-      val credentialManager = CredentialManager.create(wrappedContext)
+      val credentialManager = CredentialManager.create(activity)
       val webClientId = activity.getString(R.string.default_web_client_id)
       val option =
         GetGoogleIdOption.Builder()
@@ -374,7 +359,7 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
           .setAutoSelectEnabled(true)
           .build()
       val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-      val result = credentialManager.getCredential(context = wrappedContext, request = request)
+      val result = credentialManager.getCredential(context = activity, request = request)
       handleCredentialResponse(result.credential)
     } catch (e: NoCredentialException) {
       SignInResult.NoSavedCredential

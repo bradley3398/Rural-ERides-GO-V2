@@ -23,10 +23,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -354,8 +355,15 @@ fun CopilotScreen(
     }
   }
 
+  val isImeVisible = WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
+  LaunchedEffect(isImeVisible) {
+    if (isImeVisible && showToolsDrawer) {
+      showToolsDrawer = false
+    }
+  }
+
   Box(Modifier.fillMaxSize()) {
-  Column(Modifier.fillMaxSize().padding(bottom = if (activeVideo != null) 74.dp else 0.dp)) {
+  Column(Modifier.fillMaxSize().padding(bottom = if (activeVideo != null && !isImeVisible) 74.dp else 0.dp)) {
     // COMPACT TACTICAL HEADER WITH FULL-WIDTH SCROLLABLE ACTION BAR (NO CRAMPED/CLIPPED ICONS)
     Surface(
       color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
@@ -1012,7 +1020,7 @@ fun CopilotScreen(
       color = MaterialTheme.colorScheme.surfaceContainerHigh,
       tonalElevation = 6.dp,
       border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
-      modifier = Modifier.fillMaxWidth().imePadding(),
+      modifier = Modifier.fillMaxWidth(),
     ) {
       Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (useWebSearch) {

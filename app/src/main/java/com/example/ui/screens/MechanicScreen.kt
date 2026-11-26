@@ -965,7 +965,7 @@ private fun VisionArMechanicTab(
       color = MaterialTheme.colorScheme.surfaceContainerHigh,
       tonalElevation = 6.dp,
       border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
-      modifier = Modifier.fillMaxWidth().imePadding(),
+      modifier = Modifier.fillMaxWidth(),
     ) {
       Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // PINNED STAGED OPTICS STRIP (ALWAYS VISIBLE ABOVE COMPOSER WHEN PIC 1 / PIC 2 / SNAP STAGED)

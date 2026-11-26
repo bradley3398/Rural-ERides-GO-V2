@@ -44,7 +44,8 @@ service cloud.firestore {
     }
 
     function isValidUpdateTimestamps(data) {
-      return data.createdAt == existing().createdAt &&
+      return ((!('createdAt' in existing()) && (!('createdAt' in data) || (data.createdAt is timestamp && data.createdAt <= request.time))) ||
+              ('createdAt' in existing() && data.createdAt == existing().createdAt)) &&
              data.updatedAt is timestamp && data.updatedAt <= request.time;
     }
 
@@ -160,7 +161,7 @@ service cloud.firestore {
              data.authorBadge is string && data.authorBadge.size() <= 40 &&
              data.category in ['UNIVERSAL', 'CREW', 'GROUP_RIDES', 'MARKETPLACE', 'CONFESSIONS', 'GARAGE', 'SOS', 'STOLEN', 'VIDEO_REQUEST', 'EVENTS', 'BUILDS', 'RIDE_REPORTS', 'CHARGERS', 'REVIEWS', 'ALERTS'] &&
              data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
-             data.body is string && data.body.size() >= 1 && data.body.size() <= 3000 &&
+             data.body is string && data.body.size() >= 0 && data.body.size() <= 3000 &&
              data.imageUrl is string && data.imageUrl.size() <= 180000 &&
              data.pollQuestion is string && data.pollQuestion.size() <= 160 &&
              data.pollOptions is list && data.pollOptions.size() <= 6 &&
@@ -345,10 +346,10 @@ service cloud.firestore {
       allow update: if isOwner(userId) &&
                        isValidId(userId) &&
                        isValidRiderProfile(incoming(), userId) &&
-                       incoming().userId == existing().userId &&
-                       incoming().callsign == existing().callsign &&
-                       isValidUpdateTimestamps(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'activeVehicleId', 'unitSystem', 'emergencyContactName', 'sosContactNumber', 'medicalProfile', 'acceptedLegal', 'riderWeightLbs', 'avatarBase64', 'updatedAt']);
+                       (!('userId' in existing()) || incoming().userId == existing().userId) &&
+                       (!('callsign' in existing()) || existing().callsign == '' || incoming().callsign == existing().callsign) &&
+                       (!('createdAt' in existing()) || isValidUpdateTimestamps(incoming())) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['userId', 'callsign', 'displayName', 'email', 'activeVehicleId', 'unitSystem', 'emergencyContactName', 'sosContactNumber', 'medicalProfile', 'acceptedLegal', 'riderWeightLbs', 'avatarBase64', 'createdAt', 'updatedAt']);
 
       allow delete: if isOwner(userId) && isValidId(userId);
 
@@ -522,15 +523,15 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
                        isValidId(userId) &&
                        isValidPublicPilotProfile(incoming(), userId) &&
-                       incoming().userId == existing().userId &&
-                       isValidUpdateTimestamps(incoming()) &&
+                       (!('userId' in existing()) || incoming().userId == existing().userId) &&
+                       (!('createdAt' in existing()) || isValidUpdateTimestamps(incoming())) &&
                        (
                          (isOwner(userId) &&
-                          incoming().callsign == existing().callsign &&
-                          incoming().verified == existing().verified &&
-                          incoming().banned == existing().banned &&
-                          incoming().trustScore == existing().trustScore &&
-                          incoming().diff(existing()).affectedKeys().hasOnly(['rankBadge', 'xpPoints', 'totalKm', 'ridesCount', 'vehicleSummary', 'visibility', 'avatarBase64', 'updatedAt'])) ||
+                          (!('callsign' in existing()) || existing().callsign == '' || incoming().callsign == existing().callsign) &&
+                          ((!('verified' in existing()) && incoming().verified == false) || incoming().verified == existing().verified) &&
+                          ((!('banned' in existing()) && incoming().banned == false) || incoming().banned == existing().banned) &&
+                          ((!('trustScore' in existing()) && incoming().trustScore == 100) || incoming().trustScore == existing().trustScore) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['userId', 'callsign', 'rankBadge', 'xpPoints', 'totalKm', 'ridesCount', 'verified', 'banned', 'trustScore', 'vehicleSummary', 'visibility', 'avatarBase64', 'createdAt', 'updatedAt'])) ||
                          (isAdmin() &&
                           incoming().diff(existing()).affectedKeys().hasOnly(['verified', 'banned', 'trustScore', 'rankBadge', 'updatedAt']))
                        );
@@ -556,17 +557,22 @@ service cloud.firestore {
 
       allow update: if isSignedIn() &&
                        isValidId(postId) &&
-                       isValidBoardPost(incoming()) &&
                        incoming().userId == existing().userId &&
                        isValidUpdateTimestamps(incoming()) &&
                        (
                          (request.auth.uid == existing().userId &&
+                          incoming().title is string && incoming().title.size() >= 1 && incoming().title.size() <= 120 &&
+                          incoming().body is string && incoming().body.size() <= 3000 &&
                           incoming().diff(existing()).affectedKeys().hasOnly(['title', 'body', 'pollOptions', 'likesCount', 'commentsCount', 'updatedAt'])) ||
-                         (incoming().diff(existing()).affectedKeys().hasOnly(['likesCount', 'updatedAt'])) ||
-                         (incoming().diff(existing()).affectedKeys().hasOnly(['commentsCount', 'updatedAt'])) ||
-                         (incoming().diff(existing()).affectedKeys().hasOnly(['flaggedCount', 'updatedAt'])) ||
-                         (incoming().diff(existing()).affectedKeys().hasOnly(['pollOptions', 'updatedAt']) && existing().pollQuestion != '') ||
-                         isAdmin()
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['likesCount', 'updatedAt']) &&
+                          incoming().likesCount is int && incoming().likesCount >= 0 && incoming().likesCount <= 1000000) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['commentsCount', 'updatedAt']) &&
+                          incoming().commentsCount is int && incoming().commentsCount >= 0 && incoming().commentsCount <= 1000000) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['flaggedCount', 'updatedAt']) &&
+                          incoming().flaggedCount is int && incoming().flaggedCount >= 0 && incoming().flaggedCount <= 100000) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['pollOptions', 'updatedAt']) &&
+                          incoming().pollOptions is list && incoming().pollOptions.size() <= 6) ||
+                         (isAdmin() && isValidBoardPost(incoming()))
                        );
 
       allow delete: if isSignedIn() && isValidId(postId) && (existing().userId == request.auth.uid || isAdmin());
@@ -790,7 +796,7 @@ service cloud.firestore {
 
     // --- DIRECT MESSAGES & AUDIO/VIDEO CALL SIGNALING ---
     match /direct_messages/{threadId} {
-      allow get: if isSignedIn() && isValidId(threadId) && (request.auth.uid in existing().participantUids);
+      allow get: if isSignedIn() && isValidId(threadId) && (resource == null || (request.auth.uid in existing().participantUids));
       allow list: if isSignedIn() && (request.auth.uid in existing().participantUids);
 
       allow create: if isSignedIn() &&
@@ -810,7 +816,7 @@ service cloud.firestore {
                        incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'selfDestructSec', 'participantCallsigns', 'updatedAt']);
 
       match /messages/{messageId} {
-        allow get: if isSignedIn() && isValidId(threadId) && isValidId(messageId) && (request.auth.uid in existing().participantUids);
+        allow get: if isSignedIn() && isValidId(threadId) && isValidId(messageId) && (resource == null || (request.auth.uid in existing().participantUids));
         allow list: if isSignedIn() && (request.auth.uid in existing().participantUids);
 
         allow create: if isSignedIn() &&
@@ -830,7 +836,7 @@ service cloud.firestore {
     }
 
     match /call_sessions/{sessionId} {
-      allow get: if isSignedIn() && isValidId(sessionId) && (existing().callerUid == request.auth.uid || existing().calleeUid == request.auth.uid);
+      allow get: if isSignedIn() && isValidId(sessionId) && (resource == null || existing().callerUid == request.auth.uid || existing().calleeUid == request.auth.uid);
       allow list: if isSignedIn() && (existing().callerUid == request.auth.uid || existing().calleeUid == request.auth.uid);
 
       allow create: if isSignedIn() &&

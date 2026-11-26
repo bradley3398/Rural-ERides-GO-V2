@@ -116,8 +116,79 @@ internal object MapsSpeedLimitClient {
         var limitSource = ""
         var schoolNearby = false
 
+        val gMapsKeys = ApiKeyRing.googleMapsKeys()
+        if (gMapsKeys.isNotEmpty()) {
+          runCatching {
+            val speedBody =
+              ApiKeyRing.executeWithFailover("GOOGLE_ROADS", gMapsKeys) { rawKey ->
+                val encodedKey = URLEncoder.encode(rawKey, "UTF-8")
+                val roadsUrl =
+                  "https://roads.googleapis.com/v1/speedLimits?path=$lat,$lng&key=$encodedKey"
+                val req = Request.Builder().url(roadsUrl).get().build()
+                httpClient.newCall(req).execute().use { resp ->
+                  if (ApiKeyRing.isFailoverCode(resp.code)) throw ApiKeyFailoverException(resp.code, "Google Roads HTTP ${resp.code}")
+                  if (resp.isSuccessful) resp.body?.string().orEmpty() else ""
+                }
+              }
+            if (speedBody.isNotBlank()) {
+              val sl = JSONObject(speedBody).optJSONArray("speedLimits")?.optJSONObject(0)
+              if (sl != null) {
+                val rawVal = sl.optDouble("speedLimit", -1.0)
+                val units = sl.optString("units", "KPH").uppercase()
+                if (rawVal > 0.0) {
+                  val mph =
+                    if (units.contains("MPH")) kotlin.math.round(rawVal).toInt()
+                    else kotlin.math.round(rawVal * 0.621371).toInt()
+                  if (mph in 5..85) {
+                    limitMph = mph
+                    limitSource = "GOOGLE ROADS"
+                  }
+                }
+              }
+            }
+          }
+          if (road.isBlank()) {
+            runCatching {
+              val geoBody =
+                ApiKeyRing.executeWithFailover("GOOGLE_GEOCODE", gMapsKeys) { rawKey ->
+                  val encodedKey = URLEncoder.encode(rawKey, "UTF-8")
+                  val geoUrl =
+                    "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$encodedKey"
+                  val req = Request.Builder().url(geoUrl).get().build()
+                  httpClient.newCall(req).execute().use { resp ->
+                    if (ApiKeyRing.isFailoverCode(resp.code)) throw ApiKeyFailoverException(resp.code, "Google Geocode HTTP ${resp.code}")
+                    if (resp.isSuccessful) resp.body?.string().orEmpty() else ""
+                  }
+                }
+              if (geoBody.isNotBlank()) {
+                val firstResult = JSONObject(geoBody).optJSONArray("results")?.optJSONObject(0)
+                val comps = firstResult?.optJSONArray("address_components")
+                if (comps != null) {
+                  for (i in 0 until comps.length()) {
+                    val comp = comps.optJSONObject(i) ?: continue
+                    val types = comp.optJSONArray("types") ?: continue
+                    val isRoute = (0 until types.length()).any { types.optString(it) == "route" }
+                    if (isRoute) {
+                      val routeName = comp.optString("short_name").ifBlank { comp.optString("long_name") }
+                      if (routeName.isNotBlank()) {
+                        road = routeName
+                        break
+                      }
+                    }
+                  }
+                }
+                if (road.isBlank()) {
+                  val formatted = firstResult?.optString("formatted_address").orEmpty()
+                  val firstPart = formatted.substringBefore(",").trim()
+                  if (firstPart.isNotBlank()) road = firstPart
+                }
+              }
+            }
+          }
+        }
+
         val ttKeys = ApiKeyRing.tomTomKeys()
-        if (ttKeys.isNotEmpty()) {
+        if (ttKeys.isNotEmpty() && (road.isBlank() || limitMph == null)) {
           runCatching {
             val respBody =
               ApiKeyRing.executeWithFailover("TOMTOM", ttKeys) { rawKey ->
@@ -137,10 +208,10 @@ internal object MapsSpeedLimitClient {
                 addr?.optString("streetName").orEmpty().ifBlank {
                   addr?.optString("freeformAddress").orEmpty()
                 }
-              if (street.isNotBlank()) road = street
+              if (road.isBlank() && street.isNotBlank()) road = street
               val limitStr = addr?.optString("speedLimit").orEmpty()
               val mph = parseRoadSpeedLimitMph(limitStr, defaultAsKmh = false)
-              if (mph != null) {
+              if (limitMph == null && mph != null) {
                 limitMph = mph
                 limitSource = "TOMTOM LIVE"
               }
@@ -150,7 +221,7 @@ internal object MapsSpeedLimitClient {
 
         // Query Overpass OSM mirrors for speed limits, road names, highway classes & school zones
         val overpassQuery =
-          """[out:json][timeout:8];(way(around:65,$lat,$lng)["highway"];node(around:130,$lat,$lng)["amenity"="school"];way(around:130,$lat,$lng)["amenity"="school"];);out tags 25;"""
+          """[out:json][timeout:8];(way(around:95,$lat,$lng)["highway"];node(around:130,$lat,$lng)["amenity"="school"];way(around:130,$lat,$lng)["amenity"="school"];);out tags 25;"""
         val encodedOverpass = URLEncoder.encode(overpassQuery, "UTF-8")
         val overpassMirrors =
           listOf(
@@ -164,7 +235,7 @@ internal object MapsSpeedLimitClient {
             val req =
               Request.Builder()
                 .url(mirrorUrl)
-                .header("User-Agent", "RuralERidesGO/53.0 Android")
+                .header("User-Agent", "RuralERidesGO/54.0 Android")
                 .get()
                 .build()
             val body =
@@ -231,7 +302,7 @@ internal object MapsSpeedLimitClient {
             val req =
               Request.Builder()
                 .url(nomUrl)
-                .header("User-Agent", "RuralERidesGO/53.0 Android")
+                .header("User-Agent", "RuralERidesGO/54.0 Android")
                 .get()
                 .build()
             val body =
@@ -266,6 +337,9 @@ internal object MapsSpeedLimitClient {
                 if (statutory != null) {
                   limitMph = statutory
                   limitSource = "ROAD CLASS"
+                } else if (addr?.optString("road").orEmpty().isNotBlank()) {
+                  limitMph = 25
+                  limitSource = "ROAD CLASS"
                 }
               }
             }
@@ -289,6 +363,11 @@ internal object MapsSpeedLimitClient {
               if (place.isNotBlank()) road = place
             }
           }
+        }
+
+        if (limitMph == null && road.isNotBlank()) {
+          limitMph = if (schoolNearby) 20 else 25
+          limitSource = if (schoolNearby) "SCHOOL ZONE" else "STATUTORY"
         }
 
         LiveCloudServices.RoadSignInfo(

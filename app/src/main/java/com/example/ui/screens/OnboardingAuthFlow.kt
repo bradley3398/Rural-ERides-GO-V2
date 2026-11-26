@@ -137,8 +137,8 @@ fun AuthLoginScreen(
   val ctx = LocalContext.current
   val loginPrefs = remember(ctx) { ctx.getSharedPreferences("rural_erides_login_prefs", Context.MODE_PRIVATE) }
 
-  // Prefer Supabase (Email/Password + Non-Play Google OAuth) when configured, otherwise Firebase Google
-  var selectedProvider by remember(supabaseConfigured) { mutableIntStateOf(if (supabaseConfigured) 0 else 1) } // 0 = Supabase GoTrue, 1 = Firebase Google
+  // Default to Firebase Google Sign-In (original Build 23/26 flow), with Email/Supabase tab right next to it
+  var selectedProvider by remember { mutableIntStateOf(1) } // 1 = Firebase Google, 0 = Supabase GoTrue
   var authMode by remember { mutableIntStateOf(0) } // 0 = Sign In, 1 = Register
   var rememberEmail by remember { mutableStateOf(loginPrefs.getBoolean("remember_email", true)) }
   var email by remember { mutableStateOf(if (rememberEmail) loginPrefs.getString("saved_email", "").orEmpty() else "") }

@@ -110,6 +110,38 @@ test("Owner-only /users/{uid} and subcollections isolate PII and reject cross-us
   await assertFails(bobDb.collection("users").doc(ALICE_UID).get());
   await assertFails(bobDb.collection("users").doc(ALICE_UID).update({ callsign: "HIJACK" }));
 
+  // Owner cannot change callsign once locked
+  await assertFails(
+    aliceDb.collection("users").doc(ALICE_UID).update({
+      callsign: "NEW_CALLSIGN",
+      updatedAt: pastDate(1000),
+    })
+  );
+
+  // Legacy/partial document without callsign can be healed once by owner
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().collection("users").doc(BOB_UID).set({
+      userId: BOB_UID,
+      displayName: "Bob",
+    });
+  });
+  await assertSucceeds(
+    bobDb.collection("users").doc(BOB_UID).update({
+      userId: BOB_UID,
+      displayName: "Bob Rider",
+      callsign: "VOLT_BOB",
+      email: "bob@example.com",
+      activeVehicleId: "",
+      unitSystem: "IMPERIAL",
+      emergencyContactName: "",
+      sosContactNumber: "",
+      medicalProfile: "",
+      acceptedLegal: true,
+      createdAt: ts,
+      updatedAt: ts,
+    })
+  );
+
   // Subcollections: vehicle + ride + prayer
   await assertSucceeds(
     aliceDb.collection("users").doc(ALICE_UID).collection("vehicles").doc("veh_1").set({

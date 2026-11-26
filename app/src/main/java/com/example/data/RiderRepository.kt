@@ -61,16 +61,22 @@ class RiderRepository(
       val existingUser = userRef.get().await()
       val existingCallsign = existingUser.getString("callsign").orEmpty().trim()
       val lockedCallsign = if (existingCallsign.isNotBlank()) existingCallsign else cleanCallsign
+      val cleanDisplayName = displayName.trim().take(60).ifBlank { lockedCallsign }
+      val cleanEmail =
+        email.trim().take(120).ifBlank {
+          existingUser.getString("email").orEmpty().trim().take(120).ifBlank { "pilot@ruralerides.app" }
+        }
+      val cleanUnit = if (unitSystem == "METRIC") "METRIC" else "IMPERIAL"
       if (!existingUser.exists()) {
         userRef
           .set(
             mapOf(
               "userId" to userId,
-              "displayName" to displayName.trim().take(60).ifBlank { lockedCallsign },
+              "displayName" to cleanDisplayName,
               "callsign" to lockedCallsign,
-              "email" to email.trim().take(120).ifBlank { "pilot@ruralerides.app" },
+              "email" to cleanEmail,
               "activeVehicleId" to activeVehicleId.take(128),
-              "unitSystem" to if (unitSystem == "METRIC") "METRIC" else "IMPERIAL",
+              "unitSystem" to cleanUnit,
               "emergencyContactName" to emergencyContactName.trim().take(60),
               "sosContactNumber" to sosContactNumber.trim().take(30),
               "medicalProfile" to medicalProfile.trim().take(200),
@@ -81,20 +87,26 @@ class RiderRepository(
           )
           .await()
       } else {
-        userRef
-          .update(
-            mapOf(
-              "displayName" to displayName.trim().take(60).ifBlank { lockedCallsign },
-              "activeVehicleId" to activeVehicleId.take(128),
-              "unitSystem" to if (unitSystem == "METRIC") "METRIC" else "IMPERIAL",
-              "emergencyContactName" to emergencyContactName.trim().take(60),
-              "sosContactNumber" to sosContactNumber.trim().take(30),
-              "medicalProfile" to medicalProfile.trim().take(200),
-              "acceptedLegal" to acceptedLegal,
-              "updatedAt" to FieldValue.serverTimestamp(),
-            )
+        val updateMap =
+          mutableMapOf<String, Any>(
+            "userId" to userId,
+            "displayName" to cleanDisplayName,
+            "email" to cleanEmail,
+            "activeVehicleId" to activeVehicleId.take(128),
+            "unitSystem" to cleanUnit,
+            "emergencyContactName" to emergencyContactName.trim().take(60),
+            "sosContactNumber" to sosContactNumber.trim().take(30),
+            "medicalProfile" to medicalProfile.trim().take(200),
+            "acceptedLegal" to acceptedLegal,
+            "updatedAt" to FieldValue.serverTimestamp(),
           )
-          .await()
+        if (existingCallsign.isBlank()) {
+          updateMap["callsign"] = lockedCallsign
+        }
+        if (existingUser.getTimestamp("createdAt") == null) {
+          updateMap["createdAt"] = FieldValue.serverTimestamp()
+        }
+        userRef.update(updateMap).await()
       }
 
       val pubRef = db.collection("user_profiles").document(userId)
@@ -122,13 +134,29 @@ class RiderRepository(
           )
           .await()
       } else {
-        pubRef
-          .update(
-            mapOf(
-              "updatedAt" to FieldValue.serverTimestamp(),
-            )
+        val existingPubCallsign = existingPub.getString("callsign").orEmpty().trim()
+        val pubUpdates =
+          mutableMapOf<String, Any>(
+            "userId" to userId,
+            "rankBadge" to existingPub.getString("rankBadge").orEmpty().take(40).ifBlank { "Rookie Pilot" },
+            "xpPoints" to (existingPub.getLong("xpPoints") ?: 0L).coerceIn(0L, 10_000_000L),
+            "totalKm" to (existingPub.getDouble("totalKm") ?: 0.0).coerceIn(0.0, 1_000_000.0),
+            "ridesCount" to (existingPub.getLong("ridesCount") ?: 0L).coerceIn(0L, 100_000L),
+            "verified" to (existingPub.getBoolean("verified") ?: false),
+            "banned" to (existingPub.getBoolean("banned") ?: false),
+            "trustScore" to (existingPub.getLong("trustScore") ?: 100L).coerceIn(0L, 100L),
+            "vehicleSummary" to existingPub.getString("vehicleSummary").orEmpty().take(100).ifBlank { "PEV Unit" },
+            "visibility" to
+              (existingPub.getString("visibility")?.takeIf { it in listOf("PUBLIC", "PRIVATE") } ?: "PRIVATE"),
+            "updatedAt" to FieldValue.serverTimestamp(),
           )
-          .await()
+        if (existingPubCallsign.isBlank()) {
+          pubUpdates["callsign"] = lockedCallsign
+        }
+        if (existingPub.getTimestamp("createdAt") == null) {
+          pubUpdates["createdAt"] = FieldValue.serverTimestamp()
+        }
+        pubRef.update(pubUpdates).await()
       }
       Result.success(Unit)
     } catch (e: CancellationException) {
@@ -141,10 +169,13 @@ class RiderRepository(
   suspend fun setActiveVehicle(userId: String, vehicleId: String): Result<Unit> =
     try {
       requireUid(userId)
-      db.collection("users")
-        .document(userId)
-        .update(mapOf("activeVehicleId" to vehicleId, "updatedAt" to FieldValue.serverTimestamp()))
-        .await()
+      val ref = db.collection("users").document(userId)
+      val snap = ref.get().await()
+      if (snap.exists() && !snap.getString("callsign").isNullOrBlank()) {
+        ref
+          .update(mapOf("activeVehicleId" to vehicleId.take(128), "updatedAt" to FieldValue.serverTimestamp()))
+          .await()
+      }
       Result.success(Unit)
     } catch (e: CancellationException) {
       throw e

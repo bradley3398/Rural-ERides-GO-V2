@@ -288,9 +288,8 @@ fun DirectMessagesSheet(
     Column(
       Modifier
         .fillMaxWidth()
-        .fillMaxHeight(0.94f)
+        .fillMaxHeight(0.92f)
         .navigationBarsPadding()
-        .imePadding()
         .padding(horizontal = 14.dp, vertical = 6.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

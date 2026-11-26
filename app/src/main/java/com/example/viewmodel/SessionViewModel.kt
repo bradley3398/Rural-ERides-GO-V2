@@ -385,13 +385,23 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
           _authStatusMessage.value = "${res.reason} — switching to secure Google Browser Sign-In..."
           val webRes = authRepo.signInWithGoogleWebOAuth(activity)
           val shaHint = res.appSha1?.let { " (APK SHA-1: $it)" }.orEmpty()
-          _authStatusMessage.value =
-            when (webRes) {
-              is SignInResult.Success -> ""
-              is SignInResult.Cancelled -> "Google Browser Sign-In dismissed.$shaHint"
-              is SignInResult.Error -> "${webRes.message}$shaHint"
-              else -> "Could not retrieve Google account.$shaHint"
+          if (webRes is SignInResult.Error &&
+            webRes.message.contains("ERROR_INVALID_CERT_HASH", ignoreCase = true) &&
+            supabaseService.isConfigured()
+          ) {
+            _authStatusMessage.value = "Switching to Non-Play Google Browser Sign-In..."
+            supabaseService.launchGoogleOAuthInBrowser(activity).onFailure {
+              _authStatusMessage.value = "${webRes.message}$shaHint"
             }
+          } else {
+            _authStatusMessage.value =
+              when (webRes) {
+                is SignInResult.Success -> ""
+                is SignInResult.Cancelled -> "Google Browser Sign-In dismissed.$shaHint"
+                is SignInResult.Error -> "${webRes.message}$shaHint"
+                else -> "Could not retrieve Google account.$shaHint"
+              }
+          }
           _authBusy.value = false
         }
         is SignInResult.Error -> {
@@ -440,15 +450,23 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
           val shaHint = res.appSha1?.let { " (APK SHA-1: $it)" }.orEmpty()
           if (activity != null) {
             _authStatusMessage.value = "${res.reason} — switching to secure Google Browser Sign-In..."
-            when (val webRes = authRepo.signInWithGoogleWebOAuth(activity)) {
-              is SignInResult.Success -> _authStatusMessage.value = ""
-              is SignInResult.Cancelled ->
-                _authStatusMessage.value =
-                  "Google Browser Sign-In dismissed.$shaHint"
-              is SignInResult.Error ->
+            val webRes = authRepo.signInWithGoogleWebOAuth(activity)
+            if (webRes is SignInResult.Error &&
+              webRes.message.contains("ERROR_INVALID_CERT_HASH", ignoreCase = true) &&
+              supabaseService.isConfigured()
+            ) {
+              _authStatusMessage.value = "Switching to Non-Play Google Browser Sign-In..."
+              supabaseService.launchGoogleOAuthInBrowser(activity).onFailure {
                 _authStatusMessage.value = "${webRes.message}$shaHint"
-              else ->
-                _authStatusMessage.value = "${res.reason}$shaHint"
+              }
+            } else {
+              _authStatusMessage.value =
+                when (webRes) {
+                  is SignInResult.Success -> ""
+                  is SignInResult.Cancelled -> "Google Browser Sign-In dismissed.$shaHint"
+                  is SignInResult.Error -> "${webRes.message}$shaHint"
+                  else -> "${res.reason}$shaHint"
+                }
             }
           } else {
             _authStatusMessage.value =
@@ -477,7 +495,18 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         is SignInResult.FallbackToLegacyPicker,
         is SignInResult.FallbackToWebOAuth ->
           _authStatusMessage.value = "Could not retrieve Google account."
-        is SignInResult.Error -> _authStatusMessage.value = res.message
+        is SignInResult.Error -> {
+          if (res.message.contains("ERROR_INVALID_CERT_HASH", ignoreCase = true) &&
+            supabaseService.isConfigured()
+          ) {
+            _authStatusMessage.value = "Switching to Non-Play Google Browser Sign-In..."
+            supabaseService.launchGoogleOAuthInBrowser(activity).onFailure {
+              _authStatusMessage.value = res.message
+            }
+          } else {
+            _authStatusMessage.value = res.message
+          }
+        }
       }
       _authBusy.value = false
     }
@@ -596,39 +625,43 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
       else callsign.trim().uppercase().take(24).ifBlank { "PILOT_${active.uid.take(5).uppercase()}" }
     viewModelScope.launch {
       _authBusy.value = true
+      _authStatusMessage.value = ""
+      val localProf =
+        RiderProfile(
+          id = active.uid,
+          userId = active.uid,
+          displayName = displayName.ifBlank { active.displayName.ifBlank { effectiveCallsign } },
+          callsign = effectiveCallsign,
+          email = active.email.ifBlank { "pilot@ruralerides.app" },
+          activeVehicleId = _profile.value?.activeVehicleId.orEmpty(),
+          unitSystem = if (unitSystem == "METRIC") "METRIC" else "IMPERIAL",
+          emergencyContactName = emergencyName.trim(),
+          sosContactNumber = sosNumber.trim(),
+          medicalProfile = medicalInfo.trim(),
+          acceptedLegal = acceptedLegal,
+        )
+      localVault.saveProfile(localProf)
       if (active.firebaseAuthenticated) {
         val res =
           riderRepo.upsertProfileAndPublicIdentity(
             userId = active.uid,
-            displayName = displayName.ifBlank { active.displayName.ifBlank { effectiveCallsign } },
+            displayName = localProf.displayName,
             callsign = effectiveCallsign,
-            email = active.email,
-            unitSystem = unitSystem,
+            email = localProf.email,
+            unitSystem = localProf.unitSystem,
             emergencyContactName = emergencyName,
             sosContactNumber = sosNumber,
             medicalProfile = medicalInfo,
             acceptedLegal = acceptedLegal,
-            activeVehicleId = _profile.value?.activeVehicleId.orEmpty(),
+            activeVehicleId = localProf.activeVehicleId,
           )
-        if (res.isFailure) {
+        if (res.isSuccess) {
+          _profile.value = localProf
+          _authStatusMessage.value = ""
+        } else {
           _authStatusMessage.value = res.exceptionOrNull()?.message ?: "Profile save failed."
         }
       } else {
-        val localProf =
-          RiderProfile(
-            id = active.uid,
-            userId = active.uid,
-            displayName = displayName.ifBlank { active.displayName.ifBlank { effectiveCallsign } },
-            callsign = effectiveCallsign,
-            email = active.email,
-            activeVehicleId = _profile.value?.activeVehicleId.orEmpty(),
-            unitSystem = if (unitSystem == "METRIC") "METRIC" else "IMPERIAL",
-            emergencyContactName = emergencyName.trim(),
-            sosContactNumber = sosNumber.trim(),
-            medicalProfile = medicalInfo.trim(),
-            acceptedLegal = acceptedLegal,
-          )
-        localVault.saveProfile(localProf)
         _profile.value = localProf
         if (active.provider == AuthProviderType.SUPABASE) {
           if (existingLockedCallsign.isBlank()) {

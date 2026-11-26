@@ -1033,13 +1033,24 @@ class ExampleRobolectricTest {
   @Test
   fun `rural-erides-go google services resources match com aistudio volttrail kqrmvx`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
-    assertEquals("rural-erides-go", context.getString(R.string.project_id))
-    assertEquals("1:1030367232900:android:b96563e096b095d6c993d1", context.getString(R.string.google_app_id))
+    assertEquals("gen-lang-client-0240158881", context.getString(R.string.project_id))
+    assertEquals("1:539870395414:android:70991fcab944f52a22c937", context.getString(R.string.google_app_id))
     assertEquals(
-      "1030367232900-gqci4dcbsd2fo92m6b2oupupo8sqkvpi.apps.googleusercontent.com",
+      "539870395414-kmmgkid6dm7eobk513fu5k2rv4v9aecn.apps.googleusercontent.com",
       context.getString(R.string.default_web_client_id),
     )
-    assertEquals("(default)", context.getString(R.string.firestore_database_id))
+    assertEquals(
+      "ai-studio-android-volttrai-e4546593-bf25-48ba-aec4-c0e7d622a323",
+      context.getString(R.string.firestore_database_id),
+    )
+    assertEquals(
+      "6LdyCCcuAAAAAO8Y3BnUFlmX2GUOUM0NNw5W-zqv",
+      context.getString(R.string.recaptcha_site_key),
+    )
+    assertEquals(
+      "https://roads.googleapis.com/v1/speedLimits?path=0,0&key=[HIDDEN]",
+      com.example.core.ApiKeyRing.redactSecrets("https://roads.googleapis.com/v1/speedLimits?path=0,0&key=AIzaSecret123456"),
+    )
   }
 
   @Test

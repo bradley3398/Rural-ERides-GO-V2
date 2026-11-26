@@ -8,8 +8,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -25,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -178,8 +182,25 @@ fun VoltTrailRootApp(
     onConsumedOAuthUri()
   }
 
-  LaunchedEffect(activeUser?.uid, activeUser?.firebaseAuthenticated) {
-    cockpitVm.bindUser(activeUser?.uid, activeUser?.firebaseAuthenticated == true)
+  val supabaseSession by sessionVm.supabaseSession.collectAsStateWithLifecycle()
+  val openDmSheetRequested by socialVm.openDmSheetRequested.collectAsStateWithLifecycle()
+
+  LaunchedEffect(activeUser?.uid, activeUser?.firebaseAuthenticated, supabaseSession?.accessToken, settings.copilotPersona) {
+    val uid = activeUser?.uid
+    val fbAuth = activeUser?.firebaseAuthenticated == true
+    val sbToken = supabaseSession?.accessToken.orEmpty()
+    cockpitVm.bindUser(uid, fbAuth)
+    socialVm.bindUser(
+      uid = uid,
+      firebaseAuthenticated = fbAuth,
+      defaultPersona = settings.copilotPersona,
+      supabaseAccessToken = sbToken,
+    )
+    radarVm.bindCloudSession(
+      uid = uid,
+      firebaseAuthenticated = fbAuth,
+      supabaseAccessToken = sbToken,
+    )
   }
 
   var showSplash by rememberSaveable { mutableStateOf(true) }
@@ -188,6 +209,13 @@ fun VoltTrailRootApp(
   var telemetryStudioRideId by rememberSaveable { mutableStateOf<String?>(null) }
   var startMenuOpen by remember { mutableStateOf(false) }
   var dmSheetOpen by rememberSaveable { mutableStateOf(false) }
+
+  LaunchedEffect(openDmSheetRequested) {
+    if (openDmSheetRequested != null) {
+      dmSheetOpen = true
+      socialVm.clearOpenDmSheetRequest()
+    }
+  }
 
   LaunchedEffect(pendingTargetTab, pendingOpenDm) {
     pendingTargetTab?.let { tabKey ->
@@ -409,14 +437,17 @@ fun VoltTrailRootApp(
                       onReplayStartupIntro = { showSplash = true },
                     )
 
+                  val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
                   if (!overlayConsumed) {
                     Column(
                       modifier =
                         Modifier
                           .fillMaxSize()
-                          .then(if (!useTopRibbon) Modifier.statusBarsPadding() else Modifier),
+                          .then(if (!useTopRibbon) Modifier.statusBarsPadding() else Modifier)
+                          .imePadding(),
                     ) {
-                      if (useTopRibbon) {
+                      if (useTopRibbon && !isImeVisible) {
                         TacticalTopRibbonBar(
                           tabs = navTabs,
                           activeTabIdx = activeTabIdx,
@@ -426,6 +457,7 @@ fun VoltTrailRootApp(
 
                       val availableRelease = (appUpdateState as? AppUpdateCheckState.UpdateAvailable)?.release
                       if (
+                        !isImeVisible &&
                         availableRelease != null &&
                         !updateBannerDismissed &&
                         availableRelease.tagName != settings.skippedUpdateTag
@@ -443,14 +475,14 @@ fun VoltTrailRootApp(
                             .weight(1f)
                             .fillMaxWidth()
                             .then(
-                              if (useTopRibbon || useLeftRail || useRightRail) {
+                              if (!isImeVisible && (useTopRibbon || useLeftRail || useRightRail)) {
                                 Modifier.navigationBarsPadding()
                               } else {
                                 Modifier
                               }
                             ),
                       ) {
-                        if (useLeftRail) {
+                        if (useLeftRail && !isImeVisible) {
                           TacticalSideNavigationRail(
                             tabs = navTabs,
                             activeTabIdx = activeTabIdx,
@@ -484,7 +516,7 @@ fun VoltTrailRootApp(
                           }
                         }
 
-                        if (useRightRail) {
+                        if (useRightRail && !isImeVisible) {
                           TacticalSideNavigationRail(
                             tabs = navTabs,
                             activeTabIdx = activeTabIdx,
@@ -494,7 +526,7 @@ fun VoltTrailRootApp(
                         }
                       }
 
-                      if (!useTopRibbon && !useLeftRail && !useRightRail) {
+                      if (!isImeVisible && !useTopRibbon && !useLeftRail && !useRightRail) {
                         if (useClassicTaskbar) {
                           renderWindowsTaskbar()
                         } else {
@@ -510,23 +542,25 @@ fun VoltTrailRootApp(
                     }
                   }
 
-                  Box(
-                    modifier =
-                      Modifier
-                        .align(Alignment.BottomCenter)
-                        .then(
-                          if (overlayConsumed || useTopRibbon || useLeftRail || useRightRail) {
-                            Modifier.navigationBarsPadding()
-                          } else {
-                            Modifier
-                          }
-                        )
-                        .padding(bottom = if (overlayConsumed) 12.dp else miniPlayerBottomOffset),
-                  ) {
-                    YoutubeMiniPlayerHost(
-                      sessionVm = sessionVm,
-                      socialVm = socialVm,
-                    )
+                  if (!isImeVisible) {
+                    Box(
+                      modifier =
+                        Modifier
+                          .align(Alignment.BottomCenter)
+                          .then(
+                            if (overlayConsumed || useTopRibbon || useLeftRail || useRightRail) {
+                              Modifier.navigationBarsPadding()
+                            } else {
+                              Modifier
+                            }
+                          )
+                          .padding(bottom = if (overlayConsumed) 12.dp else miniPlayerBottomOffset),
+                    ) {
+                      YoutubeMiniPlayerHost(
+                        sessionVm = sessionVm,
+                        socialVm = socialVm,
+                      )
+                    }
                   }
                 }
               }

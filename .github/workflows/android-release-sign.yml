@@ -135,8 +135,12 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           # Materialize repository keystore (matches Firebase SHA-1 in app/google-services.json)
-          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
-            tr -d '\r\n ' < debug.keystore.base64 | base64 --decode > debug.keystore
+          if [ ! -f debug.keystore ]; then
+            if [ -f debug.keystore.base64 ]; then
+              tr -d '\r\n ' < debug.keystore.base64 | base64 --decode > debug.keystore
+            elif [ -f gradle/release-keystore.base64 ]; then
+              tr -d '\r\n ' < gradle/release-keystore.base64 | base64 --decode > debug.keystore
+            fi
           fi
 
           if [ "$SIGNING_MODE" = "custom" ]; then

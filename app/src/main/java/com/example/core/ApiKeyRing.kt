@@ -12,11 +12,14 @@ class ApiKeyFailoverException(
 ) : IllegalStateException(message)
 
 /**
- * Central API Key validation & cooldown guard for single primary per-service keys.
+ * Central API Key failover ring & secret redaction guard.
+ * Reads configured secrets from BuildConfig while ensuring raw key values are never exposed in UI or logs.
  */
 object ApiKeyRing {
   private const val COOLDOWN_MS = 5L * 60L * 1000L
   private val keyCooldownUntilMs = ConcurrentHashMap<String, Long>()
+  private val urlSecretParamRegex =
+    Regex("""(?i)([?&](?:key|api_key|apikey|access_token|appid|token)=)([^&\s]+)""")
 
   fun isRealKey(raw: String?): Boolean {
     val v = raw?.trim().orEmpty()
@@ -25,6 +28,8 @@ object ApiKeyRing {
     if (v.startsWith("YOUR_", ignoreCase = true)) return false
     if (v.startsWith("REPLACE_", ignoreCase = true)) return false
     if (v.contains("PLACEHOLDER", ignoreCase = true)) return false
+    if (v.equals("DEFAULT_API_KEY", ignoreCase = true)) return false
+    if (v.equals("null", ignoreCase = true)) return false
     return true
   }
 
@@ -34,11 +39,17 @@ object ApiKeyRing {
       .filter { isRealKey(it) }
       .distinct()
 
-  fun orderedKeys(service: String, pool: List<String>): List<String> = pool
+  fun orderedKeys(service: String, pool: List<String>): List<String> {
+    if (pool.size <= 1) return pool
+    val now = System.currentTimeMillis()
+    val healthy = pool.filter { key -> now >= (keyCooldownUntilMs[cooldownId(service, key)] ?: 0L) }
+    val cooling = pool.filter { key -> now < (keyCooldownUntilMs[cooldownId(service, key)] ?: 0L) }
+    return healthy + cooling
+  }
 
   fun markKeyThrottled(service: String, key: String, httpCode: Int = 429) {
     keyCooldownUntilMs[cooldownId(service, key)] = System.currentTimeMillis() + COOLDOWN_MS
-    Log.w(KEY_RING_TAG, "[$service] API key throttled/rejected (HTTP $httpCode); cooling down for 5m.")
+    Log.w(KEY_RING_TAG, "[$service] API key slot throttled/rejected (HTTP $httpCode); cooling down for 5m.")
   }
 
   fun markKeyHealthy(service: String, key: String) {
@@ -59,22 +70,26 @@ object ApiKeyRing {
     pool: List<String>,
     block: (apiKey: String) -> T,
   ): T {
-    require(pool.isNotEmpty()) { "No API key configured for $service" }
-    val key = pool.first()
-    try {
-      val result = block(key)
-      markKeyHealthy(service, key)
-      return result
-    } catch (e: ApiKeyFailoverException) {
-      markKeyThrottled(service, key, e.httpCode)
-      throw e
-    } catch (t: Throwable) {
-      val msg = t.message.orEmpty()
-      if (msg.contains("429") || msg.contains("403") || msg.contains("401")) {
-        markKeyThrottled(service, key, if (msg.contains("429")) 429 else 403)
+    val candidates = orderedKeys(service, pool)
+    require(candidates.isNotEmpty()) { "No API key configured for $service" }
+    var lastError: Throwable? = null
+    for (key in candidates) {
+      try {
+        val result = block(key)
+        markKeyHealthy(service, key)
+        return result
+      } catch (e: ApiKeyFailoverException) {
+        markKeyThrottled(service, key, e.httpCode)
+        lastError = e
+      } catch (t: Throwable) {
+        val msg = t.message.orEmpty()
+        if (msg.contains("429") || msg.contains("403") || msg.contains("401")) {
+          markKeyThrottled(service, key, if (msg.contains("429")) 429 else 403)
+        }
+        lastError = t
       }
-      throw t
     }
+    throw lastError ?: IllegalStateException("All configured API keys failed for $service")
   }
 
   fun <T> executeWithCseFailover(
@@ -82,49 +97,167 @@ object ApiKeyRing {
     block: (apiKey: String, cx: String) -> T,
   ): T {
     require(pairs.isNotEmpty()) { "No Google CSE key configured" }
-    val (key, cx) = pairs.first()
-    try {
-      val result = block(key, cx)
-      markKeyHealthy("GOOGLE_CSE", key)
-      return result
-    } catch (e: ApiKeyFailoverException) {
-      markKeyThrottled("GOOGLE_CSE", key, e.httpCode)
-      throw e
-    } catch (t: Throwable) {
-      val msg = t.message.orEmpty()
-      if (msg.contains("429") || msg.contains("403") || msg.contains("401")) {
-        markKeyThrottled("GOOGLE_CSE", key, if (msg.contains("429")) 429 else 403)
+    val now = System.currentTimeMillis()
+    val ordered =
+      pairs.sortedBy { (key, _) ->
+        if (now >= (keyCooldownUntilMs[cooldownId("GOOGLE_CSE", key)] ?: 0L)) 0 else 1
       }
-      throw t
+    var lastError: Throwable? = null
+    for ((key, cx) in ordered) {
+      try {
+        val result = block(key, cx)
+        markKeyHealthy("GOOGLE_CSE", key)
+        return result
+      } catch (e: ApiKeyFailoverException) {
+        markKeyThrottled("GOOGLE_CSE", key, e.httpCode)
+        lastError = e
+      } catch (t: Throwable) {
+        val msg = t.message.orEmpty()
+        if (msg.contains("429") || msg.contains("403") || msg.contains("401")) {
+          markKeyThrottled("GOOGLE_CSE", key, if (msg.contains("429")) 429 else 403)
+        }
+        lastError = t
+      }
     }
+    throw lastError ?: IllegalStateException("All configured Google CSE keys failed")
   }
 
-  // Public release safety: private third-party API keys are intentionally excluded from
-  // the Android client APK/BuildConfig so they cannot be extracted by decompilation.
-  // Live features operate via keyless public endpoints + Firebase AI Logic + App Check + Firestore.
-  fun youtubeKeys(): List<String> = emptyList()
+  fun googleMapsKeys(): List<String> =
+    collectPool(
+      BuildConfig.GOOGLE_MAPS_API_KEY,
+      BuildConfig.MAPS_API_KEY,
+      BuildConfig.GOOGLE_CLOUD_API_KEY,
+      BuildConfig.GOOGLE_API_KEY,
+    )
 
-  fun mapboxTokens(): List<String> = emptyList()
+  fun youtubeKeys(): List<String> =
+    collectPool(
+      BuildConfig.YOUTUBE_API_KEY,
+      BuildConfig.YOUTUBE_API_KEY_2,
+      BuildConfig.YOUTUBE_API_KEY_3,
+      BuildConfig.GOOGLE_CLOUD_API_KEY,
+      BuildConfig.GOOGLE_API_KEY,
+    )
 
-  fun openRouteServiceKeys(): List<String> = emptyList()
+  fun mapboxTokens(): List<String> =
+    collectPool(
+      BuildConfig.MAPBOX_ACCESS_TOKEN,
+      BuildConfig.MAPBOX_ACCESS_TOKEN_2,
+    )
 
-  fun tomTomKeys(): List<String> = emptyList()
+  fun openRouteServiceKeys(): List<String> =
+    collectPool(
+      BuildConfig.OPENROUTESERVICE_API_KEY,
+      BuildConfig.OPENROUTESERVICE_API_KEY_2,
+    )
 
-  fun openChargeMapKeys(): List<String> = emptyList()
+  fun tomTomKeys(): List<String> =
+    collectPool(
+      BuildConfig.TOMTOM_API_KEY,
+      BuildConfig.TOMTOM_API_KEY_2,
+    )
 
-  fun elevationKeys(): List<String> = emptyList()
+  fun openChargeMapKeys(): List<String> =
+    collectPool(
+      BuildConfig.OPENCHARGEMAP_API_KEY,
+      BuildConfig.OPENCHARGEMAP_API_KEY_2,
+    )
 
-  fun weatherKeys(): List<String> = emptyList()
+  fun elevationKeys(): List<String> =
+    collectPool(
+      BuildConfig.ELEVATION_API_KEY,
+      BuildConfig.GOOGLE_MAPS_API_KEY,
+      BuildConfig.MAPS_API_KEY,
+      BuildConfig.GOOGLE_CLOUD_API_KEY,
+      BuildConfig.GOOGLE_API_KEY,
+    )
 
-  fun tavilyKeys(): List<String> = emptyList()
+  fun weatherKeys(): List<String> =
+    collectPool(
+      BuildConfig.OPENWEATHER_API_KEY,
+      BuildConfig.OPENWEATHER_API_KEY_2,
+      BuildConfig.WEATHER_API_KEY,
+    )
 
-  fun braveKeys(): List<String> = emptyList()
+  fun tavilyKeys(): List<String> =
+    collectPool(
+      BuildConfig.TAVILY_API_KEY,
+      BuildConfig.TAVILY_API_KEY_2,
+    )
 
-  fun newsKeys(): List<String> = emptyList()
+  fun braveKeys(): List<String> =
+    collectPool(
+      BuildConfig.BRAVE_API_KEY,
+      BuildConfig.BRAVE_SEARCH_API_KEY,
+      BuildConfig.BRAVE_API_KEY_2,
+    )
 
-  fun imgbbKeys(): List<String> = emptyList()
+  fun newsKeys(): List<String> =
+    collectPool(
+      BuildConfig.NEWS_API_KEY,
+      BuildConfig.NEWS_API_KEY_2,
+    )
 
-  fun googleCsePairs(): List<Pair<String, String>> = emptyList()
+  fun imgbbKeys(): List<String> =
+    collectPool(
+      BuildConfig.IMGBB_API_KEY,
+      BuildConfig.IMGBB_API_KEY_2,
+    )
+
+  fun googleCsePairs(): List<Pair<String, String>> {
+    val result = mutableListOf<Pair<String, String>>()
+    val primaryKeys =
+      collectPool(
+        BuildConfig.GOOGLE_CSE_API_KEY,
+        BuildConfig.GOOGLE_CLOUD_API_KEY,
+        BuildConfig.GOOGLE_API_KEY,
+      )
+    if (isRealKey(BuildConfig.GOOGLE_CSE_CX)) {
+      val cx1 = BuildConfig.GOOGLE_CSE_CX.trim()
+      for (k in primaryKeys) {
+        result += (k to cx1)
+      }
+    }
+    if (isRealKey(BuildConfig.GOOGLE_CSE_API_KEY_2) && isRealKey(BuildConfig.GOOGLE_CSE_CX_2)) {
+      result += (BuildConfig.GOOGLE_CSE_API_KEY_2.trim() to BuildConfig.GOOGLE_CSE_CX_2.trim())
+    }
+    return result.distinct()
+  }
+
+  /**
+   * Scrubs any query-string secret parameters or raw configured secret values from logs or UI messages.
+   */
+  fun redactSecrets(raw: String?): String {
+    var text = raw.orEmpty()
+    if (text.isBlank()) return ""
+    text = text.replace(urlSecretParamRegex, "$1[HIDDEN]")
+    val allSecrets =
+      buildList {
+        addAll(googleMapsKeys())
+        addAll(youtubeKeys())
+        addAll(mapboxTokens())
+        addAll(openRouteServiceKeys())
+        addAll(tomTomKeys())
+        addAll(openChargeMapKeys())
+        addAll(elevationKeys())
+        addAll(weatherKeys())
+        addAll(tavilyKeys())
+        addAll(braveKeys())
+        addAll(newsKeys())
+        addAll(imgbbKeys())
+        googleCsePairs().forEach { (k, cx) ->
+          add(k)
+          add(cx)
+        }
+        if (isRealKey(BuildConfig.SUPABASE_ANON_KEY)) add(BuildConfig.SUPABASE_ANON_KEY.trim())
+      }.distinct()
+    for (secret in allSecrets) {
+      if (secret.length >= 8 && text.contains(secret)) {
+        text = text.replace(secret, "[HIDDEN]")
+      }
+    }
+    return text
+  }
 
   private fun cooldownId(service: String, key: String): String = "$service:${key.hashCode()}"
 }
