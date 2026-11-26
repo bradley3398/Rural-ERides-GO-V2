@@ -6,15 +6,16 @@
 
   <p>
     <a href="https://bradley3398.github.io/Rural-ERides-GO-V2/"><img src="https://img.shields.io/badge/GitHub%20Pages-Live%20Site-10B981?style=for-the-badge&logo=githubpages&logoColor=white" alt="GitHub Pages" /></a>
-    <a href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases/latest"><img src="https://img.shields.io/badge/Release-v60.0%20(Build%2060)-6366F1?style=for-the-badge&logo=android&logoColor=white" alt="Release v60.0" /></a>
+    <a href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases/latest"><img src="https://img.shields.io/badge/Release-v66.0%20(Build%2066)-6366F1?style=for-the-badge&logo=android&logoColor=white" alt="Release v66.0" /></a>
     <img src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose%20M3-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin & Jetpack Compose" />
     <img src="https://img.shields.io/badge/3D%20Engine-Hardware%20OpenGL%20ES%20GGX%20PBR-06B6D4?style=for-the-badge" alt="Hardware OpenGL ES GGX PBR" />
-    <img src="https://img.shields.io/badge/Backend-Firebase%20%26%20Gemini%20AI-F59E0B?style=for-the-badge&logo=firebase&logoColor=white" alt="Firebase & Gemini AI" />
+    <img src="https://img.shields.io/badge/Backend-Firebase%20%26%20Gemini%203.1%20Flash--Lite-F59E0B?style=for-the-badge&logo=firebase&logoColor=white" alt="Firebase & Gemini 3.1 Flash-Lite" />
   </p>
 
   <p>
     <a href="https://bradley3398.github.io/Rural-ERides-GO-V2/">🌐 User Website (GitHub Pages)</a> •
     <a href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases/latest">📦 Download Latest APK</a> •
+    <a href="#-live-app-screenshots-v660">📸 Screenshots</a> •
     <a href="#-core-features">⚡ Features</a> •
     <a href="#-building-from-source">🛠️ Build Guide</a> •
     <a href="#-release-history">📜 Changelog</a>
@@ -25,7 +26,32 @@
 
 ## Overview
 
-**Rural ERides GO** (`com.aistudio.volttrail.kqrmvx`) is a native Android companion suite built in **Kotlin & Jetpack Compose Material 3** for high-performance **Electric Unicycles (EUCs), e-Motos (Sur-Ron / Talaria / Stark Varg), Hyper-Scooters (Dualtron / InMotion / Nami), Fat-Tire e-Bikes (Super73 / Onyx), and Specialty PEVs**. Designed for riders who rely on Personal Electric Vehicles across rural backroads, trails, and daily utility routes, it combines real hardware telemetry, 88 realistic 3D PEV models with 3D off-road knobby tires, an interactive **PEV Knowledge & Certification Test**, an upgraded **Gravel Volt Runner 3D Game**, cloud-synced analytics, live weather/radar, multi-device audio/video calling, and Gemini AI diagnostics—with **100% live data and zero mockups**.
+**Rural ERides GO** (`com.aistudio.volttrail.kqrmvx`) is a native Android companion suite built in **Kotlin & Jetpack Compose Material 3** for high-performance **Electric Unicycles (EUCs), e-Motos (Sur-Ron / Talaria / Stark Varg), Hyper-Scooters (Dualtron / InMotion / Nami), Fat-Tire e-Bikes (Super73 / Onyx), and Specialty PEVs**. Designed for riders who rely on Personal Electric Vehicles across rural backroads, trails, and daily utility routes, it combines real hardware telemetry, 88 realistic 3D PEV models with 3D off-road knobby tires, an interactive **PEV Knowledge & Certification Test**, an upgraded **Gravel Volt Runner 3D Game**, cloud-synced analytics, TomTom Live speed limits & Mapbox radar, multi-device audio/video calling, and direct Cloud Console Gemini 3.1 Flash-Lite AI diagnostics—with **100% live data and zero mockups**.
+
+---
+
+## 📸 Live App Screenshots (v66.0)
+
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="public/assets/screenshots/01_splash_boot.jpg" alt="v66.0 Splash Boot & Sensor Check" width="180" /><br /><sub><b>1. v66.0 Boot &amp; 43-Sensor Check</b></sub></td>
+    <td align="center" width="25%"><img src="public/assets/screenshots/02_cockpit_dashboard.jpg" alt="Cockpit Home Dashboard" width="180" /><br /><sub><b>2. Cockpit Command Dashboard</b></sub></td>
+    <td align="center" width="25%"><img src="public/assets/screenshots/03_cockpit_s866_lcd.jpg" alt="S866 LCD Telemetry HUD" width="180" /><br /><sub><b>3. S866 LCD &amp; Telemetry</b></sub></td>
+    <td align="center" width="25%"><img src="public/assets/screenshots/04_cockpit_tomtom_map.jpg" alt="TomTom Live & Cockpit Map" width="180" /><br /><sub><b>4. TomTom Live &amp; Map</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="25%"><img src="public/assets/screenshots/05_radar_sos_map.jpg" alt="Rider Radar & SOS Flare" width="180" /><br /><sub><b>5. Rider Radar &amp; SOS Flare</b></sub></td>
+    <td align="center" width="25%"><img src="public/assets/screenshots/06_barn_ar_mechanic.jpg" alt="Barn & Bench AR Mechanic" width="180" /><br /><sub><b>6. Barn AR Mechanic (135 Tools)</b></sub></td>
+    <td align="center" width="25%"><img src="public/assets/screenshots/07_backroad_copilot.jpg" alt="Backroad Co-Pilot & Web Grounding" width="180" /><br /><sub><b>7. Backroad Co-Pilot AI</b></sub></td>
+    <td align="center" width="25%"><img src="public/assets/screenshots/08_channel_tv_radio.jpg" alt="Country Trail TV & Radio" width="180" /><br /><sub><b>8. Country Trail TV &amp; Radio</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="25%"><img src="public/assets/screenshots/09_channel_video_feed.jpg" alt="Rural ERides Video Theater Feed" width="180" /><br /><sub><b>9. Rural ERides Video Feed</b></sub></td>
+    <td align="center" width="25%"><img src="public/assets/screenshots/10_porch_talk_feed.jpg" alt="Porch Talk Social Feed" width="180" /><br /><sub><b>10. Porch Talk &amp; Stories</b></sub></td>
+    <td align="center" width="25%"><img src="public/assets/screenshots/11_porch_dms_calls.jpg" alt="Porch DMs & Live Calls" width="180" /><br /><sub><b>11. Porch DMs &amp; Live Calls</b></sub></td>
+    <td align="center" width="25%"><img src="public/assets/screenshots/12_live_board_composer.jpg" alt="Live Board Transmission Composer" width="180" /><br /><sub><b>12. Live Board Composer</b></sub></td>
+  </tr>
+</table>
 
 ---
 
@@ -111,7 +137,10 @@ gradle :app:testDebugUnitTest
 
 ## 📜 Release History
 
-- **v59.0 (Latest — Build 59)**: Permanently purged stale/orphaned Play Pre-Launch test pilots (`SHADOW_*`, `VALKYRIEONE`) from DMs, Boards, and Cloud Firestore `radar_riders` with admin cleanup rules and strict 5-minute live radar freshness; upgraded the pre-login Startup Loading Screen with new golden-hour driving-horizon artwork, a live forward-driving perspective road & headlight motion animation, dynamic current-theme color matching, full Holiday canopy garlands & particles, and a live Android `SensorManager` hardware sensor counter (`X / Y Sensors Loaded`) with armed subsystem chips; and added an interactive 5-screen App Screenshot Carousel to the GitHub Pages site.
+- **v66.0 (Latest — Build 66)**: Updated Play Console release build (`versionCode = 66`, `versionName = "66.0"`), verified live direct Google Cloud Console Gemini REST integration (`gemini-3.1-flash-lite` default + live web grounding, Barn Mechanic AI, Backroad Co-Pilot, Live Board AI Polish & Family-Friendly Media Shield), and refreshed the GitHub Pages showcase & README with all 12 real-device v66.0 screenshots.
+- **v65.0 (Build 65)**: Switched all Gemini AI, Vision AR, Co-Pilot, Studio Hub, Family Safety, and Neural TTS calls to direct Cloud Console Gemini REST (`DirectGeminiRestClient.kt`) using `gemini-3.1-flash-lite` as the app-wide default model.
+- **v60.0–v61.0 (Builds 60–61)**: Rebuilt live two-way CameraX video & G.711 voice calling, fixed YouTube in-app playback with hardware-accelerated WebView + Mobile Web fallback, added HUD Sensor Info & Multi-Axis Calibration, redesigned Settings & Rider Profile, added Family-Friendly Safety Shield, and rolled out universal phone & tablet safe-area layout framing.
+- **v59.0 (Build 59)**: Permanently purged stale/orphaned Play Pre-Launch test pilots (`SHADOW_*`, `VALKYRIEONE`) from DMs, Boards, and Cloud Firestore `radar_riders` with admin cleanup rules and strict 5-minute live radar freshness; upgraded the pre-login Startup Loading Screen with new golden-hour driving-horizon artwork, a live forward-driving perspective road & headlight motion animation, dynamic current-theme color matching, full Holiday canopy garlands & particles, and a live Android `SensorManager` hardware sensor counter (`X / Y Sensors Loaded`) with armed subsystem chips; and added an interactive App Screenshot Carousel to the GitHub Pages site.
 - **v58.0 (Build 58)**: Fixed the Direct Messages back-button crash and unified Back navigation across all screens, tabs, overlays, and modal sheets; replaced adaptive launcher notification icons with a dedicated monochrome status vector (`ic_stat_rural_pev`); fixed blank video posters on live two-way Video Calls with tuned cloud relay streaming; purged auto-generated bot pilots with expanded Firestore rules, cross-Gmail discovery, live **ONLINE NOW** presence badges, persistent Cloud Firestore following (`/users/{uid}/following/{targetUid}`), and instant in-app + system **Friend Request Notifications**; upgraded OEM HUDs with a true vector 7-segment hardware LCD/LED/TFT renderer; mounted sculpted high-poly 3D PEVs onto the dirt road with sky, trees, and procedural wildflowers in **Gravel Volt Runner 3D** with batched AO rendering in 3D Labs; hardened all Firebase AI Logic Gemini 3.x/4.x labs with multi-model fallback; and fixed the blank white GitHub Pages site with a zero-CDN self-contained landing page.
 - **v57.0 (Build 57)**: Upgraded live two-way Audio & Video calling between phones and tablets (transparent full-screen video stage, `MODIFY_AUDIO_SETTINGS` speakerphone hardware routing + 2.4x WebAudio speakerphone gain boost, race-free WebRTC handshake, and automatic Live Cloud Audio/Video Relay across strict NAT), eliminated all auto-generated `PILOT_XXXXX` / bot accounts while auto-deriving real human callsigns from Google identity, and upgraded the **Long-Range Optical Morse Transceiver** with 1x–6x Telephoto CameraX zoom, 3x3 point-source hotspot peak tracking, Schmitt-trigger temporal contrast for 150m+ distance, aiming lock beam preamble, and synchronized dual LED + screen strobe.
 - **v56.0 (Build 56)**: Massive 3D CAD & Dyno Lab realistic model upgrade (24 raised 3D knobby tire tread lugs, dark vulcanized rubber, wave-slotted cross-drilled rotors, copper stator cores, and 100% zero-blank-screen rendering across `Studio 3D PBR`, `OpenGL ES 3.0 PBR`, and `WebGL 2.0 GLB`), new interactive **PEV Knowledge & Certification Test** tab with Gemini AI custom question generation, upgraded **Gravel Volt Runner 3D Game** with multi-part 3D PEV rigs and live Rig Selector, symmetric indoor/outdoor multi-device Rider Radar beacon discovery, 1-tap Board/Radar friending for all signed-in accounts, and full-screen incoming audio/video call alerts.

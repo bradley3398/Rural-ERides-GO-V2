@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#070B14" />
-  <title>Rural ERides GO — Universal PEV Avionics, 3D PBR Rig Lab &amp; Rider Radar (v60.0)</title>
-  <meta name="description" content="Rural ERides GO (v60.0 / Build 60) — Native Android avionics, authentic OEM PEV LCD/LED/TFT HUDs, hardware OpenGL ES GGX PBR 3D Rig Lab, Gravel Volt Runner 3D, live video calling, Rider Radar, and Gemini AI Mechanic." />
+  <title>Rural ERides GO — Universal PEV Avionics, OEM HUDs, Radar &amp; Gemini AI (v66.0)</title>
+  <meta name="description" content="Rural ERides GO (v66.0 / Build 66) — Native Android PEV avionics with 43-sensor boot telemetry, authentic S866 &amp; OEM LCD/TFT HUDs, TomTom live speed limits, Mapbox &amp; Radar SOS, Barn AR Mechanic (Gemini 3.1 Flash-Lite), Backroad Co-Pilot, Trail TV &amp; Radio, and Porch Talk." />
   <style>
     :root {
       --bg: #070B14;
@@ -33,27 +33,21 @@
     }
     a { color: inherit; text-decoration: none; }
     .container { max-width: 1140px; margin: 0 auto; padding: 0 20px; }
-    header {
-      position: sticky; top: 0; z-index: 50;
-      background: rgba(7, 11, 20, 0.88);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border-bottom: 1px solid var(--border);
-    }
+    header { position: sticky; top: 0; z-index: 50; background: rgba(7, 11, 20, 0.88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); }
     .nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 70px; flex-wrap: wrap; padding: 10px 0; }
     .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: 0.3px; }
     .brand img { width: 42px; height: 42px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.45); background: #0F172A; object-fit: cover; }
     .brand-sub { display: block; font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
     .nav-links { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; font-size: 14px; color: var(--muted); font-weight: 600; }
     .nav-links a:hover { color: var(--text); }
-    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; border: 1px solid transparent; cursor: pointer; transition: transform .15s ease, filter .15s ease; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; min-height: 44px; border: 1px solid transparent; cursor: pointer; transition: transform .15s ease, filter .15s ease; }
     .btn:hover { transform: translateY(-1px); filter: brightness(1.07); }
     .btn-primary { background: linear-gradient(135deg, #10B981, #06B6D4); color: #041218; box-shadow: 0 10px 28px rgba(16, 185, 129, 0.25); }
     .btn-secondary { background: rgba(99, 102, 241, 0.16); color: #C7D2FE; border-color: rgba(99, 102, 241, 0.45); }
     .btn-ghost { background: rgba(148, 163, 184, 0.08); color: var(--text); border-color: var(--border); }
     .hero { padding: 56px 0 36px; }
-    .hero-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 36px; align-items: center; }
-    @media (max-width: 880px) { .hero-grid { grid-template-columns: 1fr; } }
+    .hero-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 36px; align-items: center; }
+    @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
     .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 800; letter-spacing: 0.6px; background: rgba(16, 185, 129, 0.14); color: #6EE7B7; border: 1px solid rgba(16, 185, 129, 0.35); margin-bottom: 18px; }
     .dot-live { width: 8px; height: 8px; border-radius: 50%; background: #10B981; box-shadow: 0 0 10px #10B981; display: inline-block; }
     h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.08; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 16px; }
@@ -66,10 +60,13 @@
     .stat-val { font-size: 20px; font-weight: 900; color: #FFFFFF; }
     .stat-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; font-weight: 700; }
     .preview-card { background: linear-gradient(160deg, #13203B, #0B1222); border: 1px solid rgba(34, 211, 238, 0.28); border-radius: 24px; padding: 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); }
-    .preview-media { position: relative; border-radius: 16px; overflow: hidden; background: #070B14; border: 1px solid var(--border); aspect-ratio: 16 / 10; display: flex; align-items: center; justify-content: center; }
-    .preview-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .preview-badge { position: absolute; bottom: 12px; left: 12px; right: 12px; background: rgba(7, 11, 20, 0.86); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; flex-wrap: wrap; }
-    .release-box { margin-top: 14px; padding: 14px; border-radius: 14px; background: rgba(7, 11, 20, 0.65); border: 1px solid var(--border); font-size: 13px; color: #CBD5E1; }
+    .hero-phones { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; }
+    .hero-shot { position: relative; border-radius: 16px; overflow: hidden; border: 1.5px solid rgba(245, 158, 11, 0.4); background: #050811; aspect-ratio: 9 / 19.5; cursor: pointer; }
+    .hero-shot img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .25s ease; }
+    .hero-shot:hover img { transform: scale(1.03); }
+    .hero-shot-tag { position: absolute; bottom: 8px; left: 8px; right: 8px; background: rgba(7, 11, 20, 0.86); backdrop-filter: blur(8px); border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 10px; padding: 5px 8px; font-size: 11px; font-weight: 800; color: #FDE68A; text-align: center; }
+    .preview-badge { margin-top: 12px; background: rgba(7, 11, 20, 0.72); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; flex-wrap: wrap; }
+    .release-box { margin-top: 12px; padding: 14px; border-radius: 14px; background: rgba(7, 11, 20, 0.65); border: 1px solid var(--border); font-size: 13px; color: #CBD5E1; }
     .release-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px dashed rgba(148,163,184,0.14); }
     .release-row:last-child { border-bottom: none; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; color: #67E8F9; }
@@ -77,15 +74,15 @@
     .section-head { margin-bottom: 24px; }
     .eyebrow { color: var(--accent-2); font-size: 12px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; margin-bottom: 6px; }
     h2 { font-size: clamp(24px, 3.4vw, 34px); font-weight: 900; letter-spacing: -0.01em; margin-bottom: 8px; }
-    .sub { color: var(--muted); max-width: 720px; font-size: 15px; }
+    .sub { color: var(--muted); max-width: 740px; font-size: 15px; }
     .carousel-shell { background: linear-gradient(160deg, rgba(17, 26, 46, 0.96), rgba(9, 15, 30, 0.96)); border: 1px solid rgba(34, 211, 238, 0.25); border-radius: 24px; padding: 24px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.48); }
-    .carousel-stage { display: grid; grid-template-columns: 320px 1fr; gap: 28px; align-items: center; }
+    .carousel-stage { display: grid; grid-template-columns: 310px 1fr; gap: 28px; align-items: center; }
     @media (max-width: 820px) { .carousel-stage { grid-template-columns: 1fr; justify-items: center; } }
-    .phone-frame { position: relative; width: 100%; max-width: 310px; aspect-ratio: 9 / 16; border-radius: 28px; padding: 8px; background: linear-gradient(145deg, #1E293B, #0B1222); border: 2px solid rgba(56, 189, 248, 0.35); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65); overflow: hidden; }
+    .phone-frame { position: relative; width: 100%; max-width: 300px; aspect-ratio: 9 / 19.5; border-radius: 28px; padding: 8px; background: linear-gradient(145deg, #1E293B, #0B1222); border: 2px solid rgba(56, 189, 248, 0.35); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65); overflow: hidden; }
     .phone-screen { position: relative; width: 100%; height: 100%; border-radius: 20px; overflow: hidden; background: #050811; cursor: zoom-in; }
     .carousel-slide-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity .25s ease, transform .3s ease; }
     .carousel-slide-img:hover { transform: scale(1.02); }
-    .carousel-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(7, 11, 20, 0.78); color: #FFFFFF; font-size: 20px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 4; }
+    .carousel-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(7, 11, 20, 0.78); color: #FFFFFF; font-size: 20px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 4; }
     .carousel-nav-btn:hover { background: rgba(16, 185, 129, 0.85); color: #041218; border-color: #10B981; }
     .carousel-prev { left: 10px; }
     .carousel-next { right: 10px; }
@@ -97,18 +94,18 @@
     .carousel-bullets { list-style: none; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; background: rgba(7, 11, 20, 0.55); border: 1px solid var(--border); font-size: 13.5px; color: #E2E8F0; }
     .carousel-bullets li::before { content: "⚡ "; color: #34D399; }
     .carousel-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .carousel-thumbs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
-    @media (max-width: 640px) { .carousel-thumbs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    .carousel-thumbs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+    @media (max-width: 900px) { .carousel-thumbs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @media (max-width: 600px) { .carousel-thumbs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     .thumb-btn { background: #0B1222; border: 2px solid rgba(148, 163, 184, 0.2); border-radius: 14px; padding: 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; }
-    .thumb-btn:hover { transform: translateY(-2px); color: #FFFFFF; }
     .thumb-btn.active { border-color: #10B981; background: rgba(16, 185, 129, 0.14); color: #6EE7B7; }
-    .thumb-btn img { width: 100%; aspect-ratio: 9 / 12; object-fit: cover; border-radius: 8px; display: block; }
+    .thumb-btn img { width: 100%; aspect-ratio: 9 / 14; object-fit: cover; border-radius: 8px; display: block; }
     .lightbox { position: fixed; inset: 0; z-index: 200; background: rgba(3, 6, 14, 0.92); backdrop-filter: blur(10px); display: none; align-items: center; justify-content: center; padding: 20px; flex-direction: column; gap: 14px; }
     .lightbox.open { display: flex; }
     .lightbox img { max-height: 82vh; max-width: 92vw; border-radius: 18px; border: 2px solid rgba(56, 189, 248, 0.45); }
-    .lightbox-bar { display: flex; align-items: center; gap: 14px; color: #E2E8F0; font-size: 14px; font-weight: 700; }
+    .lightbox-bar { display: flex; align-items: center; gap: 14px; color: #E2E8F0; font-size: 14px; font-weight: 700; flex-wrap: wrap; justify-content: center; }
     .tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
-    .tab-btn { background: var(--card); color: var(--muted); border: 1px solid var(--border); padding: 10px 16px; border-radius: 12px; font-weight: 700; font-size: 13px; cursor: pointer; }
+    .tab-btn { background: var(--card); color: var(--muted); border: 1px solid var(--border); padding: 10px 16px; border-radius: 12px; font-weight: 700; font-size: 13px; cursor: pointer; min-height: 44px; }
     .tab-btn.active { background: rgba(16, 185, 129, 0.16); color: #6EE7B7; border-color: rgba(16, 185, 129, 0.55); }
     .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
     .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
@@ -130,14 +127,11 @@
   <header>
     <div class="container nav">
       <a class="brand" href="#top">
-        <img src="https://raw.githubusercontent.com/bradley3398/Rural-ERides-GO-V2/main/public/assets/icon.png" alt="Rural ERides GO Icon" />
-        <span>
-          Rural ERides GO
-          <span class="brand-sub">v60.0 &bull; Build 60 &bull; Keep It Rural Y'all</span>
-        </span>
+        <img src="../public/assets/icon.png" alt="Rural ERides GO Icon" onerror="this.onerror=null;this.src='https://raw.githubusercontent.com/bradley3398/Rural-ERides-GO-V2/main/public/assets/icon.png';" />
+        <span>Rural ERides GO<span class="brand-sub">v66.0 &bull; Build 66 &bull; Keep It Rural Y'all</span></span>
       </a>
       <nav class="nav-links">
-        <a href="#screenshots">App Gallery</a>
+        <a href="#screenshots">App Gallery (12)</a>
         <a href="#whats-new">What's New</a>
         <a href="#features">Features</a>
         <a href="#download">Download &amp; Play Store</a>
@@ -150,35 +144,35 @@
     <section class="hero">
       <div class="container hero-grid">
         <div>
-          <div class="pill"><span class="dot-live"></span> LIVE RELEASE: v60.0 (BUILD 60) &bull; GITHUB &amp; GOOGLE PLAY READY</div>
-          <h1>Universal PEV Avionics, <span class="grad">Authentic Hardware HUDs</span> &amp; 3D Rig Lab</h1>
-          <p class="lead">
-            Built in Kotlin &amp; Jetpack Compose Material 3 for high-performance e-Motos, Hyper-Scooters, EUCs, and Fat-Tire e-Bikes.
-            Real GPS + 9-DOF telemetry, authentic monochrome LCD / LED / IPS TFT displays, hardware OpenGL ES GGX PBR 3D Rig Lab, Gravel Volt Runner 3D, live video calling, real-pilot Rider Radar, and Firebase AI Logic Gemini diagnostics.
-          </p>
+          <div class="pill"><span class="dot-live"></span> LIVE RELEASE: v66.0 (BUILD 66) &bull; GITHUB &amp; GOOGLE PLAY READY</div>
+          <h1>Universal PEV Avionics, <span class="grad">Authentic Hardware HUDs</span> &amp; Live Rider Radar</h1>
+          <p class="lead">Built in Kotlin &amp; Jetpack Compose Material 3 for high-performance e-Motos, Hyper-Scooters, EUCs, and Fat-Tire e-Bikes. Real GPS + 43 hardware sensors, S866 &amp; OEM LCD/LED/TFT displays, TomTom Live road speed limits, Mapbox &amp; SOS Radar, Barn AR Mechanic powered by Gemini 3.1 Flash-Lite, Country Trail TV &amp; Radio, and Porch Talk.</p>
           <div class="cta-row">
-            <a class="btn btn-primary" id="hero-apk-btn" href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases/latest" target="_blank" rel="noopener">Download Signed APK (v60.0)</a>
-            <a class="btn btn-secondary" href="#screenshots">Tour App Screenshots</a>
+            <a class="btn btn-primary" id="hero-apk-btn" href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases/latest" target="_blank" rel="noopener">Download Signed APK (v66.0)</a>
+            <a class="btn btn-secondary" href="#screenshots">Tour 12 Real Screenshots</a>
             <a class="btn btn-ghost" href="https://github.com/bradley3398/Rural-ERides-GO-V2" target="_blank" rel="noopener">GitHub Repo</a>
           </div>
           <div class="stats">
-            <div class="stat"><div class="stat-val">88+</div><div class="stat-lbl">3D PEV Models</div></div>
-            <div class="stat"><div class="stat-val">14</div><div class="stat-lbl">OEM LCD/TFT HUDs</div></div>
-            <div class="stat"><div class="stat-val">100%</div><div class="stat-lbl">Real Pilots Only</div></div>
-            <div class="stat"><div class="stat-val">v60.0</div><div class="stat-lbl">Build 60 Live</div></div>
+            <div class="stat"><div class="stat-val">43</div><div class="stat-lbl">Hardware Sensors</div></div>
+            <div class="stat"><div class="stat-val">135</div><div class="stat-lbl">Barn Bench Tools</div></div>
+            <div class="stat"><div class="stat-val">100%</div><div class="stat-lbl">Zero Bots / Live</div></div>
+            <div class="stat"><div class="stat-val">v66.0</div><div class="stat-lbl">Build 66 Live</div></div>
           </div>
         </div>
-
         <div class="preview-card">
-          <div class="preview-media">
-            <img src="https://raw.githubusercontent.com/bradley3398/Rural-ERides-GO-V2/main/public/assets/splash.png" alt="Rural ERides GO Trail Preview" />
-            <div class="preview-badge">
-              <span><strong>Package:</strong> <span class="mono">com.aistudio.volttrail.kqrmvx</span></span>
-              <span style="color:#6EE7B7;font-weight:800;">Android 7.0+ (API 24&ndash;36)</span>
+          <div class="hero-phones">
+            <div class="hero-shot" id="hero-shot-1" title="Preview v66.0 Boot & Sensor Check">
+              <img src="../public/assets/screenshots/01_splash_boot.jpg" alt="Rural ERides GO v66.0 Boot Splash Screen" onerror="this.onerror=null;this.src='https://raw.githubusercontent.com/bradley3398/Rural-ERides-GO-V2/main/public/assets/screenshots/01_splash_boot.jpg';" />
+              <div class="hero-shot-tag">v66.0 Sensor Boot</div>
+            </div>
+            <div class="hero-shot" id="hero-shot-2" title="Preview Live Cockpit & S866 HUD">
+              <img src="../public/assets/screenshots/03_cockpit_s866_lcd.jpg" alt="Rural ERides GO S866 LCD Cockpit HUD" onerror="this.onerror=null;this.src='https://raw.githubusercontent.com/bradley3398/Rural-ERides-GO-V2/main/public/assets/screenshots/03_cockpit_s866_lcd.jpg';" />
+              <div class="hero-shot-tag">S866 LCD Cockpit</div>
             </div>
           </div>
+          <div class="preview-badge"><span><strong>Package:</strong> <span class="mono">com.aistudio.volttrail.kqrmvx</span></span><span style="color:#6EE7B7;font-weight:800;">Android 7.0+ (API 24&ndash;36)</span></div>
           <div class="release-box" id="live-release-card">
-            <div class="release-row"><span>Latest Version</span><strong id="rel-tag">v60.0 (Build 60)</strong></div>
+            <div class="release-row"><span>Latest Version</span><strong id="rel-tag">v66.0 (Build 66)</strong></div>
             <div class="release-row"><span>Direct APK Asset</span><span id="rel-apk" class="mono">Fetching GitHub Release...</span></div>
             <div class="release-row"><span>Play Store Bundle (.aab)</span><span id="rel-aab" class="mono">Ready via Release Workflow</span></div>
             <div class="release-row"><span>Creator</span><strong>Lord Bradley Callison</strong></div>
@@ -190,23 +184,23 @@
     <section id="screenshots">
       <div class="container">
         <div class="section-head">
-          <div class="eyebrow">INSIDE RURAL ERIDES GO</div>
-          <h2>Interactive App Screenshot Carousel</h2>
-          <p class="sub">Swipe, click arrows, or pick a screen below to preview the real Android interface — tap any screenshot to zoom full-screen.</p>
+          <div class="eyebrow">REAL DEVICE SCREENSHOTS &bull; v66.0</div>
+          <h2>Interactive 12-Screen App Gallery</h2>
+          <p class="sub">Captured directly on device running Rural ERides GO v66.0 — swipe, click arrows, or pick any of the 12 screens below and tap to zoom full-screen.</p>
         </div>
         <div class="carousel-shell" id="app-carousel">
           <div class="carousel-stage">
             <div class="phone-frame" id="carousel-swipe-area">
-              <div class="carousel-counter" id="carousel-counter">1 / 5</div>
+              <div class="carousel-counter" id="carousel-counter">1 / 12</div>
               <button class="carousel-nav-btn carousel-prev" id="carousel-prev" type="button" aria-label="Previous screenshot">&#8249;</button>
               <button class="carousel-nav-btn carousel-next" id="carousel-next" type="button" aria-label="Next screenshot">&#8250;</button>
               <div class="phone-screen" id="carousel-zoom-trigger" title="Tap to view full screen">
-                <img class="carousel-slide-img" id="carousel-main-img" src="https://raw.githubusercontent.com/bradley3398/Rural-ERides-GO-V2/main/public/assets/screenshots/cockpit_hud.jpg" alt="Rural ERides GO Cockpit OEM HUD" />
+                <img class="carousel-slide-img" id="carousel-main-img" src="../public/assets/screenshots/01_splash_boot.jpg" alt="Rural ERides GO v66.0 Splash Screen" />
               </div>
             </div>
             <div class="carousel-info">
-              <span class="carousel-kicker" id="carousel-kicker">COCKPIT &amp; OEM HARDWARE HUDS</span>
-              <h3 class="carousel-title" id="carousel-title">Authentic Monochrome LCD, LED &amp; IPS TFT Speedometers</h3>
+              <span class="carousel-kicker" id="carousel-kicker">STARTUP &amp; 43-SENSOR BOOT</span>
+              <h3 class="carousel-title" id="carousel-title">v66.0 Driving-Horizon Splash &amp; Live Sensor Check</h3>
               <p class="carousel-desc" id="carousel-desc"></p>
               <ul class="carousel-bullets" id="carousel-bullets"></ul>
               <div class="carousel-controls">
@@ -223,81 +217,42 @@
 
     <section id="whats-new">
       <div class="container">
-        <div class="section-head">
-          <div class="eyebrow">BUILD 60 RELEASE NOTES</div>
-          <h2>What's New in Rural ERides GO v60.0</h2>
-          <p class="sub">Hardware OpenGL ES GGX PBR 3D graphics across 3D Rig Lab and Gravel Volt Runner 3D, zero-crash 3D Lab launch, driving-motion splash screen, and complete fake pilot purge.</p>
-        </div>
+        <div class="section-head"><div class="eyebrow">BUILD 66 RELEASE NOTES</div><h2>What's New in Rural ERides GO v66.0</h2><p class="sub">Direct Cloud Console Gemini 3.1 Flash-Lite REST integration, live TomTom &amp; Mapbox navigation, 135-tool Barn AR Mechanic, Country Trail TV &amp; Radio, and zero-bot Porch Talk.</p></div>
         <div class="changelog">
-          <div class="cl-item">
-            <div class="cl-title">Zero-Crash 3D Lab + Hardware OpenGL ES Textured GGX PBR (3D Lab &amp; Gravel Volt Runner 3D)</div>
-            <ul class="cl-list">
-              <li>Fixed the 3D Lab crash on high-poly 3D tire-lug models with a crash-proof Hardware EGL14 + OpenGL ES 2.0/3.0 Textured Cook-Torrance GGX PBR engine and automatic safe fallback.</li>
-              <li>Upgraded both <strong>3D CAD &amp; Dyno Lab</strong> (88 models) and <strong>Gravel Volt Runner 3D</strong> with mipmapped procedural PBR textures (knobby tires, 3K carbon weave, CNC alloy, metallic flake paint, glowing LED optics, and scrolling gravel dirt road), dual-layer clearcoat, and ACES Filmic tone mapping.</li>
-            </ul>
-          </div>
-          <div class="cl-item">
-            <div class="cl-title">Upgraded Driving-Motion Pre-Login Loading Screen with Live Sensor Count &amp; Theme/Holiday Art</div>
-            <ul class="cl-list">
-              <li>Redesigned the pre-login boot sequence with animated forward-driving highway motion, live hardware sensor count readout from Android's <code>SensorManager</code>, and dynamic colors + holiday accents matched to your active theme.</li>
-            </ul>
-          </div>
-          <div class="cl-item">
-            <div class="cl-title">Permanent Fake Radar Pilot Purge &amp; Unified Back Navigation</div>
-            <ul class="cl-list">
-              <li>Blocked and permanently purged legacy fake radar callsigns (<code>SHADOW_99</code>, <code>SHADOW_RUNNER</code>, <code>SHADOW_RIDER</code>, <code>VALKYRIEONE</code>) and orphaned radar beacons with updated Firestore cleanup rules.</li>
-              <li>Preserves Build 58's crash-free Direct Messages, two-way live Video Calling, Friend Request pop-ups, 14 authentic OEM LCD/LED/TFT HUDs, and Gemini 3.x/4.x AI Labs.</li>
-            </ul>
-          </div>
+          <div class="cl-item"><div class="cl-title">Direct Google Cloud Console Gemini 3.1 Flash-Lite AI &amp; Live Web Grounding</div><ul class="cl-list"><li>Routed <strong>Barn Mechanic AI</strong>, <strong>Backroad Co-Pilot</strong> (with <strong>Live Web Grounding</strong>, <strong>Pre-Ride Flight Check</strong>, Personas &amp; 100 Skills), <strong>Live Board AI Polish</strong>, and <strong>Family-Friendly Media Shield</strong> directly through Cloud Console API keys using <code>gemini-3.1-flash-lite</code> with automatic model fallback.</li></ul></div>
+          <div class="cl-item"><div class="cl-title">Cockpit Telemetry, TomTom Live Speed Limits &amp; Mapbox Rider Radar</div><ul class="cl-list"><li>Unified Cockpit Command Dashboard with <code>Trail Readiness 94%</code>, active fleet switcher (e.g. <code>isinwheel H7 PRO</code> / <code>engwe y600</code>), Backroad Field Command range/climb/cold-factor calculators, authentic vector <code>S866 LCD</code> + compass/roll gauges, and <strong>TomTom Live</strong> road speed limit + <strong>Mapbox Streets / Satellite / Dark</strong> map layers with <strong>SOS Flare</strong> beacons.</li></ul></div>
+          <div class="cl-item"><div class="cl-title">Country Trail TV &amp; Radio + Zero-Bot Porch Talk, DMs &amp; Live Calls</div><ul class="cl-list"><li>Live YouTube theater feed (<em>Rural ERides</em>, <em>Global PEV</em>, <em>Music Mixes</em>, 35 curated playlists &amp; Auto-DJ Mix), plus <strong>Porch Talk</strong> with 24h Rider Timeline Stories, 35 post templates, live GPS pin DMs, direct voice/video calls, and Family-Friendly Cloud Sync.</li></ul></div>
         </div>
       </div>
     </section>
 
     <section id="features">
       <div class="container">
-        <div class="section-head">
-          <div class="eyebrow">COMPLETE PEV COMMAND SUITE</div>
-          <h2>Explore Every Subsystem</h2>
-          <p class="sub">Switch tabs to inspect the engineering, telemetry, social, and AI tools included in Build 60.</p>
-        </div>
+        <div class="section-head"><div class="eyebrow">COMPLETE PEV COMMAND SUITE</div><h2>Explore Every Subsystem</h2></div>
         <div class="tabs" role="tablist">
           <button class="tab-btn active" data-tab="all" type="button">All Modules</button>
-          <button class="tab-btn" data-tab="cockpit" type="button">HUDs &amp; Telemetry</button>
-          <button class="tab-btn" data-tab="3d" type="button">3D Lab &amp; Game</button>
-          <button class="tab-btn" data-tab="social" type="button">Radar, Calls &amp; Boards</button>
-          <button class="tab-btn" data-tab="ai" type="button">AI Mechanic &amp; Co-Pilot</button>
+          <button class="tab-btn" data-tab="cockpit" type="button">Cockpit &amp; Radar</button>
+          <button class="tab-btn" data-tab="ai" type="button">Mechanic &amp; Co-Pilot AI</button>
+          <button class="tab-btn" data-tab="media" type="button">Trail TV &amp; 3D Lab</button>
+          <button class="tab-btn" data-tab="social" type="button">Porch Talk &amp; DMs</button>
         </div>
         <div class="grid-3" id="feature-grid">
-          <article class="card" data-cat="cockpit"><span class="card-tag">OEM HARDWARE HUDS</span><h3>Authentic LCD, LED &amp; IPS TFT Displays</h3><p>Physical S866 reflective monochrome STN LCD, backlit cobalt SW900, emerald Minimotors EYE3, Ninebot smoked stem LED, QS-S4 trigger LCD, Bafang DPC-18 TFT, and Nami/Kaabo Matrix TFT with live voltage sag and global MPH/KM/H sync.</p></article>
-          <article class="card" data-cat="3d"><span class="card-tag">3D CAD &amp; DYNO LAB</span><h3>88 Photorealistic 3D PEV Models</h3><p>Studio 3D PBR, OpenGL ES 3.0 GGX PBR, and WebGL 2.0 Clearcoat viewports with 3D knobby tires, cross-drilled rotors, copper stator cores, ambient occlusion, Explode CAD teardown, and live Dyno sweep.</p></article>
-          <article class="card" data-cat="3d"><span class="card-tag">3D ARCADE RUNNER</span><h3>Gravel Volt Runner 3D</h3><p>Ride your sculpted high-poly 3D Garage PEV down a rural sienna dirt &amp; gravel trail with golden-hour skies, mountain ridges, pine/oak forests, swaying wildflowers, and rear-tire dust trails.</p></article>
-          <article class="card" data-cat="social"><span class="card-tag">REAL PILOTS ONLY</span><h3>Rider Radar, Live Video Calls &amp; Boards</h3><p>Zero bot accounts. Discover real Gmail pilots with live ONLINE badges, persistent cloud following, instant Friend Request pop-ups, crash-free DMs, Push-to-Talk Walkie-Talkie, and two-way live Video &amp; Speakerphone calling.</p></article>
-          <article class="card" data-cat="ai"><span class="card-tag">FIREBASE AI LOGIC</span><h3>Gemini Bench Eyes Mechanic &amp; Co-Pilot</h3><p>Point your camera at brakes, controllers, or packs for live AI hardware diagnosis, 17-bay engineering calculators, 4-model Spec &amp; Parts Engine, 20 riding personas, Custom Voice Studio, and Image/Music AI Labs.</p></article>
-          <article class="card" data-cat="cockpit"><span class="card-tag">FIELD SURVIVAL</span><h3>Long-Range Optical Morse &amp; 11 Fleet Graphs</h3><p>1x&ndash;6x telephoto point-source Optical Morse flashlight transceiver for 150m+ distance, RainViewer Doppler storm radar, OSMDroid trail routing, and 11 interactive Telemetry Studio graphs.</p></article>
+          <article class="card" data-cat="cockpit"><span class="card-tag">OEM HARDWARE HUDS</span><h3>S866 LCD, Tilt &amp; Backroad Calculators</h3><p>Live 43-sensor Android fusion, vector 7-segment S866 reflective LCD &amp; switchable HUD skins, compass/roll inclinometer, True Range, Climb Load, LFP/NMC Cold Factor, and RTB Homing Beacon.</p></article>
+          <article class="card" data-cat="cockpit"><span class="card-tag">TOMTOM &amp; MAPBOX RADAR</span><h3>Live Speed Limits &amp; Sector SOS</h3><p>Real-time TomTom Live road speed limit signs, Mapbox Streets / Satellite / Dark layers, live pilot beacon visibility, sector wind &amp; weather telemetry, quick trailhead pins, and SOS Flare.</p></article>
+          <article class="card" data-cat="ai"><span class="card-tag">GEMINI 3.1 FLASH-LITE</span><h3>Barn &amp; Bench AR Mechanic (135 Tools)</h3><p>Diagnose controller MOSFETs, phase wires, and error codes with Bench Cam, Snap/Pic upload, Live AR, 45 Live Fault Trees, 60 Bolt Torque Specs, and 30 Surface PSI presets.</p></article>
+          <article class="card" data-cat="ai"><span class="card-tag">BACKROAD CO-PILOT</span><h3>Flight Check &amp; Live Web Grounding</h3><p>Run structured Gemini Pre-Ride Flight Checks for your exact rig voltage &amp; chemistry, switch between Trail Chaplain &amp; Senior E-Moto Mechanic personas, and query live web-grounded local conditions.</p></article>
+          <article class="card" data-cat="media"><span class="card-tag">TRAIL TV &amp; 3D LAB</span><h3>In-App YouTube Theater &amp; 3D Rig Lab</h3><p>Stream Rural ERides &amp; Global PEV video reviews, 35 Riding Radio &amp; Barn Workshop playlists, Auto-DJ mixes, plus interactive 3D PEV models, Telemetry Graphs, and Gravel Volt Runner 3D.</p></article>
+          <article class="card" data-cat="social"><span class="card-tag">ZERO BOTS &bull; SAFE SHIELD</span><h3>Porch Talk, Live GPS DMs &amp; Calls</h3><p>Real Gmail pilots only. Share 24h Timeline Stories, use 35 Convoy &amp; Swap Meet templates, transmit Family-Friendly Cloud posts &amp; polls, drop live GPS pins in DMs, and start instant voice/video calls.</p></article>
         </div>
       </div>
     </section>
 
     <section id="download">
       <div class="container">
-        <div class="section-head">
-          <div class="eyebrow">INSTALL &amp; DEPLOY</div>
-          <h2>GitHub Release &amp; Google Play Distribution</h2>
-          <p class="sub">Install the signed Android APK directly from GitHub Releases or deploy the signed Android App Bundle (.aab) to Google Play Console.</p>
-        </div>
+        <div class="section-head"><div class="eyebrow">INSTALL &amp; DEPLOY</div><h2>GitHub Release &amp; Google Play Distribution</h2></div>
         <div class="grid-2">
-          <div class="card">
-            <span class="card-tag">DIRECT ANDROID APK</span>
-            <h3>Download from GitHub Releases</h3>
-            <p>Every tagged release (<span class="mono">v60.0</span>) automatically builds, signs, verifies, and publishes <span class="mono">app-release.apk</span>, <span class="mono">app-release.aab</span>, and <span class="mono">SHA256SUMS.txt</span> via GitHub Actions.</p>
-            <div style="margin-top:8px;"><a class="btn btn-primary" id="card-apk-btn" href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases/latest" target="_blank" rel="noopener">Open Latest Release</a></div>
-          </div>
-          <div class="card">
-            <span class="card-tag">GOOGLE PLAY CONSOLE</span>
-            <h3>Play Store Compliant Build 60</h3>
-            <p>Built with <span class="mono">versionCode = 60</span>, <span class="mono">targetSdk = 36</span>, zero restricted storage or install permissions, Android Photo Picker, and signed App Bundle (<span class="mono">.aab</span>) ready for Google Play production or testing tracks.</p>
-            <div style="margin-top:8px;"><a class="btn btn-secondary" href="https://github.com/bradley3398/Rural-ERides-GO-V2/actions" target="_blank" rel="noopener">Open GitHub Actions CI</a></div>
-          </div>
+          <div class="card"><span class="card-tag">DIRECT ANDROID APK</span><h3>Download from GitHub Releases</h3><p>Every tagged release (<span class="mono">v66.0</span>) builds, signs, verifies, and publishes <span class="mono">app-release.apk</span>, <span class="mono">app-release.aab</span>, and <span class="mono">SHA256SUMS.txt</span> via GitHub Actions.</p><div style="margin-top:8px;"><a class="btn btn-primary" id="card-apk-btn" href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases/latest" target="_blank" rel="noopener">Open Latest Release</a></div></div>
+          <div class="card"><span class="card-tag">GOOGLE PLAY CONSOLE</span><h3>Play Store Compliant Build 66</h3><p>Built with <span class="mono">versionCode = 66</span>, <span class="mono">targetSdk = 36</span>, zero restricted storage or install permissions, Android Photo Picker, and signed App Bundle (<span class="mono">.aab</span>) ready for Google Play production tracks.</p><div style="margin-top:8px;"><a class="btn btn-secondary" href="https://github.com/bradley3398/Rural-ERides-GO-V2/actions" target="_blank" rel="noopener">Open GitHub Actions CI</a></div></div>
         </div>
       </div>
     </section>
@@ -305,32 +260,32 @@
 
   <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Full screen app screenshot">
     <img id="lightbox-img" src="" alt="Full screen preview" />
-    <div class="lightbox-bar">
-      <span id="lightbox-caption"></span>
-      <button class="btn btn-primary" id="lightbox-close" type="button">Close</button>
-    </div>
+    <div class="lightbox-bar"><span id="lightbox-caption"></span><button class="btn btn-primary" id="lightbox-close" type="button">Close</button></div>
   </div>
 
   <footer>
     <div class="container footer-flex">
       <div><strong>Rural ERides GO</strong> &mdash; Created &amp; Architected by <strong>Lord Bradley Callison</strong><br /><span>"KEEP IT RURAL Y'ALL" &bull; Package <span class="mono">com.aistudio.volttrail.kqrmvx</span></span></div>
-      <div class="nav-links">
-        <a href="https://github.com/bradley3398/Rural-ERides-GO-V2" target="_blank" rel="noopener">GitHub Repo</a>
-        <a href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases" target="_blank" rel="noopener">Releases</a>
-        <a href="https://github.com/bradley3398/Rural-ERides-GO-V2/issues" target="_blank" rel="noopener">Report Issue</a>
-      </div>
+      <div class="nav-links"><a href="https://github.com/bradley3398/Rural-ERides-GO-V2" target="_blank" rel="noopener">GitHub Repo</a><a href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases" target="_blank" rel="noopener">Releases</a><a href="https://github.com/bradley3398/Rural-ERides-GO-V2/issues" target="_blank" rel="noopener">Report Issue</a></div>
     </div>
   </footer>
 
   <script>
     (function () {
-      var RAW = 'https://raw.githubusercontent.com/bradley3398/Rural-ERides-GO-V2/main/public/assets/screenshots/';
+      var RAW_BASE = 'https://raw.githubusercontent.com/bradley3398/Rural-ERides-GO-V2/main/public/';
       var SLIDES = [
-        { label: 'Cockpit HUD', kicker: 'COCKPIT & OEM HARDWARE HUDS', title: 'Authentic Monochrome LCD, LED & IPS TFT Speedometers', desc: 'Switch between 14 cockpit displays including reflective olive-gray S866 STN LCD, cobalt backlit SW900, emerald Minimotors EYE3, smoked acrylic Ninebot Max LED stem, round QS-S4 trigger LCD, Bafang DPC-18 TFT, and rugged Nami/Kaabo Matrix TFT.', bullets: ['True vector 7-segment crystal digits with ghosted segments & live voltage sag', 'Live 9-DOF pitch/roll inclinometer & global MPH / KM/H + °F / °C unit sync', '1x–6x Telephoto Long-Range Optical Morse flashlight transceiver'], src: RAW + 'cockpit_hud.jpg' },
-        { label: '3D Rig Lab', kicker: '3D CAD & DYNO LAB (88 MODELS)', title: 'Photorealistic 3D PEV Models with 3D Knobby Tires', desc: 'Inspect 88 curated e-Motos, Hyper-Scooters, EUCs, and e-Bikes across Studio 3D PBR, OpenGL ES 3.0 GGX PBR, and WebGL 2.0 Clearcoat pipelines with ground/cavity ambient occlusion and zero blank screens.', bullets: ['24 raised 3D knobby tire lugs, cross-drilled floating rotors & copper stators', 'Touch Orbit, Gyro Tilt, 5–65 MPH Dyno Sweep & 0–100% Explode CAD teardown', 'Interactive PEV Knowledge & Certification Test with Gemini AI question generator'], src: RAW + 'lab_3d.jpg' },
-        { label: '3D Dirt Game', kicker: 'GRAVEL VOLT RUNNER 3D GAME', title: 'Sculpted High-Poly 3D Garage PEVs on Rural Dirt Trails', desc: 'Ride your actual sculpted 3D Garage PEV down a cambered sienna dirt and crushed-gravel backroad surrounded by golden-hour skies, layered Blue Ridge peaks, pine & oak trees, and swaying roadside wildflowers.', bullets: ['Mounts your active 3D PEV rig with spinning axles, turn banking & dirt dust trails', 'Procedural black-eyed Susans, purple lupine spires, daisies, hay bales & creeks', 'Fully synced with your Settings speed & distance units (MPH or KM/H)'], src: RAW + 'gravel_game.jpg' },
-        { label: 'Radar & Calls', kicker: 'REAL-PILOT RADAR, BOARDS & VIDEO CALLS', title: 'Zero Bots, Live ONLINE Badges & Two-Way Video Calling', desc: 'Connect with real Google-authenticated riders across phones and tablets. Discover crew members with live ONLINE NOW badges, persistent Cloud Firestore following, instant Friend Request pop-ups, and crash-free DMs.', bullets: ['Two-way live Video & Speakerphone calling with automatic cloud relay across NAT', '100% real human pilots — all auto-generated bot accounts blocked & purged', 'OSMDroid rural trail maps, RainViewer Doppler storm radar & PTT Walkie-Talkie'], src: RAW + 'radar_social.jpg' },
-        { label: 'AI Mechanic', kicker: 'FIREBASE AI LOGIC • GEMINI 3.8 & 4', title: 'Bench Eyes Camera Mechanic, Spec Engine & AI Co-Pilot', desc: 'Point your camera at brakes, motors, wiring harnesses, or battery packs for live Gemini AI visual inspection, backed by a 17-bay engineering calculator lab, 4-model Spec Comparison Engine, and 20 Co-Pilot personas.', bullets: ['Live CameraX Bench Eyes diagnostics with interactive AR callout boxes', 'Hardened Gemini 3.8 Flash / 3.5 Flash-Lite / 4 Argon & Nano Banana AI labs', 'Custom AI Voice Studio, Trail Soundtrack Composer & Search/Maps Trail Scout'], src: RAW + 'ai_mechanic.jpg' }
+        { label: 'Splash Boot', kicker: 'STARTUP & 43-SENSOR BOOT', title: 'v66.0 Driving-Horizon Splash & Live Sensor Check', desc: 'Pre-login boot horizon with active Thanksgiving seasonal garland theme, live hardware SensorManager telemetry (36 / 43 sensors armed), GNSS readiness badge, and multi-constellation GPS/GLONASS/Galileo lock.', bullets: ['Live Android SensorManager hardware check: ACCEL, GYRO, MAG, 9-DOF, BARO & LIGHT', 'Active theme & seasonal holiday canopy styling synced across every screen', 'Instant Skip Intro control into the live Cockpit Command Center'], src: '../public/assets/screenshots/01_splash_boot.jpg', fallback: RAW_BASE + 'assets/screenshots/01_splash_boot.jpg' },
+        { label: 'Cockpit Home', kicker: 'COCKPIT COMMAND & FLEET OPS', title: 'Trail Readiness, Live Ride Dashboard & Field Calculators', desc: 'Central pilot command showing LVL 4 Rookie Pilot profile, 8 quick-launch modules (AR HUD, Graphs, Trail Kit, Pro Suite, AI Lab, 3D Lab, Prayer, Health), 94% Trail Readiness, and Backroad Field Command.', bullets: ['Live rig telemetry card (isinwheel H7 PRO • EMOPED • 48V • 18.2Ah • 874Wh • 1200W)', 'Backroad calculators for True Range (30.0 mi), Climb Load (2454W) & Cold Factor', '1-tap Garage Fleet Switcher between isinwheel H7 PRO and engwe y600'], src: '../public/assets/screenshots/02_cockpit_dashboard.jpg', fallback: RAW_BASE + 'assets/screenshots/02_cockpit_dashboard.jpg' },
+        { label: 'S866 LCD', kicker: 'OEM HARDWARE HUD • S866 STN LCD', title: 'Authentic S866 LCD, Compass Tape & 9-DOF Telemetry', desc: 'Switch between Tilt & Lean, Neon Orb, Analog Dial, Cyber Arc, and hardware-accurate S866 LCD complete with physical +, M, and - switch pod, 189° S compass bar, roll gauge, and Return-to-Base beacon.', bullets: ['Vector 7-segment S866 LCD showing 100% pack, 54.6V, PAS 2, Trip, Max & Avg MPH', 'Live Trip, Avg, Range (22.6 mi), Energy Left (874 Wh) & Lean / G-Force (-8° / 1.3G)', 'Auto-arming RTB Homing Beacon with Off-Road Unlimited speed class status'], src: '../public/assets/screenshots/03_cockpit_s866_lcd.jpg', fallback: RAW_BASE + 'assets/screenshots/03_cockpit_s866_lcd.jpg' },
+        { label: 'TomTom & Map', kicker: 'TOMTOM LIVE & COCKPIT MAP', title: 'Live Speed Limits, Vector Streets & AI Ride Safety Check', desc: 'Inline Cockpit navigation powered by TomTom Live road speed limits and an interactive dark Mapbox vector map alongside a 1-tap AI Ride & Sensor Safety Check.', bullets: ['Live street name & posted LIMIT 25 MPH badge from TomTom Live telemetry', 'Interactive dark Mapbox vector map with zoom controls and rider pin', 'Backcountry & Rural Trail Readiness weather and compass strip'], src: '../public/assets/screenshots/04_cockpit_tomtom_map.jpg', fallback: RAW_BASE + 'assets/screenshots/04_cockpit_tomtom_map.jpg' },
+        { label: 'Rider Radar', kicker: 'RIDER RADAR & SECTOR SOS', title: 'Mapbox Streets/Satellite, Nearby Pilots & SOS Flare', desc: 'Discover visible real-human riders within 50 miles, monitor sector weather and nearest pilot distance, switch between Mapbox Streets, Satellite, and Mapbox Dark, and drop quick trail waypoints.', bullets: ['Visible beacon toggle with live GPS heading readout (HDG 202° • 475 ft)', 'Sector Telemetry & SOS card with instant SOS Flare emergency alert button', '1-tap trail waypoints: + Country Store, + Air Pump & + Pine Trailhead'], src: '../public/assets/screenshots/05_radar_sos_map.jpg', fallback: RAW_BASE + 'assets/screenshots/05_radar_sos_map.jpg' },
+        { label: 'AR Mechanic', kicker: 'BARN & BENCH AR MECHANIC', title: '135 Workshop Tools & Live Gemini MOSFET Diagnostics', desc: 'Full workbench companion with Bench, Shop Calc, Rig Specs, and Parts tabs, live Bench Cam, Voltmeter & Live AR tools, and Gemini 3.1 Flash-Lite diagnostics for controller MOSFETs and phase leads.', bullets: ['Barn Workbench Reference: 45 Live Fault Trees, 60 Bolt Torque Specs & 30 Surface PSI', 'Inspect hardware using live Camera Snap, Photo Picker (Pic 1 / Pic 2) & Voice', 'Instant AI technical diagnosis with copy, read-aloud TTS & share controls'], src: '../public/assets/screenshots/06_barn_ar_mechanic.jpg', fallback: RAW_BASE + 'assets/screenshots/06_barn_ar_mechanic.jpg' },
+        { label: 'Co-Pilot AI', kicker: 'BACKROAD CO-PILOT & WEB GROUNDING', title: 'Pre-Ride Flight Check, Personas & Live Web Grounding', desc: 'Ask the Backroad Co-Pilot anything about your rig, voltage, local weather, or route with structured Gemini Pre-Ride Flight Checks, switchable personas (like Trail Chaplain), and Live Web Grounding ON.', bullets: ['1-tap Live AI Pre-Ride Flight Check scored for your active 48V 13S NMC rig', 'Quick access to Range Check, Personas, Repair Wizards & 100 Co-Pilot Skills', 'Real-time Live Web Grounding toggle alongside Camera, Photo, AR Eye & Mic'], src: '../public/assets/screenshots/07_backroad_copilot.jpg', fallback: RAW_BASE + 'assets/screenshots/07_backroad_copilot.jpg' },
+        { label: 'Trail TV Hub', kicker: 'COUNTRY TRAIL TV & RADIO', title: 'In-App Theater, Auto-DJ Mix & 35 Ride Radio Stations', desc: 'Stream curated Rural ERides builds, Global PEV reviews, and Music Mixes right inside the app with Auto-DJ Mix, Vault bookmarks, Shuffle/Queue controls, and 35 Barn Workshop & Riding Radio presets.', bullets: ['Filter chips for Rural Gravel Rides, Barn PEV Builds, Riding Radio & VESC Tech', 'Direct Auto-DJ Mix, Sleep Timer, Recent History & Saved Vault controls', 'One-tap playlists like Gravel Cruise Country Acoustic & Dusk Porch Americana'], src: '../public/assets/screenshots/08_channel_tv_radio.jpg', fallback: RAW_BASE + 'assets/screenshots/08_channel_tv_radio.jpg' },
+        { label: 'Video Feed', kicker: 'RURAL ERIDES VIDEO THEATER', title: 'Live YouTube PEV Reviews, Unboxings & App Updates', desc: 'Browse the live Rural ERides YouTube feed including Balinge 16x4 Tire Review H7 PRO and GoPro Hero 12 Black Unboxing at the Lake with instant Queue, Theater Play, Bookmark, and Share actions.', bullets: ['Live YouTube feed integration synced directly to the Rural ERides channel', 'Instant play-in-theater, add-to-queue, save-to-vault & external share buttons', 'Works alongside the persistent mini-player bar across all app tabs'], src: '../public/assets/screenshots/09_channel_video_feed.jpg', fallback: RAW_BASE + 'assets/screenshots/09_channel_video_feed.jpg' },
+        { label: 'Porch Talk', kicker: 'PORCH TALK • ZERO BOT PILOTS', title: 'Rider Timeline Stories & 35 Rural Porch Post Templates', desc: 'Connect with verified real riders across Porch Feed, Trail Crew, Saved, and Top Riders—featuring 24-hour Timeline Stories, PEV Slang dictionary, and 35 pre-filled Convoy, Swap Meet & Charger templates.', bullets: ['24h Rider Timeline Stories with photo upload & real rider callsigns', '35 Rural Porch Post Templates (County Gravel Convoy, Sunset Backroad Cruise)', 'Quick trail post bar with Photo, Ride Log, Poll, Sell Rig & SOS shortcuts'], src: '../public/assets/screenshots/10_porch_talk_feed.jpg', fallback: RAW_BASE + 'assets/screenshots/10_porch_talk_feed.jpg' },
+        { label: 'Porch DMs', kicker: 'PORCH DMs & LIVE CALLS', title: 'Zero-Bot Direct Messages, Live GPS Pins & Voice/Video Calls', desc: 'Message real Google-authenticated riders in crash-free threads, filter Chats, Pins, Riders, and Calls, drop exact LIVE GPS PIN coordinates, and launch 1-tap voice or video calls.', bullets: ['Verified real-rider directory (Zero Bots) with instant callsign & rig search', 'Clickable LIVE GPS PIN sharing inside DM threads for trail meetups', 'Integrated call launcher and pin board right inside each conversation card'], src: '../public/assets/screenshots/11_porch_dms_calls.jpg', fallback: RAW_BASE + 'assets/screenshots/11_porch_dms_calls.jpg' },
+        { label: 'Board Post', kicker: 'LIVE BOARD TRANSMISSION', title: 'Family-Friendly Shield Composer, AI Polish & Live Polls', desc: 'Broadcast ride reports, builds, or garage updates to Cloud Firestore with automatic Family-Friendly Shield moderation, quick #PEV/#EUC/#VESC tags, Tone presets, AI Polish, and Live Polls.', bullets: ['Family-Friendly Shield Active: automated text & photo safety filtering', 'Category channels (UNIVERSAL, RIDE REPORTS, BUILDS, GARAGE) & Tone chips', '1-tap AI Polish rewrites, Photo Picker attachments & optional Live Polls'], src: '../public/assets/screenshots/12_live_board_composer.jpg', fallback: RAW_BASE + 'assets/screenshots/12_live_board_composer.jpg' }
       ];
       var idx = 0, autoPlay = true, timer = null;
       var mainImg = document.getElementById('carousel-main-img'), counterEl = document.getElementById('carousel-counter'), kickerEl = document.getElementById('carousel-kicker'), titleEl = document.getElementById('carousel-title'), descEl = document.getElementById('carousel-desc'), bulletsEl = document.getElementById('carousel-bullets'), thumbsEl = document.getElementById('carousel-thumbs'), playBtn = document.getElementById('carousel-btn-play'), lightbox = document.getElementById('lightbox'), lightboxImg = document.getElementById('lightbox-img'), lightboxCap = document.getElementById('lightbox-caption');
@@ -339,7 +294,9 @@
         SLIDES.forEach(function (s, i) {
           var b = document.createElement('button');
           b.type = 'button'; b.className = 'thumb-btn' + (i === idx ? ' active' : '');
-          b.innerHTML = '<img src="' + s.src + '" alt="' + s.label + '" /><span>' + s.label + '</span>';
+          var im = document.createElement('img'); im.src = s.src; im.alt = s.label; im.onerror = function () { this.onerror = null; this.src = s.fallback; };
+          var sp = document.createElement('span'); sp.textContent = (i + 1) + '. ' + s.label;
+          b.appendChild(im); b.appendChild(sp);
           b.addEventListener('click', function () { goTo(i); resetAuto(); });
           thumbsEl.appendChild(b);
         });
@@ -347,6 +304,7 @@
       function goTo(n) {
         idx = (n + SLIDES.length) % SLIDES.length;
         var s = SLIDES[idx];
+        mainImg.onerror = function () { this.onerror = null; this.src = s.fallback; };
         mainImg.src = s.src; mainImg.alt = s.title;
         counterEl.textContent = (idx + 1) + ' / ' + SLIDES.length;
         kickerEl.textContent = s.kicker; titleEl.textContent = s.title; descEl.textContent = s.desc;
@@ -355,15 +313,18 @@
       }
       function resetAuto() { if (timer) clearInterval(timer); if (autoPlay) timer = setInterval(function () { goTo(idx + 1); }, 5500); }
       buildThumbs(); goTo(0); resetAuto();
+      document.getElementById('hero-shot-1').addEventListener('click', function () { goTo(0); resetAuto(); document.getElementById('screenshots').scrollIntoView({ behavior: 'smooth' }); });
+      document.getElementById('hero-shot-2').addEventListener('click', function () { goTo(2); resetAuto(); document.getElementById('screenshots').scrollIntoView({ behavior: 'smooth' }); });
       document.getElementById('carousel-prev').addEventListener('click', function () { goTo(idx - 1); resetAuto(); });
       document.getElementById('carousel-next').addEventListener('click', function () { goTo(idx + 1); resetAuto(); });
       document.getElementById('carousel-btn-next').addEventListener('click', function () { goTo(idx + 1); resetAuto(); });
       playBtn.addEventListener('click', function () { autoPlay = !autoPlay; playBtn.textContent = autoPlay ? 'Pause Autoplay' : 'Resume Autoplay'; resetAuto(); });
-      function openLightbox() { lightboxImg.src = SLIDES[idx].src; lightboxCap.textContent = SLIDES[idx].title; lightbox.classList.add('open'); }
+      function openLightbox() { var s = SLIDES[idx]; lightboxImg.onerror = function () { this.onerror = null; this.src = s.fallback; }; lightboxImg.src = s.src; lightboxCap.textContent = (idx + 1) + ' / ' + SLIDES.length + ' — ' + s.title; lightbox.classList.add('open'); }
       document.getElementById('carousel-zoom-trigger').addEventListener('click', openLightbox);
       document.getElementById('carousel-btn-zoom').addEventListener('click', openLightbox);
       document.getElementById('lightbox-close').addEventListener('click', function () { lightbox.classList.remove('open'); });
       lightbox.addEventListener('click', function (e) { if (e.target === lightbox) lightbox.classList.remove('open'); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') lightbox.classList.remove('open'); if (e.key === 'ArrowRight') { goTo(idx + 1); resetAuto(); } if (e.key === 'ArrowLeft') { goTo(idx - 1); resetAuto(); } });
       var touchStartX = 0;
       document.getElementById('carousel-swipe-area').addEventListener('touchstart', function (e) { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
       document.getElementById('carousel-swipe-area').addEventListener('touchend', function (e) { var dx = e.changedTouches[0].screenX - touchStartX; if (Math.abs(dx) > 40) { goTo(dx < 0 ? idx + 1 : idx - 1); resetAuto(); } }, { passive: true });
@@ -373,7 +334,7 @@
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (rel) {
           if (!rel) { document.getElementById('rel-apk').textContent = 'View on GitHub Releases'; return; }
-          document.getElementById('rel-tag').textContent = rel.name || rel.tag_name || 'v60.0';
+          document.getElementById('rel-tag').textContent = rel.name || rel.tag_name || 'v66.0';
           var assets = Array.isArray(rel.assets) ? rel.assets : [];
           var apk = assets.find(function (a) { return a.name && a.name.toLowerCase().endsWith('.apk'); });
           var aab = assets.find(function (a) { return a.name && a.name.toLowerCase().endsWith('.aab'); });
