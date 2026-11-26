@@ -1376,4 +1376,10 @@ data class LiveTelemetrySnapshot(
   val inSchoolZone: Boolean = false,
   val roadLimitSource: String = "",
   val trailPoints: List<Pair<Double, Double>> = emptyList(),
-)
+) {
+  val powerWatts: Double
+    get() = if (speedKmh < 0.8) 0.0 else (speedKmh * 19.5 + pitchDeg.coerceIn(0f, 25f) * 34.0).coerceIn(35.0, 12500.0)
+
+  val voltageSagV: Double
+    get() = if (speedKmh < 0.8) 0.0 else ((powerWatts / estimatedVoltage.coerceAtLeast(36.0)) * 0.048).coerceIn(0.1, 6.8)
+}

@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,24 +58,36 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.Image
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.hardware.VoiceAudioManager
+import com.example.ui.components.distUnitLabel
+import com.example.ui.components.formatDistValue
+import com.example.ui.components.formatSpeedValue
+import com.example.ui.components.speedUnitLabel
+import com.example.ui.theme.LocalTacticalSettings
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -151,6 +164,10 @@ fun GravelVoltGameScreen(
   onBack: () -> Unit,
 ) {
   val haptics = LocalHapticFeedback.current
+  val settings = LocalTacticalSettings.current
+  val distUnit = settings.distanceUnit
+  val distLblUpper = distUnitLabel(distUnit).uppercase()
+  val spdLblUpper = speedUnitLabel(distUnit)
   var phase by remember { mutableStateOf(VoltGamePhase.TITLE) }
   var muted by remember { mutableStateOf(false) }
   var activeVehicleName by remember(vehicleName) { mutableStateOf(vehicleName.ifBlank { "Sur-Ron Ultra Bee eMoto" }) }
@@ -627,6 +644,10 @@ fun GravelVoltGameScreen(
         }
 
         if (phase == VoltGamePhase.PLAYING || phase == VoltGamePhase.PAUSED) {
+          val liveDistanceKm = distanceMiles * 1.60934
+          val dispDist = formatDistValue(liveDistanceKm, distUnit)
+          val rawKmh = (28.0 + (distanceMiles * 4.5).coerceAtMost(24.0)) * (if (boostTimer > 0f) 1.45 else 1.0)
+          val dispSpd = formatSpeedValue(rawKmh, distUnit).roundToInt()
           Surface(
             shape = RoundedCornerShape(14.dp),
             color = Color(0xCC0B132B),
@@ -639,7 +660,8 @@ fun GravelVoltGameScreen(
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Text("$score PTS", color = Color(0xFF39FF14), fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1, softWrap = false)
-              Text("${"%.2f".format(distanceMiles)} MI", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
+              Text("$dispSpd $spdLblUpper", color = Color(0xFFFACC15), fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1, softWrap = false)
+              Text("${"%.2f".format(dispDist)} $distLblUpper", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
               Text("${batteryPct.toInt()}%⚡", color = if (batteryPct < 25f) Color(0xFFEF4444) else Color(0xFF38BDF8), fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1, softWrap = false)
               Text("♥".repeat(lives.coerceAtLeast(0)), color = Color(0xFFF43F5E), fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
@@ -905,14 +927,47 @@ fun GravelVoltGameScreen(
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Icon(Icons.Default.Bolt, contentDescription = null, tint = Color(0xFF39FF14), modifier = Modifier.size(36.dp))
-          Text(
-            "GRAVEL VOLT RUNNER 3D",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Black,
-            color = Color.White,
-            textAlign = TextAlign.Center,
-          )
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(104.dp)
+              .clip(RoundedCornerShape(14.dp))
+              .border(1.dp, Color(0xFF39FF14).copy(alpha = 0.55f), RoundedCornerShape(14.dp)),
+          ) {
+            Image(
+              painter = painterResource(id = R.drawable.img_rural_dirt_road_sky),
+              contentDescription = "Rural Dirt Trail & Wildflower Landscape",
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.fillMaxSize(),
+            )
+            Box(
+              modifier = Modifier
+                .fillMaxSize()
+                .background(
+                  Brush.verticalGradient(
+                    listOf(Color(0x22000000), Color(0xCC0B132B)),
+                  )
+                ),
+            )
+            Column(
+              modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
+              horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+              Text(
+                "GRAVEL VOLT RUNNER 3D",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+              )
+              Text(
+                "Rural Dirt Trail • Procedural Wildflowers • Pine & Oak Forest ($spdLblUpper)",
+                fontSize = 10.sp,
+                color = Color(0xFF86EFAC),
+                fontWeight = FontWeight.Bold,
+              )
+            }
+          }
           Text(
             "Pilot $callsign • $activeVehicleName",
             style = MaterialTheme.typography.labelLarge,
@@ -922,7 +977,7 @@ fun GravelVoltGameScreen(
             overflow = TextOverflow.Ellipsis,
           )
           Text(
-            "SELECT 3D PEV RIG (LIVE 3D PREVIEW ON ROAD)",
+            "SELECT 3D PEV RIG (LIVE 3D PREVIEW ON DIRT TRAIL)",
             fontSize = 10.sp,
             fontWeight = FontWeight.Black,
             color = Color(0xFF39FF14),
@@ -999,8 +1054,9 @@ fun GravelVoltGameScreen(
             color = Color.White,
             textAlign = TextAlign.Center,
           )
+          val dispRunDist = formatDistValue(distanceMiles * 1.60934, distUnit)
           Text(
-            "Score: $score PTS • ${"%.2f".format(distanceMiles)} MI • $streetsExplored Streets",
+            "Score: $score PTS • ${"%.2f".format(dispRunDist)} $distLblUpper • $streetsExplored Trails",
             color = Color(0xFF39FF14),
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,

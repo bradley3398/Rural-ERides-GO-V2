@@ -540,8 +540,9 @@ fun FighterJetHud(
       }
 
       Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 98.dp)) {
+        val altVal = if (settings.distanceUnit == "km") "${telemetry.altitudeM.toInt()}m" else "${(telemetry.altitudeM * 3.28084).roundToInt()}ft"
         Text(
-          "HDG ${"%03d".format(((telemetry.bearingDeg.toInt() % 360) + 360) % 360)}° • ALT ${telemetry.altitudeM.toInt()}m • P ${"%.0f".format(telemetry.pitchDeg)}° R ${"%.0f".format(telemetry.rollDeg)}°",
+          "HDG ${"%03d".format(((telemetry.bearingDeg.toInt() % 360) + 360) % 360)}° • ALT $altVal • P ${"%.0f".format(telemetry.pitchDeg)}° R ${"%.0f".format(telemetry.rollDeg)}°",
           fontSize = 9.5.sp,
           fontWeight = FontWeight.Bold,
           color = hudGreen,
@@ -715,7 +716,7 @@ fun DualTwinClusterHud(
     // Center Mini Gear / Mode Indicator
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
       Text(settings.rideMode, fontSize = 10.sp, fontWeight = FontWeight.Black, color = secondary)
-      Text("TRIP", fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Text("TRIP (${distUnitLabel(settings.distanceUnit).uppercase()})", fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
       Text("%.1f".format(formatDistValue(telemetry.tripDistanceKm, settings.distanceUnit)), fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 
@@ -802,6 +803,11 @@ fun RetroSynthWedgeHud(
   }
 }
 
+/**
+ * Authentic LeaperKim Veteran Sherman-S / Begode Master / InMotion V13 Top-Deck EUC Display
+ * Includes live PWM % duty cycle + Safety Headroom bar, pack voltage & phase amps, board temp,
+ * HARD/MED/SOFT pedal stiffness badge, and dual-axis carving lean & pitch horizon.
+ */
 @Composable
 fun EucLeanCarvingHud(
   dispSpeed: Double,
@@ -814,88 +820,159 @@ fun EucLeanCarvingHud(
   surfaceBg: Color,
 ) {
   val chrome = LocalTacticalChrome.current
-  val pwmSafetyPct = ((1f - progress * 0.85f) * 100f).roundToInt().coerceIn(5, 100)
-  Column(
-    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-    horizontalAlignment = Alignment.CenterHorizontally,
-    verticalArrangement = Arrangement.spacedBy(6.dp),
-  ) {
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().height(126.dp)) {
-      Canvas(modifier = Modifier.size(196.dp, 124.dp)) {
-        val cx = size.width / 2f
-        val cy = size.height * 0.88f
-        val r = size.height * 0.78f
-        drawArc(
-          color = surfaceBg,
-          startAngle = 205f,
-          sweepAngle = 130f,
-          useCenter = false,
-          topLeft = Offset(cx - r, cy - r),
-          size = Size(r * 2f, r * 2f),
-          style = Stroke(12f, cap = StrokeCap.Round),
-        )
-        // ±15°, ±30°, ±45° lean scale ticks
-        for (degOff in listOf(-45, -30, -15, 0, 15, 30, 45)) {
-          val rad = Math.toRadians((270f + (degOff / 45f) * 65f).toDouble())
-          drawLine(
-            color = if (degOff == 0) accent else secondary.copy(alpha = 0.65f),
-            start = Offset(cx + ((r - 9f) * cos(rad)).toFloat(), cy + ((r - 9f) * sin(rad)).toFloat()),
-            end = Offset(cx + ((r + 8f) * cos(rad)).toFloat(), cy + ((r + 8f) * sin(rad)).toFloat()),
-            strokeWidth = if (degOff == 0) 3f else 1.6f,
-          )
-        }
-        val rollClamped = telemetry.rollDeg.coerceIn(-45f, 45f)
-        val rollSweep = (rollClamped / 45f) * 65f
-        drawArc(
-          color = if (abs(rollClamped) > 32f) Color(0xFFFF4D6D) else secondary,
-          startAngle = 270f,
-          sweepAngle = rollSweep,
-          useCenter = false,
-          topLeft = Offset(cx - r, cy - r),
-          size = Size(r * 2f, r * 2f),
-          style = Stroke(12f, cap = StrokeCap.Round),
-        )
-        // Peak Left/Right lean markers
-        listOf(-telemetry.peakLeanLeftDeg, telemetry.peakLeanRightDeg).forEach { pk ->
-          if (abs(pk) > 3f) {
-            val pkRad = Math.toRadians((270f + (pk.coerceIn(-45f, 45f) / 45f) * 65f).toDouble())
-            drawCircle(
-              color = Color(0xFFFFEA00),
-              radius = 3.5f,
-              center = Offset(cx + (r * cos(pkRad)).toFloat(), cy + (r * sin(pkRad)).toFloat()),
-            )
-          }
-        }
-      }
-      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 24.dp)) {
-        Text("%.1f".format(dispSpeed), fontSize = 38.sp, lineHeight = 38.sp, fontWeight = FontWeight.Black, color = accent)
-        Text("$unitLbl • LEAN ${"%.0f".format(telemetry.rollDeg)}° • PITCH ${"%.0f".format(telemetry.pitchDeg)}°", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = secondary)
-      }
+  val pwmUsedPct = (progress * 88f + (telemetry.voltageSagV.toFloat() * 1.8f)).roundToInt().coerceIn(4, 98)
+  val pwmSafetyPct = (100 - pwmUsedPct).coerceIn(2, 96)
+  val pwmAlertColor =
+    when {
+      pwmUsedPct >= 80 -> Color(0xFFFF2E55)
+      pwmUsedPct >= 70 -> Color(0xFFF59E0B)
+      else -> accent
+    }
+  val boardTempC = (telemetry.ambientTempC?.toDouble() ?: 24.0) + (pwmUsedPct * 0.34)
+  val boardTempLbl = formatTempLabel(boardTempC, settings.tempUnit)
+  val pedalMode =
+    when {
+      settings.rideMode.equals("SPORT", ignoreCase = true) || settings.rideMode.equals("TURBO", ignoreCase = true) -> "HARD"
+      settings.rideMode.equals("ECO", ignoreCase = true) -> "SOFT"
+      else -> "MED"
     }
 
-    // PWM / Power Safety Headroom Bar
-    Row(
-      modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
+  Surface(
+    color = Color(0xFF070B12),
+    shape = RoundedCornerShape(18.dp),
+    border = BorderStroke(2.dp, pwmAlertColor.copy(alpha = 0.65f)),
+    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+  ) {
+    Column(
+      modifier = Modifier.fillMaxWidth().padding(10.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-      Text("SAFETY MARGIN $pwmSafetyPct%", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (pwmSafetyPct < 25) Color(0xFFFF4D6D) else accent)
-      Box(
-        modifier =
-          Modifier
-            .weight(1f)
-            .height(10.dp)
-            .background(surfaceBg, chrome.smallShape),
+      // Top EUC Roll-Cage Header: Pack Volts + Sag | EUC Mode | Board Temp + Battery %
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
       ) {
+        Text(
+          "${"%.1f".format(telemetry.estimatedVoltage)}V (-${"%.1f".format(telemetry.voltageSagV)}V)",
+          fontSize = 10.sp,
+          fontWeight = FontWeight.Black,
+          color = Color(0xFFFBBF24),
+        )
+        Surface(
+          color = pwmAlertColor.copy(alpha = 0.18f),
+          shape = RoundedCornerShape(5.dp),
+          border = BorderStroke(1.dp, pwmAlertColor),
+        ) {
+          Text(
+            "PEDAL $pedalMode • ${if (pwmUsedPct >= 80) "TILTBACK!" else "FOC OK"}",
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Black,
+            color = pwmAlertColor,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+          )
+        }
+        Text(
+          "MOS $boardTempLbl • ${telemetry.batteryPct}%",
+          fontSize = 10.sp,
+          fontWeight = FontWeight.Bold,
+          color = secondary,
+        )
+      }
+
+      Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().height(116.dp)) {
+        Canvas(modifier = Modifier.size(196.dp, 114.dp)) {
+          val cx = size.width / 2f
+          val cy = size.height * 0.88f
+          val r = size.height * 0.76f
+          drawArc(
+            color = surfaceBg,
+            startAngle = 205f,
+            sweepAngle = 130f,
+            useCenter = false,
+            topLeft = Offset(cx - r, cy - r),
+            size = Size(r * 2f, r * 2f),
+            style = Stroke(12f, cap = StrokeCap.Round),
+          )
+          // ±15°, ±30°, ±45° lean scale ticks
+          for (degOff in listOf(-45, -30, -15, 0, 15, 30, 45)) {
+            val rad = Math.toRadians((270f + (degOff / 45f) * 65f).toDouble())
+            drawLine(
+              color = if (degOff == 0) accent else secondary.copy(alpha = 0.65f),
+              start = Offset(cx + ((r - 9f) * cos(rad)).toFloat(), cy + ((r - 9f) * sin(rad)).toFloat()),
+              end = Offset(cx + ((r + 8f) * cos(rad)).toFloat(), cy + ((r + 8f) * sin(rad)).toFloat()),
+              strokeWidth = if (degOff == 0) 3f else 1.6f,
+            )
+          }
+          val rollClamped = telemetry.rollDeg.coerceIn(-45f, 45f)
+          val rollSweep = (rollClamped / 45f) * 65f
+          drawArc(
+            color = if (abs(rollClamped) > 32f) Color(0xFFFF4D6D) else secondary,
+            startAngle = 270f,
+            sweepAngle = rollSweep,
+            useCenter = false,
+            topLeft = Offset(cx - r, cy - r),
+            size = Size(r * 2f, r * 2f),
+            style = Stroke(12f, cap = StrokeCap.Round),
+          )
+          // Peak Left/Right lean markers
+          listOf(-telemetry.peakLeanLeftDeg, telemetry.peakLeanRightDeg).forEach { pk ->
+            if (abs(pk) > 3f) {
+              val pkRad = Math.toRadians((270f + (pk.coerceIn(-45f, 45f) / 45f) * 65f).toDouble())
+              drawCircle(
+                color = Color(0xFFFFEA00),
+                radius = 3.5f,
+                center = Offset(cx + (r * cos(pkRad)).toFloat(), cy + (r * sin(pkRad)).toFloat()),
+              )
+            }
+          }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 20.dp)) {
+          Text("%.1f".format(dispSpeed), fontSize = 38.sp, lineHeight = 38.sp, fontWeight = FontWeight.Black, color = Color.White)
+          Text(
+            "$unitLbl • LEAN ${"%.0f".format(telemetry.rollDeg)}° • PITCH ${"%.0f".format(telemetry.pitchDeg)}°",
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = secondary,
+          )
+        }
+      }
+
+      // Live EUC PWM % Load & Cutout Safety Headroom Bar
+      Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Text(
+          "PWM $pwmUsedPct%",
+          fontSize = 10.sp,
+          fontWeight = FontWeight.Black,
+          color = pwmAlertColor,
+        )
         Box(
           modifier =
             Modifier
-              .fillMaxWidth(pwmSafetyPct / 100f)
-              .fillMaxHeight()
-              .background(if (pwmSafetyPct < 25) Color(0xFFFF4D6D) else accent, chrome.smallShape),
+              .weight(1f)
+              .height(10.dp)
+              .background(surfaceBg, chrome.smallShape),
+        ) {
+          Box(
+            modifier =
+              Modifier
+                .fillMaxWidth((pwmUsedPct / 100f).coerceIn(0.04f, 1f))
+                .fillMaxHeight()
+                .background(pwmAlertColor, chrome.smallShape),
+          )
+        }
+        Text(
+          "SAFE $pwmSafetyPct%",
+          fontSize = 10.sp,
+          fontWeight = FontWeight.Black,
+          color = if (pwmSafetyPct <= 20) Color(0xFFFF2E55) else accent,
         )
       }
-      Text("${telemetry.batteryPct}%", fontSize = 10.sp, fontWeight = FontWeight.Black, color = secondary)
     }
   }
 }

@@ -183,7 +183,7 @@ fun BoardScreen(
   val activeVehicleSummary =
     activeVehicle?.let { "${it.name} (${it.category} • ${it.voltage.toInt()}V • ${it.batteryWh}Wh)" }.orEmpty()
   val liveTelemetrySummary =
-    "Live Speed ${"%.1f".format(telemetry.speedKmh)} km/h • Trip ${"%.2f".format(telemetry.tripDistanceKm)} km • Bat ${telemetry.batteryPct}%"
+    "Live Speed ${"%.1f".format(com.example.ui.components.formatSpeedValue(telemetry.speedKmh, settings.distanceUnit))} ${com.example.ui.components.speedUnitLabel(settings.distanceUnit)} • Trip ${"%.2f".format(com.example.ui.components.formatDistValue(telemetry.tripDistanceKm, settings.distanceUnit))} ${com.example.ui.components.distUnitLabel(settings.distanceUnit)} • Bat ${telemetry.batteryPct}%"
 
   LaunchedEffect(
     activeUser?.uid,

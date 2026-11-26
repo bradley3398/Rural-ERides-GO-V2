@@ -520,9 +520,16 @@ fun ExpandedPevSpecDetailSheet(
                 "Power-to-Weight Ratio" to if (wattsPerLb > 0) "${"%.1f".format(wattsPerLb)} W/lb (${"%.1f".format(wattsPerLb * 2.205)} W/kg)" else "N/A",
                 "Battery Energy Density" to if (whPerLb > 0) "${"%.1f".format(whPerLb)} Wh/lb" else "N/A",
                 "Value Analytics" to buildString {
+                  val useMetric = !com.example.ui.theme.LocalTacticalSettings.current.distanceUnit.equals("mi", ignoreCase = true)
                   if (dollarsPerWh > 0) append("$${"%.2f".format(dollarsPerWh)}/Wh")
-                  if (dollarsPerMph > 0) append("  •  $${"%.0f".format(dollarsPerMph)}/mph")
-                  if (dollarsPerMi > 0) append("  •  $${"%.0f".format(dollarsPerMi)}/mi")
+                  if (dollarsPerMph > 0) {
+                    if (useMetric) append("  •  $${"%.0f".format(dollarsPerMph / 1.60934)}/km/h")
+                    else append("  •  $${"%.0f".format(dollarsPerMph)}/mph")
+                  }
+                  if (dollarsPerMi > 0) {
+                    if (useMetric) append("  •  $${"%.0f".format(dollarsPerMi / 1.60934)}/km")
+                    else append("  •  $${"%.0f".format(dollarsPerMi)}/mi")
+                  }
                 }.ifBlank { "Standard" },
                 "Recommended Safety Gear" to gearTier,
               )
@@ -544,6 +551,14 @@ fun ExpandedPevSpecDetailSheet(
 
         // 4. INTERACTIVE LIVE RANGE SIMULATOR
         item {
+          val curSettings = com.example.ui.theme.LocalTacticalSettings.current
+          val isMetricSim = !curSettings.distanceUnit.equals("mi", ignoreCase = true)
+          val isCelsiusSim = curSettings.tempUnit.equals("c", ignoreCase = true)
+          val displayCruise = if (isMetricSim) "${(simCruiseMph * 1.60934f).roundToInt()} KM/H" else "${simCruiseMph.roundToInt()} MPH"
+          val displayTemp = if (isCelsiusSim) "${((simTempF - 32f) * 5f / 9f).roundToInt()}°C" else "${simTempF.roundToInt()}°F"
+          val primaryRangeText =
+            if (isMetricSim) "${"%.1f".format(liveSimRangeKm)} km (${"%.1f".format(liveSimRangeMi)} mi)"
+            else "${"%.1f".format(liveSimRangeMi)} mi (${"%.1f".format(liveSimRangeKm)} km)"
           TacticalCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
               Icon(Icons.Default.Speed, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
@@ -557,7 +572,7 @@ fun ExpandedPevSpecDetailSheet(
               modifier = Modifier.fillMaxWidth(),
             ) {
               Text(
-                "Estimated Real Range: ${"%.1f".format(liveSimRangeMi)} mi (${"%.1f".format(liveSimRangeKm)} km)",
+                "Estimated Real Range: $primaryRangeText",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Black,
@@ -567,9 +582,9 @@ fun ExpandedPevSpecDetailSheet(
             Spacer(Modifier.height(6.dp))
             Text("Rider + Gear Weight: ${simWeightLbs.roundToInt()} lbs", style = MaterialTheme.typography.labelSmall)
             com.example.ui.components.TacticalSlider(value = simWeightLbs, onValueChange = { simWeightLbs = it }, valueRange = 100f..320f)
-            Text("Target Cruise Speed: ${simCruiseMph.roundToInt()} mph", style = MaterialTheme.typography.labelSmall)
+            Text("Target Cruise Speed: $displayCruise", style = MaterialTheme.typography.labelSmall)
             com.example.ui.components.TacticalSlider(value = simCruiseMph, onValueChange = { simCruiseMph = it }, valueRange = 10f..55f)
-            Text("Ambient Temp: ${simTempF.roundToInt()}°F  |  Avg Hill Grade: ${simGradePct.roundToInt()}%", style = MaterialTheme.typography.labelSmall)
+            Text("Ambient Temp: $displayTemp  |  Avg Hill Grade: ${simGradePct.roundToInt()}%", style = MaterialTheme.typography.labelSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
               com.example.ui.components.TacticalSlider(value = simTempF, onValueChange = { simTempF = it }, valueRange = 15f..105f, modifier = Modifier.weight(1f))
               com.example.ui.components.TacticalSlider(value = simGradePct, onValueChange = { simGradePct = it }, valueRange = 0f..15f, modifier = Modifier.weight(1f))

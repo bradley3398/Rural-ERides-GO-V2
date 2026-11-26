@@ -91,7 +91,7 @@ class CommunityRepository(
             PublicPilotProfile(
               id = r.userId,
               userId = r.userId,
-              callsign = r.callsign.ifBlank { "PILOT_${r.userId.take(5).uppercase()}" },
+              callsign = r.callsign.trim(),
               rankBadge = "Live Radar Pilot",
               xpPoints = 25L,
               totalKm = 0.0,
@@ -445,7 +445,16 @@ class CommunityRepository(
         if (statusTag in listOf("CRUISING", "CHARGING", "SOS", "ASSEMBLE", "OFFLINE")) statusTag
         else "CRUISING"
       val vis = if (visible) "PUBLIC" else "HIDDEN"
-      val cleanCs = callsign.take(32).ifBlank { "PILOT_${uid.take(5).uppercase()}" }
+      val fbUser = auth.currentUser
+      val cleanCs =
+        PilotAuthenticityGuard.deriveHumanCallsign(
+          preferredCallsign = callsign,
+          displayName = fbUser?.displayName.orEmpty(),
+          email = fbUser?.email.orEmpty(),
+        )
+      if (cleanCs.isBlank()) {
+        return Result.failure(IllegalStateException("Set a real pilot callsign before broadcasting radar beacon."))
+      }
       if (!snap.exists()) {
         ref
           .set(

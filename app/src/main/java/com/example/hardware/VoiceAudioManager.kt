@@ -1821,20 +1821,48 @@ class VoiceAudioManager(private val context: Context) {
   fun setSpeakerphoneOn(enabled: Boolean) {
     runCatching {
       val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
-      am.mode = AudioManager.MODE_IN_COMMUNICATION
+      // Stop any active ringtone before switching communication audio routing
+      stopRingtone()
+      am.mode = if (enabled) AudioManager.MODE_IN_COMMUNICATION else AudioManager.MODE_IN_COMMUNICATION
+      @Suppress("DEPRECATION")
+      runCatching { am.isSpeakerphoneOn = enabled }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val devices = am.availableCommunicationDevices
         if (enabled) {
           val speaker =
-            am.availableCommunicationDevices.firstOrNull {
+            devices.firstOrNull {
               it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
             }
-          if (speaker != null) am.setCommunicationDevice(speaker)
+          if (speaker != null) {
+            am.setCommunicationDevice(speaker)
+          }
         } else {
-          am.clearCommunicationDevice()
+          val earpiece =
+            devices.firstOrNull {
+              it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE ||
+                it.type == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                it.type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                it.type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET
+            }
+          if (earpiece != null) {
+            am.setCommunicationDevice(earpiece)
+          } else {
+            am.clearCommunicationDevice()
+          }
         }
-      } else {
-        @Suppress("DEPRECATION")
-        am.isSpeakerphoneOn = enabled
+      }
+      if (enabled) {
+        // Ensure neither voice call stream nor media stream (used by WebView WebRTC/WebAudio) is muted
+        listOf(AudioManager.STREAM_VOICE_CALL, AudioManager.STREAM_MUSIC).forEach { stream ->
+          runCatching {
+            val maxVol = am.getStreamMaxVolume(stream).coerceAtLeast(1)
+            val curVol = am.getStreamVolume(stream)
+            val targetMin = (maxVol * 0.72f).toInt().coerceAtLeast(1)
+            if (curVol < targetMin) {
+              am.setStreamVolume(stream, targetMin, 0)
+            }
+          }
+        }
       }
     }
   }
@@ -1843,11 +1871,10 @@ class VoiceAudioManager(private val context: Context) {
     runCatching {
       val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        am.clearCommunicationDevice()
-      } else {
-        @Suppress("DEPRECATION")
-        am.isSpeakerphoneOn = false
+        runCatching { am.clearCommunicationDevice() }
       }
+      @Suppress("DEPRECATION")
+      runCatching { am.isSpeakerphoneOn = false }
       am.mode = AudioManager.MODE_NORMAL
     }
   }

@@ -825,7 +825,7 @@ fun AhrsCockpitBatterySettingsContent(
       }
       AndroidSettingSwitch("Smart AI Range Estimation", checked = settings.smartBatteryAi) { v -> sessionVm.updateSettings { it.copy(smartBatteryAi = v) } }
       AndroidSettingSwitch("Auto-Start Recording on App Open", checked = settings.autoStartTracking) { v -> sessionVm.updateSettings { it.copy(autoStartTracking = v) } }
-      Text("Motor Heat Warning: ${settings.motorTempWarnC}°C", style = MaterialTheme.typography.labelSmall)
+      Text("Motor Heat Warning: ${com.example.ui.components.formatTempLabel(settings.motorTempWarnC.toDouble(), settings.tempUnit)}", style = MaterialTheme.typography.labelSmall)
       TacticalSlider(value = settings.motorTempWarnC.toFloat(), onValueChange = { v -> sessionVm.updateSettings { it.copy(motorTempWarnC = v.toInt()) } }, valueRange = 65f..115f)
       Text("Gas Savings Calculator: $${"%.2f".format(settings.gasPriceUsd)}/gal • Car ${settings.carMpg.toInt()} MPG", style = MaterialTheme.typography.labelSmall)
       TacticalSlider(value = settings.gasPriceUsd.toFloat(), onValueChange = { v -> sessionVm.updateSettings { it.copy(gasPriceUsd = v.toDouble()) } }, valueRange = 2.0f..7.0f)
@@ -842,7 +842,10 @@ fun AhrsCockpitBatterySettingsContent(
       }
       Text("Rider + Gear Weight: ${settings.riderWeightLbs} lbs", style = MaterialTheme.typography.labelSmall)
       TacticalSlider(value = settings.riderWeightLbs.coerceIn(90, 350).toFloat(), onValueChange = { v -> sessionVm.updateSettings { it.copy(riderWeightLbs = v.toInt()) } }, valueRange = 90f..350f)
-      Text("Daily Distance Goal: ${"%.0f".format(settings.dailyDistanceGoalKm)} km", style = MaterialTheme.typography.labelSmall)
+      Text(
+        "Daily Distance Goal: ${"%.0f".format(com.example.ui.components.formatDistValue(settings.dailyDistanceGoalKm.toDouble(), settings.distanceUnit))} ${com.example.ui.components.distUnitLabel(settings.distanceUnit)}",
+        style = MaterialTheme.typography.labelSmall,
+      )
       TacticalSlider(value = settings.dailyDistanceGoalKm.coerceIn(5f, 100f), onValueChange = { v -> sessionVm.updateSettings { it.copy(dailyDistanceGoalKm = v) } }, valueRange = 5f..100f)
       Text("Low Battery Alert: ${settings.lowBatteryWarningPct}%", style = MaterialTheme.typography.labelSmall)
       TacticalSlider(value = settings.lowBatteryWarningPct.coerceIn(5, 45).toFloat(), onValueChange = { v -> sessionVm.updateSettings { it.copy(lowBatteryWarningPct = v.toInt()) } }, valueRange = 5f..45f)
@@ -1412,17 +1415,25 @@ fun NavRadarLegalSettingsContent(
           TacticalFilterChip(selected = settings.pevLegalClass == cls, onClick = { sessionVm.updateSettings { it.copy(pevLegalClass = cls) } }, label = cls.label)
         }
       }
-      AndroidSettingSwitch("Strict School Zone Cap (20 MPH)", checked = settings.schoolZoneStrict) { v -> sessionVm.updateSettings { it.copy(schoolZoneStrict = v) } }
+      val isMetricSpeedSet = !settings.distanceUnit.equals("mi", ignoreCase = true)
+      val schoolCapLabel = if (isMetricSpeedSet) "32 KM/H" else "20 MPH"
+      val bufferLabel =
+        if (isMetricSpeedSet) "+${(settings.speedOffsetTolerance * 1.60934).toInt()} KM/H"
+        else "+${settings.speedOffsetTolerance} MPH"
+      val radiusLabel =
+        if (isMetricSpeedSet) "${(settings.radarRadiusMiles * 1.60934).toInt()} km"
+        else "${settings.radarRadiusMiles} mi"
+      AndroidSettingSwitch("Strict School Zone Cap ($schoolCapLabel)", checked = settings.schoolZoneStrict) { v -> sessionVm.updateSettings { it.copy(schoolZoneStrict = v) } }
       AndroidSettingSwitch("Play Beep When Over Speed Limit", checked = settings.legalAudioAlert) { v -> sessionVm.updateSettings { it.copy(legalAudioAlert = v) } }
       AndroidSettingSwitch("Flash Speedometer at Max Speed", checked = settings.hudBlinkMax) { v -> sessionVm.updateSettings { it.copy(hudBlinkMax = v) } }
-      Text("Speed Alert Buffer: +${settings.speedOffsetTolerance} MPH", style = MaterialTheme.typography.labelSmall)
+      Text("Speed Alert Buffer: $bufferLabel", style = MaterialTheme.typography.labelSmall)
       TacticalSlider(value = settings.speedOffsetTolerance.toFloat(), onValueChange = { v -> sessionVm.updateSettings { it.copy(speedOffsetTolerance = v.toInt()) } }, valueRange = 0f..15f)
       AndroidSettingSwitch("Auto-Follow My Position on Map", checked = settings.radarAutoFollow) { v -> sessionVm.updateSettings { it.copy(radarAutoFollow = v) } }
       AndroidSettingSwitch("Auto-Zoom Map Based on Speed", checked = settings.radarSpeedZoom) { v -> sessionVm.updateSettings { it.copy(radarSpeedZoom = v) } }
       AndroidSettingSwitch("Show My Profile on Local Map", checked = settings.publicProfile) { v -> sessionVm.updateSettings { it.copy(publicProfile = v) } }
       AndroidSettingSwitch("Include Me on Community Leaderboard", checked = settings.shareLeaderboard) { v -> sessionVm.updateSettings { it.copy(shareLeaderboard = v) } }
       AndroidSettingSwitch("Auto-Refresh Local Weather", checked = settings.autoWeatherSync) { v -> sessionVm.updateSettings { it.copy(autoWeatherSync = v) } }
-      Text("Nearby Map Search Radius: ${settings.radarRadiusMiles} mi", style = MaterialTheme.typography.labelSmall)
+      Text("Nearby Map Search Radius: $radiusLabel", style = MaterialTheme.typography.labelSmall)
       TacticalSlider(value = settings.radarRadiusMiles.toFloat(), onValueChange = { v -> sessionVm.updateSettings { it.copy(radarRadiusMiles = v.toInt()) } }, valueRange = 5f..100f)
       Text("GPS Refresh Rate: ${settings.telemetryRateHz}x/sec • Accuracy Filter: ${settings.gpsAccuracyLimitM}m", style = MaterialTheme.typography.labelSmall)
       TacticalSlider(value = settings.telemetryRateHz.toFloat(), onValueChange = { v -> sessionVm.updateSettings { it.copy(telemetryRateHz = v.toInt()) } }, valueRange = 1f..5f)

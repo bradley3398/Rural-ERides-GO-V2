@@ -265,9 +265,13 @@ fun CockpitScreen(
         rtbVector?.turnBackWarning == true ->
           "VOLT ALERT • TURN BACK TO BASE" to
             "Pack range (${"%.1f".format(formatDistValue(estRemRangeKm, settings.distanceUnit))} ${distUnitLabel(settings.distanceUnit)}) is within 1.25x of your ${"%.2f".format(formatDistValue(rtbVector.distanceKm, settings.distanceUnit))} ${distUnitLabel(settings.distanceUnit)} RTB distance!"
-        isOverspeeding ->
+        isOverspeeding -> {
+          val limDisplay =
+            if (settings.distanceUnit.equals("mi", ignoreCase = true)) "$effectiveLimitMph MPH"
+            else "${((effectiveLimitMph ?: 20) * 1.60934).toInt()} KM/H"
           "VOLT COACH • SPEED CAP EXCEEDED" to
-            "You are riding above the active ${effectiveLimitMph} MPH limit on ${telemetry.roadName}. Ease throttle."
+            "You are riding above the active $limDisplay limit on ${telemetry.roadName}. Ease throttle."
+        }
         aiSafetyBrief.isNotBlank() ->
           "VOLT • TACTICAL COACH BRIEFING" to aiSafetyBrief
         else -> null
@@ -1648,7 +1652,9 @@ fun CockpitScreen(
               onClick = {
                 sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.LIGHT_TICK)
                 val wSummary =
-                  (weatherState as? UiState.Success)?.data?.let { "${it.conditionLabel} ${it.tempC}C, wind ${it.windSpeedKmh}km/h" } ?: "Clear"
+                  (weatherState as? UiState.Success)?.data?.let {
+                    "${it.conditionLabel} ${com.example.ui.components.formatTempLabel(it.tempC, settings.tempUnit)}, wind ${"%.0f".format(com.example.ui.components.formatSpeedValue(it.windSpeedKmh, settings.distanceUnit))} ${com.example.ui.components.speedUnitLabel(settings.distanceUnit)}"
+                  } ?: "Clear"
                 cockpitVm.requestTelemetrySafetyBrief(effectiveLimitMph, wSummary, settings.aiModelId)
               },
               enabled = !aiSafetyBusy,
@@ -1958,7 +1964,9 @@ fun CockpitScreen(
           },
           onRequestDebrief = { ride ->
             val wSummary =
-              (weatherState as? UiState.Success)?.data?.let { "${it.conditionLabel} ${it.tempC}°C" } ?: "Live GPS"
+              (weatherState as? UiState.Success)?.data?.let {
+                "${it.conditionLabel} ${com.example.ui.components.formatTempLabel(it.tempC, settings.tempUnit)}"
+              } ?: "Live GPS"
             cockpitVm.requestRideDebrief(
               uid = effectiveUid,
               ride = ride,

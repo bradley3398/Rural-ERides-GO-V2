@@ -340,9 +340,22 @@ fun Pev3dGarageViewer(
   val scope = rememberCoroutineScope()
   val geminiRepo = remember { GeminiAiRepository() }
 
+  val settings = com.example.ui.theme.LocalTacticalSettings.current
+  val isMetricSpeed = !settings.distanceUnit.equals("mi", ignoreCase = true)
+  val speedUnitStr = com.example.ui.components.speedUnitLabel(settings.distanceUnit)
   val modelCategories = remember { listOf("All", "e-Moto & Dirt", "Hyper-Scooter", "EUC", "e-Bike & Moped", "Specialty") }
   var selectedCategory by remember { mutableStateOf("All") }
-  var selectedModelIdx by remember { mutableIntStateOf(0) }
+  val initialModelIdx = remember(activeVehicleName, activeVoltage) {
+    val nameQuery = activeVehicleName.trim().lowercase()
+    val byName = if (nameQuery.length >= 3) {
+      AAA_PEV_MODELS.indexOfFirst {
+        it.name.lowercase().contains(nameQuery) || nameQuery.contains(it.name.lowercase().substringBefore(" "))
+      }
+    } else -1
+    if (byName >= 0) byName
+    else AAA_PEV_MODELS.indices.minByOrNull { kotlin.math.abs(AAA_PEV_MODELS[it].voltage - activeVoltage.roundToInt()) } ?: 0
+  }
+  var selectedModelIdx by remember(initialModelIdx) { mutableIntStateOf(initialModelIdx) }
   var motorThrottlePct by remember { mutableFloatStateOf(0.35f) }
 
   // Technology & Method Selection States (Zero-Crash Studio 3D PBR default)
@@ -518,6 +531,7 @@ fun Pev3dGarageViewer(
   }
 
   val liveMph = (currentModel.topSpeedMph * motorThrottlePct).roundToInt()
+  val liveDisplaySpeed = if (isMetricSpeed) (liveMph * 1.60934).roundToInt() else liveMph
   val liveRpm = (liveMph * 26.5).roundToInt()
   val ambientTempC = dynoWeather?.tempC?.toFloat() ?: 22f
   val airDensityKgM3 = dynoWeather?.let { w ->
@@ -525,6 +539,7 @@ fun Pev3dGarageViewer(
     (w.pressureHpa * 100.0) / (287.05 * tempK)
   } ?: 1.225
   val estMotorTempC = (ambientTempC + motorThrottlePct * 68f).roundToInt()
+  val estMotorTempLabel = com.example.ui.components.formatTempLabel(estMotorTempC.toDouble(), settings.tempUnit)
   val primaryCol = MaterialTheme.colorScheme.primary
 
   // Top-level 3D Lab vs PEV Knowledge Test Tab Switcher
@@ -1021,8 +1036,8 @@ fun Pev3dGarageViewer(
           )
           LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             item { PevSpecPills("BLUEPRINT", finish.blueprintType.chassisClass, Color(0xFF22D3EE)) }
-            item { PevSpecPills("DYNO", "$liveMph MPH ($liveRpm RPM)", primaryCol) }
-            item { PevSpecPills("TEMP IR", "${estMotorTempC}°C", Color(0xFFFF6B35)) }
+            item { PevSpecPills("DYNO", "$liveDisplaySpeed $speedUnitStr ($liveRpm RPM)", primaryCol) }
+            item { PevSpecPills("TEMP IR", estMotorTempLabel, Color(0xFFFF6B35)) }
             item { PevSpecPills("FULL V", "${"%.1f".format(packSpec.fullChargeV)}V", Color(0xFF22C55E)) }
             item { PevSpecPills("POWER", currentModel.powerKw, Color(0xFF38BDF8)) }
             item {
@@ -1199,7 +1214,7 @@ fun Pev3dGarageViewer(
 
       Spacer(Modifier.height(4.dp))
       Text(
-        "Live Wheel Dyno Throttle: ${(motorThrottlePct * 100).roundToInt()}% (${liveMph} MPH • ${liveRpm} Wheel RPM • Est Stator ${estMotorTempC}°C)",
+        "Live Wheel Dyno Throttle: ${(motorThrottlePct * 100).roundToInt()}% ($liveDisplaySpeed $speedUnitStr • $liveRpm Wheel RPM • Est Stator $estMotorTempLabel)",
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
       )
@@ -1285,7 +1300,9 @@ fun Pev3dGarageViewer(
                 val res = LiveCloudServices.fetchWeatherMatrix(gpsLat, gpsLng)
                 res.onSuccess { w ->
                   dynoWeather = w
-                  weatherStatusMsg = "${w.locationLabel}: ${"%.1f".format(w.tempC)}°C • ${"%.0f".format(w.pressureHpa)} hPa • Wind ${"%.0f".format(w.windSpeedKmh)} km/h"
+                  val tempLbl = com.example.ui.components.formatTempLabel(w.tempC, settings.tempUnit)
+                  val windVal = com.example.ui.components.formatSpeedValue(w.windSpeedKmh, settings.distanceUnit)
+                  weatherStatusMsg = "${w.locationLabel}: $tempLbl • ${"%.0f".format(w.pressureHpa)} hPa • Wind ${"%.0f".format(windVal)} $speedUnitStr"
                 }.onFailure { err ->
                   weatherStatusMsg = "Weather sync error: ${err.message}"
                 }

@@ -303,7 +303,10 @@ fun CockpitRuralLiveCommandDeck(
             var gradePct by remember { mutableDoubleStateOf(12.0) }
             var climbMph by remember { mutableDoubleStateOf(16.0) }
             val res = RuralPevPhysics.computeHillClimbPower(totalWeightLbs, climbMph, gradePct, packNomV, 0.025)
-            Text("Grade: ${"%.0f".format(gradePct)}% • Speed: ${"%.0f".format(climbMph)} MPH • Weight: ${totalWeightLbs.toInt()} lbs", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            val climbDisplay =
+              if (settings.distanceUnit.equals("mi", ignoreCase = true)) "${"%.0f".format(climbMph)} MPH"
+              else "${"%.0f".format(climbMph * 1.60934)} KM/H"
+            Text("Grade: ${"%.0f".format(gradePct)}% • Speed: $climbDisplay • Weight: ${totalWeightLbs.toInt()} lbs", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             TacticalSlider(value = gradePct.toFloat(), onValueChange = { gradePct = it.toDouble() }, valueRange = 2f..30f)
             TacticalSlider(value = climbMph.toFloat(), onValueChange = { climbMph = it.toDouble() }, valueRange = 6f..35f)
             Text(

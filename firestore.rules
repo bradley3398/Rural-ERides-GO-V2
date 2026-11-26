@@ -347,7 +347,7 @@ service cloud.firestore {
                        isValidId(userId) &&
                        isValidRiderProfile(incoming(), userId) &&
                        (!('userId' in existing()) || incoming().userId == existing().userId) &&
-                       (!('callsign' in existing()) || existing().callsign == '' || incoming().callsign == existing().callsign) &&
+                       (!('callsign' in existing()) || existing().callsign == '' || existing().callsign.matches('^[Pp][Ii][Ll][Oo][Tt][_\\-].*') || incoming().callsign == existing().callsign) &&
                        (!('createdAt' in existing()) || isValidUpdateTimestamps(incoming())) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['userId', 'callsign', 'displayName', 'email', 'activeVehicleId', 'unitSystem', 'emergencyContactName', 'sosContactNumber', 'medicalProfile', 'acceptedLegal', 'riderWeightLbs', 'avatarBase64', 'createdAt', 'updatedAt']);
 
@@ -527,7 +527,7 @@ service cloud.firestore {
                        (!('createdAt' in existing()) || isValidUpdateTimestamps(incoming())) &&
                        (
                          (isOwner(userId) &&
-                          (!('callsign' in existing()) || existing().callsign == '' || incoming().callsign == existing().callsign) &&
+                          (!('callsign' in existing()) || existing().callsign == '' || existing().callsign.matches('^[Pp][Ii][Ll][Oo][Tt][_\\-].*') || incoming().callsign == existing().callsign) &&
                           ((!('verified' in existing()) && incoming().verified == false) || incoming().verified == existing().verified) &&
                           ((!('banned' in existing()) && incoming().banned == false) || incoming().banned == existing().banned) &&
                           ((!('trustScore' in existing()) && incoming().trustScore == 100) || incoming().trustScore == existing().trustScore) &&

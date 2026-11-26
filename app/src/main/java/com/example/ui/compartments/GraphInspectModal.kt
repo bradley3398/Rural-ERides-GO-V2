@@ -608,6 +608,7 @@ fun GraphInspectModal(
                     Text("Gemini Analyst", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                   }
 
+                  val curSettings = com.example.ui.theme.LocalTacticalSettings.current
                   OutlinedButton(
                     onClick = {
                       if (geoBusy) return@OutlinedButton
@@ -616,21 +617,31 @@ fun GraphInspectModal(
                         return@OutlinedButton
                       }
                       geoBusy = true
+                      val distUnit = curSettings.distanceUnit
+                      val tempUnit = curSettings.tempUnit
                       scope.launch {
                         val elevs = LiveCloudServices.fetchElevationSparkline(data.gpsPoints)
                         val anchor = data.gpsPoints.first()
                         val weatherRes = LiveCloudServices.fetchWeatherMatrix(anchor.first, anchor.second)
                         geoDemElevations = elevs
                         geoWeather = weatherRes.getOrNull()
+                        val useImperialElev = distUnit.equals("mi", ignoreCase = true)
+                        val elevMult = if (useImperialElev) 3.28084 else 1.0
+                        val elevUnit = if (useImperialElev) "ft" else "m"
                         geoStatus =
                           buildString {
                             if (elevs.isNotEmpty()) {
                               val gain = elevs.zipWithNext().sumOf { (a, b) -> (b - a).coerceAtLeast(0.0) }
-                              append("Open-Meteo 30m DEM (${elevs.size} pts): Min ${"%.0f".format(elevs.minOrNull() ?: 0.0)}m • Peak ${"%.0f".format(elevs.maxOrNull() ?: 0.0)}m • Climb +${"%.0f".format(gain)}m")
+                              append(
+                                "Open-Meteo 30m DEM (${elevs.size} pts): Min ${"%.0f".format((elevs.minOrNull() ?: 0.0) * elevMult)}$elevUnit • Peak ${"%.0f".format((elevs.maxOrNull() ?: 0.0) * elevMult)}$elevUnit • Climb +${"%.0f".format(gain * elevMult)}$elevUnit"
+                              )
                             }
                             weatherRes.getOrNull()?.let { w ->
                               if (isNotEmpty()) append("\n")
-                              append("${w.locationLabel}: ${"%.1f".format(w.tempC)}°C • Wind ${"%.1f".format(w.windSpeedKmh)} km/h @ ${w.windDirDeg}° • ${w.pressureHpa.toInt()} hPa")
+                              val tempStr = com.example.ui.components.formatTempLabel(w.tempC, tempUnit)
+                              val windVal = com.example.ui.components.formatSpeedValue(w.windSpeedKmh, distUnit)
+                              val windUnit = com.example.ui.components.speedUnitLabel(distUnit)
+                              append("${w.locationLabel}: $tempStr • Wind ${"%.1f".format(windVal)} $windUnit @ ${w.windDirDeg}° • ${w.pressureHpa.toInt()} hPa")
                             }
                             if (isEmpty()) append("Elevation/Weather query returned no data for track coordinates.")
                           }

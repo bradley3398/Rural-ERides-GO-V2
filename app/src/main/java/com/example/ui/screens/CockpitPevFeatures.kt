@@ -246,26 +246,28 @@ fun PevRangeAndChargePlannerCard(
     )
     Spacer(Modifier.height(6.dp))
 
+    val isMetricDist = !settings.distanceUnit.equals("mi", ignoreCase = true)
+    val speedUnitLbl = speedUnitLabel(settings.distanceUnit)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       item {
         FilterChip(
           selected = cruiseMphStr == "18",
           onClick = { cruiseMphStr = "18" },
-          label = { Text("Eco 18mph", maxLines = 1, softWrap = false) },
+          label = { Text(if (isMetricDist) "Eco 29 km/h" else "Eco 18mph", maxLines = 1, softWrap = false) },
         )
       }
       item {
         FilterChip(
           selected = cruiseMphStr == "25",
           onClick = { cruiseMphStr = "25" },
-          label = { Text("Trail 25mph", maxLines = 1, softWrap = false) },
+          label = { Text(if (isMetricDist) "Trail 40 km/h" else "Trail 25mph", maxLines = 1, softWrap = false) },
         )
       }
       item {
         FilterChip(
           selected = cruiseMphStr == "40",
           onClick = { cruiseMphStr = "40" },
-          label = { Text("Send 40mph", maxLines = 1, softWrap = false) },
+          label = { Text(if (isMetricDist) "Send 64 km/h" else "Send 40mph", maxLines = 1, softWrap = false) },
         )
       }
       items(listOf(0, 6, 12)) { r ->
@@ -289,7 +291,7 @@ fun PevRangeAndChargePlannerCard(
       OutlinedTextField(
         value = cruiseMphStr,
         onValueChange = { cruiseMphStr = it },
-        label = { Text("Cruise MPH") },
+        label = { Text("Cruise $speedUnitLbl") },
         singleLine = true,
         modifier = Modifier.weight(1f),
       )
@@ -1000,7 +1002,7 @@ fun PevTacticalPowerStripCard(
       ) {
         Column(Modifier.padding(8.dp)) {
           Text("MOTOR TEMP", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-          Text("${estMotorTempC.roundToInt()}°C", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = thermalColor)
+          Text(com.example.ui.components.formatTempLabel(estMotorTempC.toDouble(), settings.tempUnit), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = thermalColor)
           Text("Pk ${"%.1f".format(formatSpeedValue(peakSpeedKmh, settings.distanceUnit))} ${speedUnitLabel(settings.distanceUnit)}", style = MaterialTheme.typography.labelSmall)
         }
       }

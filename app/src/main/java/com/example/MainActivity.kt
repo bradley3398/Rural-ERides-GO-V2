@@ -310,13 +310,10 @@ fun VoltTrailRootApp(
                     useClassicTaskbar = useClassicTaskbar,
                   )
 
-                val unitSystem = profile?.unitSystem ?: "IMPERIAL"
                 val telemetryTicker =
-                  remember(telemetry.speedKmh, telemetry.batteryPct, unitSystem) {
-                    val speedVal =
-                      if (unitSystem == "IMPERIAL") telemetry.speedKmh * 0.621371
-                      else telemetry.speedKmh
-                    val unitLbl = if (unitSystem == "IMPERIAL") "MPH" else "KM/H"
+                  remember(telemetry.speedKmh, telemetry.batteryPct, settings.distanceUnit) {
+                    val speedVal = com.example.ui.components.formatSpeedValue(telemetry.speedKmh, settings.distanceUnit)
+                    val unitLbl = com.example.ui.components.speedUnitLabel(settings.distanceUnit)
                     "${"%.1f".format(speedVal)} $unitLbl • BAT ${telemetry.batteryPct}%"
                   }
 
@@ -573,7 +570,8 @@ fun VoltTrailRootApp(
                 telemetryLat = telemetry.lat,
                 telemetryLng = telemetry.lng,
                 activeVehicleSummary = activeVehicle?.let { "${it.name} (${it.voltage}V)" }.orEmpty(),
-                liveTelemetrySummary = "${"%.1f".format(telemetry.speedKmh)} km/h • BAT ${telemetry.batteryPct}%",
+                liveTelemetrySummary =
+                  "${"%.1f".format(com.example.ui.components.formatSpeedValue(telemetry.speedKmh, settings.distanceUnit))} ${com.example.ui.components.speedUnitLabel(settings.distanceUnit)} • BAT ${telemetry.batteryPct}%",
                 onDismiss = { dmSheetOpen = false },
               )
             }
