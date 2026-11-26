@@ -2,19 +2,7 @@ package com.example.ai
 
 import android.graphics.Bitmap
 import android.util.Log
-import com.example.core.AppCheckHealthManager
 import com.example.core.LiveCloudServices
-import com.google.firebase.Firebase
-import com.google.firebase.ai.ai
-import com.google.firebase.ai.type.AspectRatio
-import com.google.firebase.ai.type.ImageConfig
-import com.google.firebase.ai.type.ImagePart
-import com.google.firebase.ai.type.ImageSize
-import com.google.firebase.ai.type.ResponseModality
-import com.google.firebase.ai.type.Schema
-import com.google.firebase.ai.type.Tool
-import com.google.firebase.ai.type.content
-import com.google.firebase.ai.type.generationConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
@@ -70,10 +58,10 @@ data class AiComposedTrack(
 )
 
 /**
- * Firebase AI Logic multimodal studio engine powering:
- * - Runtime image generation & photo editing (gemini-nano-banana-2.1)
- * - Direct audio WAV transcription (gemini-3.8-flash multimodal inline audio)
- * - Multi-turn hands-free voice conversation (gemini-3.8-flash / 3.5-flash-lite / 4-argon)
+ * Direct Google Cloud Console Gemini REST multimodal studio engine powering:
+ * - Runtime image generation & photo editing (gemini-3.1-flash-image / gemini-nano-banana-2.1)
+ * - Direct audio WAV transcription (gemini-3.1-flash-lite multimodal inline audio)
+ * - Multi-turn hands-free voice conversation (gemini-3.1-flash-lite -> 3.5-flash-lite -> 3.8-flash)
  * - Live Google Search & GPS Maps grounded exploration
  * - Structured AI trail soundtrack composition for 44.1kHz stereo PCM synthesis
  */
@@ -84,63 +72,47 @@ class GeminiStudioEngine {
     sourceBitmap: Bitmap? = null,
     aspectRatioKey: String = "1:1",
   ): Result<GeneratedImageResult> {
-    val aspect =
+    val cleanAspect =
       when (aspectRatioKey) {
-        "16:9" -> AspectRatio.LANDSCAPE_16x9
-        "9:16" -> AspectRatio.PORTRAIT_9x16
-        else -> AspectRatio.SQUARE_1x1
-      }
-    val config =
-      generationConfig {
-        responseModalities = listOf(ResponseModality.IMAGE, ResponseModality.TEXT)
-        imageConfig =
-          ImageConfig.builder()
-            .setAspectRatio(aspect)
-            .setImageSize(ImageSize.SIZE_1K)
-            .build()
+        "16:9", "9:16", "1:1" -> aspectRatioKey
+        else -> "1:1"
       }
 
     var lastError: Exception? = null
     for (imageModelId in GeminiModelCatalog.imageFallbackChain) {
       try {
-        val model =
-          AppCheckHealthManager.createGenerativeModel(
-            modelName = imageModelId,
-            generationConfig = config,
-          )
         val response =
-          AppCheckHealthManager.runWithAppCheckRecovery(STUDIO_TAG) {
-            withTimeout(60_000L) {
-              if (sourceBitmap != null) {
-                model.generateContent(
-                  content {
-                    image(sourceBitmap)
-                    text(prompt)
-                  }
-                )
-              } else {
-                model.generateContent(prompt)
-              }
-            }
+          withTimeout(65_000L) {
+            DirectGeminiRestClient.generateContent(
+              modelId = imageModelId,
+              turns =
+                listOf(
+                  GeminiChatTurnPayload(
+                    role = "user",
+                    text = prompt,
+                    images = listOfNotNull(sourceBitmap),
+                  ),
+                ),
+              responseModalities = listOf("IMAGE", "TEXT"),
+              imageAspectRatio = cleanAspect,
+              imageSize = "1K",
+            )
           }
-        val parts = response.candidates.firstOrNull()?.content?.parts.orEmpty()
-        val imagePart = parts.filterIsInstance<ImagePart>().firstOrNull()
-        val bitmap = imagePart?.image
+        val bitmap = response.inlineImages.firstOrNull()
         if (bitmap != null) {
-          val caption = response.text?.trim().orEmpty()
           return Result.success(
             GeneratedImageResult(
               bitmap = bitmap,
-              captionText = caption,
+              captionText = response.text.trim(),
               modelUsed = imageModelId,
-            )
+            ),
           )
         } else {
           lastError = IllegalStateException("Gemini returned text without an image. Try a more descriptive visual prompt.")
         }
       } catch (e: TimeoutCancellationException) {
         Log.e(STUDIO_TAG, "Image generation timed out on $imageModelId", e)
-        lastError = Exception("Image generation timed out after 60 seconds. Please try again.")
+        lastError = Exception("Image generation timed out after 65 seconds. Please try again.")
       } catch (e: CancellationException) {
         throw e
       } catch (e: Exception) {
@@ -159,49 +131,38 @@ class GeminiStudioEngine {
       return Result.failure(IllegalArgumentException("Audio clip is too short to transcribe."))
     }
     val schema =
-      Schema.obj(
+      GeminiJsonSchema.obj(
         properties =
           mapOf(
-            "transcript" to Schema.string("Verbatim spoken transcription of the audio clip"),
-            "summary" to Schema.string("Concise 1-sentence rural rider note summary"),
-            "actionCategory" to Schema.enumeration(listOf("RIDE_LOG", "TRAIL_HAZARD", "MECHANIC_NOTE", "GENERAL_VOICE")),
-          )
+            "transcript" to GeminiJsonSchema.string("Verbatim spoken transcription of the audio clip"),
+            "summary" to GeminiJsonSchema.string("Concise 1-sentence rural rider note summary"),
+            "actionCategory" to GeminiJsonSchema.enumeration(listOf("RIDE_LOG", "TRAIL_HAZARD", "MECHANIC_NOTE", "GENERAL_VOICE")),
+          ),
       )
     var lastError: Exception? = null
-    for (modelId in listOf(GeminiModelCatalog.GEMINI_3_8_FLASH, GeminiModelCatalog.GEMINI_3_5_FLASH_LITE)) {
+    for (modelId in GeminiModelCatalog.fallbackChain(GeminiModelCatalog.GEMINI_3_1_FLASH_LITE)) {
       try {
-        val model =
-          AppCheckHealthManager.createGenerativeModel(
-            modelName = modelId,
-            generationConfig =
-              generationConfig {
-                responseMimeType = "application/json"
-                responseSchema = schema
-                temperature = 0.1f
-              },
-          )
         val response =
-          AppCheckHealthManager.runWithAppCheckRecovery(STUDIO_TAG) {
-            withTimeout(60_000L) {
-              model.generateContent(
-                content {
-                  inlineData(wavBytes, "audio/wav")
-                  text(
-                    "Transcribe this microphone audio from an electric PEV rider accurately verbatim. " +
-                      "Rider context: $vehicleContext. Return JSON with transcript, summary, and actionCategory."
-                  )
-                }
-              )
-            }
+          withTimeout(60_000L) {
+            DirectGeminiRestClient.generateText(
+              modelId = modelId,
+              prompt =
+                "Transcribe this microphone audio from an electric PEV rider accurately verbatim. " +
+                  "Rider context: $vehicleContext. Return JSON with transcript, summary, and actionCategory.",
+              wavAudio = wavBytes,
+              temperature = 0.1f,
+              responseMimeType = "application/json",
+              responseSchema = schema,
+            )
           }
-        val raw = response.text ?: error("Empty transcription response.")
-        val json = JSONObject(raw)
+        val raw = response.text.ifBlank { error("Empty transcription response.") }
+        val json = JSONObject(DirectGeminiRestClient.cleanJsonPayload(raw))
         return Result.success(
           AudioTranscriptionResult(
             transcript = json.optString("transcript").trim(),
             summary = json.optString("summary").trim(),
             actionCategory = json.optString("actionCategory", "GENERAL_VOICE"),
-          )
+          ),
         )
       } catch (e: TimeoutCancellationException) {
         Log.e(STUDIO_TAG, "Audio transcription timed out on $modelId", e)
@@ -227,49 +188,46 @@ class GeminiStudioEngine {
   ): Result<Pair<String, String>> {
     val chain = GeminiModelCatalog.fallbackChain(modelId)
     val sysInstruction =
-      content {
-        text(
-          """
-          You are the Rural ERides GO Live Voice Co-Pilot ($personaRole).
-          Speak naturally, warmly, and concisely in 2 to 4 crisp spoken sentences (no markdown bullets or asterisks) so your reply sounds great read aloud while riding.
-          Active Rig: $vehicleContext | Location: $locationLabel.
-          If audio is attached, answer the spoken question directly.
-          """
-            .trimIndent()
-        )
+      """
+      You are the Rural ERides GO Live Voice Co-Pilot ($personaRole).
+      Speak naturally, warmly, and concisely in 2 to 4 crisp spoken sentences (no markdown bullets or asterisks) so your reply sounds great read aloud while riding.
+      Active Rig: $vehicleContext | Location: $locationLabel.
+      If audio is attached, answer the spoken question directly.
+      """
+        .trimIndent()
+
+    val historyTurns =
+      history.takeLast(12).mapNotNull { turn ->
+        val txt = turn.text.trim()
+        if (txt.isBlank()) null else GeminiChatTurnPayload(role = if (turn.isUser) "user" else "model", text = txt)
       }
-    val chatHistory =
-      history.takeLast(12).map { turn ->
-        content(if (turn.isUser) "user" else "model") { text(turn.text) }
-      }
+    val hasAudio = audioWavBytes != null && audioWavBytes.size > 256
+    val currentTurn =
+      GeminiChatTurnPayload(
+        role = "user",
+        text =
+          if (hasAudio && userMessage.isBlank()) {
+            "Listen to my voice message and answer conversationally as my riding co-pilot."
+          } else {
+            userMessage
+          },
+        wavAudio = if (hasAudio) audioWavBytes else null,
+      )
+    val allTurns = historyTurns + currentTurn
 
     var lastError: Exception? = null
     for (activeModel in chain) {
       try {
-        val model =
-          AppCheckHealthManager.createGenerativeModel(
-            modelName = activeModel,
-            systemInstruction = sysInstruction,
-            generationConfig = generationConfig { temperature = 0.7f },
-          )
-        val chat = model.startChat(history = chatHistory)
         val response =
-          AppCheckHealthManager.runWithAppCheckRecovery(STUDIO_TAG) {
-            withTimeout(60_000L) {
-              if (audioWavBytes != null && audioWavBytes.size > 256) {
-                chat.sendMessage(
-                  content("user") {
-                    inlineData(audioWavBytes, "audio/wav")
-                    if (userMessage.isNotBlank()) text(userMessage)
-                    else text("Listen to my voice message and answer conversationally as my riding co-pilot.")
-                  }
-                )
-              } else {
-                chat.sendMessage(userMessage)
-              }
-            }
+          withTimeout(60_000L) {
+            DirectGeminiRestClient.generateContent(
+              modelId = activeModel,
+              turns = allTurns,
+              systemInstruction = sysInstruction,
+              temperature = 0.7f,
+            )
           }
-        val reply = response.text?.trim().orEmpty().ifBlank { "Copy that partner — signal was faint, say again?" }
+        val reply = response.text.trim().ifBlank { "Copy that partner — signal was faint, say again?" }
         return Result.success(reply to activeModel)
       } catch (e: TimeoutCancellationException) {
         Log.e(STUDIO_TAG, "Voice turn timed out on $activeModel", e)
@@ -331,57 +289,58 @@ class GeminiStudioEngine {
           .trimIndent()
 
       var usedSearch = false
-      val webSources = mutableListOf<Pair<String, String>>()
-      val response =
-        AppCheckHealthManager.runWithAppCheckRecovery(STUDIO_TAG) {
-          withTimeout(60_000L) {
-            if (useGoogleSearch) {
-              try {
-                usedSearch = true
-                AppCheckHealthManager.createGenerativeModel(
-                  modelName = GeminiModelCatalog.GEMINI_3_8_FLASH,
-                  tools = listOf(Tool.googleSearch()),
-                ).generateContent(prompt)
-              } catch (e: CancellationException) {
-                throw e
-              } catch (toolErr: Exception) {
-                if (AppCheckHealthManager.isAppCheckError(toolErr)) throw toolErr
-                Log.w(STUDIO_TAG, "Google Search tool fallback: ${toolErr.message}")
-                usedSearch = false
-                runCatching {
-                  AppCheckHealthManager.createGenerativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
-                }.getOrElse {
-                  AppCheckHealthManager.createGenerativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
-                }
+      var response: GeminiRestResult? = null
+      var lastErr: Exception? = null
+      val chain = GeminiModelCatalog.fallbackChain(GeminiModelCatalog.GEMINI_3_1_FLASH_LITE)
+
+      for (modelId in chain) {
+        if (useGoogleSearch) {
+          try {
+            usedSearch = true
+            response =
+              withTimeout(60_000L) {
+                DirectGeminiRestClient.generateText(
+                  modelId = modelId,
+                  prompt = prompt,
+                  useGoogleSearch = true,
+                )
               }
-            } else {
-              runCatching {
-                AppCheckHealthManager.createGenerativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
-              }.getOrElse {
-                AppCheckHealthManager.createGenerativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
-              }
-            }
+            break
+          } catch (e: CancellationException) {
+            throw e
+          } catch (toolErr: Exception) {
+            Log.w(STUDIO_TAG, "Google Search tool fallback on $modelId: ${toolErr.message}")
+            usedSearch = false
+            lastErr = toolErr
           }
         }
-
-      runCatching {
-        val grounding = response.candidates.firstOrNull()?.groundingMetadata
-        grounding?.groundingChunks?.forEach { chunk ->
-          val web = chunk.web
-          if (web != null && !web.uri.isNullOrBlank()) {
-            webSources += (web.title?.ifBlank { web.uri } ?: web.uri.orEmpty()) to web.uri.orEmpty()
-          }
+        try {
+          usedSearch = false
+          response =
+            withTimeout(60_000L) {
+              DirectGeminiRestClient.generateText(
+                modelId = modelId,
+                prompt = prompt,
+                useGoogleSearch = false,
+              )
+            }
+          break
+        } catch (e: CancellationException) {
+          throw e
+        } catch (err: Exception) {
+          lastErr = err
         }
       }
 
-      val answer = response.text?.trim().orEmpty().ifBlank { "No grounded information returned for \"$query\"." }
+      val finalResp = response ?: throw (lastErr ?: IllegalStateException("Search & Maps query failed."))
+      val answer = finalResp.text.trim().ifBlank { "No grounded information returned for \"$query\"." }
       Result.success(
         GroundedExploreResult(
           answer = answer,
           places = livePlaces,
-          webSources = webSources.distinctBy { it.second }.take(6),
+          webSources = finalResp.webSources.distinctBy { it.second }.take(6),
           usedSearchTool = usedSearch,
-        )
+        ),
       )
     } catch (e: TimeoutCancellationException) {
       Log.e(STUDIO_TAG, "Grounded explore timed out", e)
@@ -398,18 +357,18 @@ class GeminiStudioEngine {
     genre: String,
   ): Result<AiComposedTrack> {
     val schema =
-      Schema.obj(
+      GeminiJsonSchema.obj(
         properties =
           mapOf(
-            "title" to Schema.string("Original rural PEV trail soundtrack title"),
-            "bpm" to Schema.integer("Tempo in BPM between 84 and 148"),
-            "musicalKey" to Schema.string("Key signature like D Major or A Minor"),
-            "chords" to Schema.array(Schema.string(), "4 chord names e.g. D, A, Bm, G"),
-            "leadNotesMidi" to Schema.array(Schema.integer(), "16 MIDI note numbers between 55 and 84 for the lead melody"),
-            "bassNotesMidi" to Schema.array(Schema.integer(), "8 MIDI note numbers between 36 and 52 for the bassline"),
-            "vibeSummary" to Schema.string("1-sentence production description"),
-            "lyricHook" to Schema.string("Short 2-line rural electric riding chorus hook"),
-          )
+            "title" to GeminiJsonSchema.string("Original rural PEV trail soundtrack title"),
+            "bpm" to GeminiJsonSchema.integer("Tempo in BPM between 84 and 148"),
+            "musicalKey" to GeminiJsonSchema.string("Key signature like D Major or A Minor"),
+            "chords" to GeminiJsonSchema.array(GeminiJsonSchema.string(), "4 chord names e.g. D, A, Bm, G"),
+            "leadNotesMidi" to GeminiJsonSchema.array(GeminiJsonSchema.integer(), "16 MIDI note numbers between 55 and 84 for the lead melody"),
+            "bassNotesMidi" to GeminiJsonSchema.array(GeminiJsonSchema.integer(), "8 MIDI note numbers between 36 and 52 for the bassline"),
+            "vibeSummary" to GeminiJsonSchema.string("1-sentence production description"),
+            "lyricHook" to GeminiJsonSchema.string("Short 2-line rural electric riding chorus hook"),
+          ),
       )
     val prompt =
       """
@@ -421,24 +380,20 @@ class GeminiStudioEngine {
         .trimIndent()
 
     var lastError: Exception? = null
-    for (modelId in listOf(GeminiModelCatalog.GEMINI_3_8_FLASH, GeminiModelCatalog.GEMINI_3_5_FLASH_LITE)) {
+    for (modelId in GeminiModelCatalog.fallbackChain(GeminiModelCatalog.GEMINI_3_1_FLASH_LITE)) {
       try {
-        val model =
-          AppCheckHealthManager.createGenerativeModel(
-            modelName = modelId,
-            generationConfig =
-              generationConfig {
-                responseMimeType = "application/json"
-                responseSchema = schema
-                temperature = 0.85f
-              },
-          )
         val response =
-          AppCheckHealthManager.runWithAppCheckRecovery(STUDIO_TAG) {
-            withTimeout(50_000L) { model.generateContent(prompt) }
+          withTimeout(50_000L) {
+            DirectGeminiRestClient.generateText(
+              modelId = modelId,
+              prompt = prompt,
+              temperature = 0.85f,
+              responseMimeType = "application/json",
+              responseSchema = schema,
+            )
           }
-        val raw = response.text ?: error("Empty music composition response.")
-        val json = JSONObject(raw)
+        val raw = response.text.ifBlank { error("Empty music composition response.") }
+        val json = JSONObject(DirectGeminiRestClient.cleanJsonPayload(raw))
 
         fun readIntArray(key: String, min: Int, max: Int, fallback: List<Int>): List<Int> {
           val arr = json.optJSONArray(key) ?: return fallback
@@ -463,7 +418,7 @@ class GeminiStudioEngine {
             bassNotesMidi = readIntArray("bassNotesMidi", 32, 55, listOf(43, 43, 38, 38, 40, 40, 36, 38)),
             vibeSummary = json.optString("vibeSummary", "Original rural trail groove synthesized at 44.1kHz."),
             lyricHook = json.optString("lyricHook", "Fifty-four volts down the gravel lane, quiet torque in the sunset rain."),
-          )
+          ),
         )
       } catch (e: TimeoutCancellationException) {
         Log.e(STUDIO_TAG, "Soundtrack composition timed out on $modelId", e)
@@ -478,4 +433,3 @@ class GeminiStudioEngine {
     return Result.failure(lastError ?: Exception("Music composition failed."))
   }
 }
-

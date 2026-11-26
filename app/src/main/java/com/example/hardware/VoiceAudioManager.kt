@@ -27,6 +27,8 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import com.example.ai.DirectGeminiRestClient
+import com.example.ai.GeminiChatTurnPayload
 import com.example.data.AiVoiceProfile
 import com.example.data.AlertTonePreset
 import com.example.data.CustomVoiceProfile
@@ -35,16 +37,6 @@ import com.example.data.VibrationPatternPreset
 import com.example.data.VoiceDspProfile
 import com.example.data.getActiveCustomVoice
 import com.example.data.resolveEffectiveBase
-import com.google.firebase.Firebase
-import com.google.firebase.ai.GenerativeModel
-import com.google.firebase.ai.ai
-import com.google.firebase.ai.type.GenerativeBackend
-import com.google.firebase.ai.type.InlineDataPart
-import com.google.firebase.ai.type.PublicPreviewAPI
-import com.google.firebase.ai.type.ResponseModality
-import com.google.firebase.ai.type.SpeechConfig
-import com.google.firebase.ai.type.Voice
-import com.google.firebase.ai.type.generationConfig
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
@@ -117,7 +109,6 @@ class VoiceAudioManager(private val context: Context) {
 
   private var activeSpeechJob: Job? = null
   @Volatile private var activeSpeechTrack: AudioTrack? = null
-  private val neuralTtsModels = ConcurrentHashMap<String, GenerativeModel>()
   private val neuralAudioCache = LruCache<String, ParsedWavPcm>(28)
   private val pcmFragmentCache = LruCache<String, SynthesizedFragment>(48)
   @Volatile var activeStreamingSession: StreamingTtsBufferSession? = null
@@ -718,27 +709,6 @@ class VoiceAudioManager(private val context: Context) {
       preferFastLocal = false,
     )
 
-  @OptIn(PublicPreviewAPI::class)
-  private fun getOrCreateNeuralTtsModel(voiceName: String, localeTag: String): GenerativeModel {
-    val key = "$voiceName|$localeTag"
-    return neuralTtsModels.getOrPut(key) {
-      val config =
-        generationConfig {
-          responseModalities = listOf(ResponseModality.AUDIO)
-          speechConfig =
-            SpeechConfig(
-              voice = Voice(voiceName),
-              languageCode = localeTag,
-            )
-        }
-      Firebase.ai(backend = GenerativeBackend.googleAI())
-        .generativeModel(
-          modelName = GEMINI_TTS_MODEL,
-          generationConfig = config,
-        )
-    }
-  }
-
   private suspend fun fetchOrCacheNeuralSpeechPcm(
     cleanText: String,
     profile: AiVoiceProfile,
@@ -754,24 +724,20 @@ class VoiceAudioManager(private val context: Context) {
       return cached
     }
     return try {
-      val model = getOrCreateNeuralTtsModel(voiceName, localeTag)
       val directedPrompt = "$directive. Speak naturally and read this text aloud:\n$spokenExcerpt"
       val response =
-        com.example.core.AppCheckHealthManager.runWithAppCheckRecovery("VoiceAudioManager") {
-          withTimeout(18_000L) {
-            model.generateContent(directedPrompt)
-          }
+        withTimeout(18_000L) {
+          DirectGeminiRestClient.generateContent(
+            modelId = GEMINI_TTS_MODEL,
+            turns = listOf(GeminiChatTurnPayload(role = "user", text = directedPrompt)),
+            responseModalities = listOf("AUDIO"),
+            ttsVoiceName = voiceName,
+            ttsLanguageCode = localeTag,
+          )
         }
-      val outStream = ByteArrayOutputStream()
-      var audioMime = ""
-      response.candidates.firstOrNull()?.content?.parts?.forEach { part ->
-        if (part is InlineDataPart && part.mimeType.startsWith("audio", ignoreCase = true)) {
-          if (audioMime.isBlank()) audioMime = part.mimeType
-          outStream.write(part.inlineData)
-        }
-      }
-      val bytes = outStream.toByteArray()
-      if (bytes.size > 1024) {
+      val bytes = response.inlineAudioBytes
+      val audioMime = response.inlineAudioMime
+      if (bytes != null && bytes.size > 1024) {
         val parsedWav =
           if (bytes.size > 44 && bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() &&
             bytes[2] == 'F'.code.toByte() && bytes[3] == 'F'.code.toByte()

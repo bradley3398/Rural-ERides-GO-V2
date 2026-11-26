@@ -89,6 +89,10 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
+        "v65.0 (Build 65) — Cloud Console Gemini 3.1 Flash-Lite Direct REST Integration" to
+          "• Cloud Console API Key Gemini Engine: Replaced Firebase AI Logic & App Check dependencies on Gemini calls with DirectGeminiRestClient calling generativelanguage.googleapis.com/v1beta directly using Google Cloud Console API keys from BuildConfig/Secrets (GEMINI_API_KEY, GEMINI_API_KEY_2, GOOGLE_CLOUD_API_KEY, GOOGLE_API_KEY) with automatic key failover.\n" +
+          "• Gemini 3.1 Flash-Lite Default: Switched app-wide AI default and upgrade migration to gemini-3.1-flash-lite with free-tier rotation (gemini-3.1-flash-lite -> gemini-3.5-flash-lite -> gemini-3.8-flash), eliminating Firebase App Check token errors on tablets and phones.\n" +
+          "• Live Cloud Console Key Probe: Diagnostics now probes generativelanguage.googleapis.com directly with Gemini 3.1 Flash-Lite and reports active key count and latency.",
         "v61.0 (Build 61) — Multi-Device Firebase AI App Check Self-Healing & Universal Screen-Fit Layout Overhaul" to
           "• Tablet & Multi-Device Firebase AI App Check Fix: Added a non-backed-up device install anchor so restored or stale App Check tokens/debug secrets copied between phones and tablets are automatically wiped on startup, prevented duplicate provider resets on tablet layout/taskbar changes, added startup reCAPTCHA Enterprise warm-up, and wired automatic force-refresh & retry recovery across Mechanic AI, Co-Pilot, Studio Labs, Safety Shield, and Neural TTS.\n" +
           "• Universal Phone & Tablet Screen-Fit Layout Overhaul: Built a host-window safe-area inset engine for Samsung One UI & Android 14–16 edge-to-edge Dialog windows, fixed the Live Call Overlay End-Call button and top status chips, eliminated the bottom gap in YouTube Theater Mode, made modal dialogs and bottom sheets viewport-adaptive with IME keyboard avoidance, and added scrollable safe-area framing across Gravel Volt Runner 3D, Onboarding, and all Studio/Settings screens.\n" +
@@ -264,7 +268,7 @@ fun AppInfoAndChangelogScreen(
           }
           Spacer(Modifier.height(8.dp))
           Text(
-            "Package: ${BuildConfig.APPLICATION_ID}\nGitHub: https://github.com/bradley3398/Rural-ERides-GO-V2\nArchitecture: Kotlin • Jetpack Compose Material 3 • Studio 3D PBR / OpenGL ES / WebGL 2.0 • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • CameraX • OSMDroid",
+            "Package: ${BuildConfig.APPLICATION_ID}\nGitHub: https://github.com/bradley3398/Rural-ERides-GO-V2\nArchitecture: Kotlin • Jetpack Compose Material 3 • Studio 3D PBR / OpenGL ES / WebGL 2.0 • 9-DOF AHRS • Cloud Console Gemini 3.1 Flash-Lite API • Cloud Firestore • CameraX • OSMDroid",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -395,7 +399,7 @@ fun AppInfoAndChangelogScreen(
                     "battery" -> "Phone=${hwSnap.batteryPct}% (${hwSnap.batteryChargeState}) ${hwSnap.batteryTempC}°C ${hwSnap.batteryVoltageMv}mV Health=${hwSnap.batteryHealthLabel}"
                     "memory" -> "RAM=${hwSnap.ramUsedMb}/${hwSnap.ramTotalMb}MB | FreeDisk=${"%.2f".format(hwSnap.storageFreeGb)}/${"%.2f".format(hwSnap.storageTotalGb)}GB"
                     "telemetry" -> "Lat=${telemetry.lat}, Lng=${telemetry.lng}, Spd=${"%.1f".format(telemetry.speedKmh)}kmh, Acc=±${telemetry.gpsAccuracyM.toInt()}m, Pack=${telemetry.batteryPct}%"
-                    "keys" -> "YT=${LiveCloudServices.hasYoutubeKey()}, TT=${LiveCloudServices.hasTomTomKey()}, MB=${ApiKeyRing.mapboxTokens().isNotEmpty()}, ORS=${LiveCloudServices.hasOpenRouteServiceKey()}, OCM=${LiveCloudServices.hasOpenChargeMapKey()}, TV=${LiveCloudServices.hasTavilyKey()}, IMGBB=${LiveCloudServices.hasImgbbKey()}"
+                    "keys" -> "GEMINI=${LiveCloudServices.hasGeminiKey()}(${ApiKeyRing.geminiKeys().size}), YT=${LiveCloudServices.hasYoutubeKey()}, TT=${LiveCloudServices.hasTomTomKey()}, MB=${ApiKeyRing.mapboxTokens().isNotEmpty()}, ORS=${LiveCloudServices.hasOpenRouteServiceKey()}, OCM=${LiveCloudServices.hasOpenChargeMapKey()}, TV=${LiveCloudServices.hasTavilyKey()}, IMGBB=${LiveCloudServices.hasImgbbKey()}"
                     "clear" -> ""
                     else -> "Unknown cmd: $c (type 'help')"
                   }

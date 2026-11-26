@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ai.DirectGeminiRestClient
 import com.example.core.AppUpdateCheckState
 import com.example.core.ReminderScheduler
 import com.example.core.configureAppCheck
@@ -119,6 +120,7 @@ class MainActivity : FragmentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    DirectGeminiRestClient.initAndroidIdentity(this)
     configureAppCheck(this, intent)
     captureIntentExtras(intent)
     enableEdgeToEdge()

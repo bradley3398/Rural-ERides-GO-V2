@@ -206,7 +206,7 @@ fun CreatorArcadeHubScreen(
   val micLevel by audioEngine.micLevel.collectAsStateWithLifecycle()
   val recSeconds by audioEngine.recordedDurationSec.collectAsStateWithLifecycle()
   var voiceModeTranscribeOnly by remember { mutableStateOf(false) }
-  var selectedVoiceModel by remember { mutableStateOf(GeminiModelCatalog.GEMINI_3_8_FLASH) }
+  var selectedVoiceModel by remember { mutableStateOf(GeminiModelCatalog.GEMINI_3_1_FLASH_LITE) }
   var voicePersona by remember { mutableStateOf("Rural Trail Navigator") }
   var autoSpeakVoiceReply by remember { mutableStateOf(true) }
   var voiceTextInput by remember { mutableStateOf("") }
@@ -466,7 +466,7 @@ fun CreatorArcadeHubScreen(
                   Spacer(Modifier.height(10.dp))
                   LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                   Spacer(Modifier.height(4.dp))
-                  Text("Rendering high-res 1K artwork via Firebase AI Logic (gemini-nano-banana-2.1)...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                  Text("Rendering high-res 1K artwork via Cloud Console Gemini API (gemini-3.1-flash-image)...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
                 if (imgError.isNotBlank()) {
                   Spacer(Modifier.height(8.dp))

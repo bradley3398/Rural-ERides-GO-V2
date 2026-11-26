@@ -15,8 +15,8 @@ android {
     applicationId = "com.aistudio.volttrail.kqrmvx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 64
-    versionName = "64.0"
+    versionCode = 65
+    versionName = "65.0"
 
     buildConfigField("Boolean", "LEGAL_COMPLIANCE_MODE", "true")
 
@@ -126,7 +126,7 @@ dependencies {
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.coil.compose)
   // implementation(libs.converter.moshi)
-  implementation(libs.firebase.ai)
+  // implementation(libs.firebase.ai)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
   implementation(libs.androidx.credentials)

@@ -57,6 +57,7 @@ object LiveCloudServices {
       .build()
   }
 
+  fun hasGeminiKey(): Boolean = ApiKeyRing.geminiKeys().isNotEmpty()
   fun hasYoutubeKey(): Boolean = ApiKeyRing.youtubeKeys().isNotEmpty()
   fun hasSupabaseConfig(): Boolean =
     SupabaseAuthService.isConfiguredValues(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)

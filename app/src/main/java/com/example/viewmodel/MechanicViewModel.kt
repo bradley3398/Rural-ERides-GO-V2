@@ -410,7 +410,7 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
     scope: String,
     detailLevel: String,
     imageLabels: List<String>,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
   ) {
     val recentHistory = _diagMessages.value.takeLast(6)
     val historySummary =
@@ -504,7 +504,7 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
   fun lookupLiveErrorCode(
     code: String,
     brand: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
   ) {
     viewModelScope.launch {
       _errorCodeState.value = UiState.Loading
@@ -545,7 +545,7 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
   fun searchSpecs(
     query: String,
     category: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     deepSearch: Boolean = true,
   ) {
     recordSpecHistory(query)
@@ -572,7 +572,7 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
   fun digDeeperSpecs(
     query: String,
     category: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
   ) {
     if (_specDigDeeperBusy.value) return
     val existing = (_specState.value as? UiState.Success)?.data.orEmpty()
@@ -628,7 +628,7 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
     category: String,
     region: String,
     vehicleType: String = "ALL",
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     deepSearch: Boolean = true,
   ) {
     recordPartsHistory(listOf(make, model, query).filter { it.isNotBlank() }.joinToString(" "))
@@ -667,7 +667,7 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
     category: String,
     region: String,
     vehicleType: String = "ALL",
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
   ) {
     if (_partsDigDeeperBusy.value) return
     val existing = (_partsState.value as? UiState.Success)?.data.orEmpty()
@@ -838,7 +838,7 @@ class MechanicViewModel(application: Application) : AndroidViewModel(application
     vehicleSummary: String,
     plannedUpgrade: String,
     ridingGoal: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_8_FLASH,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
   ) {
     if (plannedUpgrade.isBlank()) return
     viewModelScope.launch {

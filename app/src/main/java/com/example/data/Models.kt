@@ -575,7 +575,7 @@ data class MasterSettings(
   val gasPriceUsd: Double = 3.45,
   val carMpg: Double = 22.0,
   val copilotPersona: String = "Tactical Coach",
-  val aiModelId: String = "gemini-3.5-flash-lite",
+  val aiModelId: String = "gemini-3.1-flash-lite",
   val aiThinkingLevel: String = "medium",
   val aiCreativity: Float = 0.7f,
   val aiDetailLevel: String = "standard",

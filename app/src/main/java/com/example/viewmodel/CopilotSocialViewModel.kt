@@ -680,7 +680,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     customDirective: String,
     autoSpeak: Boolean,
     volumePct: Int,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     temperature: Float = 0.7f,
     thinkingLevel: String = "medium",
     detailLevel: String = "standard",
@@ -1226,7 +1226,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     question: String,
     persona: String,
     detail: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
   ) {
     viewModelScope.launch {
       _videoAiBusy.value = true
@@ -1402,7 +1402,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
 
   fun suggestDmReplies(
     lastIncomingMessage: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     onResult: (List<String>) -> Unit,
   ) {
     if (lastIncomingMessage.isBlank()) {
@@ -1438,7 +1438,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     topic: String,
     platform: String,
     telemetrySummary: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     onResult: (String) -> Unit,
   ) {
     viewModelScope.launch {
@@ -1453,7 +1453,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     }
   }
 
-  fun runSosAiTriage(post: BoardPost, modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE) {
+  fun runSosAiTriage(post: BoardPost, modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE) {
     viewModelScope.launch {
       _sosTriageBusyId.value = post.id
       aiRepo
@@ -1570,7 +1570,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   fun polishPostDraft(
     draft: String,
     tone: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     onResult: (String) -> Unit,
   ) {
     viewModelScope.launch {
@@ -1583,7 +1583,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   fun translateText(
     text: String,
     targetLang: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     onResult: (String) -> Unit,
   ) {
     viewModelScope.launch {
@@ -2132,7 +2132,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     telemetrySummary: String,
     weatherSummary: String,
     riderGoal: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_8_FLASH,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
   ) {
     if (_flightCheckState.value is UiState.Loading) return
     viewModelScope.launch {

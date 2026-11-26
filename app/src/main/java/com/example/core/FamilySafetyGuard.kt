@@ -4,12 +4,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
+import com.example.ai.DirectGeminiRestClient
+import com.example.ai.GeminiJsonSchema
 import com.example.ai.GeminiModelCatalog
-import com.google.firebase.Firebase
-import com.google.firebase.ai.ai
-import com.google.firebase.ai.type.Schema
-import com.google.firebase.ai.type.content
-import com.google.firebase.ai.type.generationConfig
 import java.text.Normalizer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -393,20 +390,14 @@ object FamilySafetyGuard {
 
       try {
         val schema =
-          Schema.obj(
+          GeminiJsonSchema.obj(
             properties =
               mapOf(
-                "safe" to Schema.boolean(description = "true ONLY if the image is completely family-friendly (G/PG rated)"),
-                "category" to Schema.string(description = "SAFE, NUDITY_OR_SEXUAL, VIOLENCE_OR_GORE, HATE_OR_HARASSMENT, PROFANITY_OR_GESTURE, DRUGS_OR_WEAPONS, or SPAM_ABUSE"),
-                "reason" to Schema.string(description = "Brief polite explanation if unsafe, or empty string if safe"),
+                "safe" to GeminiJsonSchema.bool("true ONLY if the image is completely family-friendly (G/PG rated)"),
+                "category" to GeminiJsonSchema.string("SAFE, NUDITY_OR_SEXUAL, VIOLENCE_OR_GORE, HATE_OR_HARASSMENT, PROFANITY_OR_GESTURE, DRUGS_OR_WEAPONS, or SPAM_ABUSE"),
+                "reason" to GeminiJsonSchema.string("Brief polite explanation if unsafe, or empty string if safe"),
               ),
           )
-        val config =
-          generationConfig {
-            temperature = 0.0f
-            responseMimeType = "application/json"
-            responseSchema = schema
-          }
 
         val prompt =
           """
@@ -424,19 +415,18 @@ object FamilySafetyGuard {
 
         var responseText: String? = null
         var lastError: Throwable? = null
-        for (modelId in listOf(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE, GeminiModelCatalog.GEMINI_3_8_FLASH)) {
+        for (modelId in GeminiModelCatalog.fallbackChain(GeminiModelCatalog.GEMINI_3_1_FLASH_LITE)) {
           try {
-            val model = AppCheckHealthManager.createGenerativeModel(modelName = modelId, generationConfig = config)
             val response =
-              AppCheckHealthManager.runWithAppCheckRecovery("FamilySafetyGuard") {
-                withTimeout(22_000L) {
-                  model.generateContent(
-                    content {
-                      image(safeScaled)
-                      text(prompt)
-                    },
-                  )
-                }
+              withTimeout(22_000L) {
+                DirectGeminiRestClient.generateText(
+                  modelId = modelId,
+                  prompt = prompt,
+                  images = listOf(safeScaled),
+                  temperature = 0.0f,
+                  responseMimeType = "application/json",
+                  responseSchema = schema,
+                )
               }
             responseText = response.text
             if (!responseText.isNullOrBlank()) break
@@ -464,7 +454,7 @@ object FamilySafetyGuard {
         }
 
         if (!responseText.isNullOrBlank()) {
-          val json = JSONObject(responseText)
+          val json = JSONObject(DirectGeminiRestClient.cleanJsonPayload(responseText))
           val isSafe = json.optBoolean("safe", false)
           val cat = json.optString("category", if (isSafe) "SAFE" else "UNSAFE_MEDIA")
           val reason = json.optString("reason", "")
@@ -573,24 +563,13 @@ object FamilySafetyGuard {
     withContext(Dispatchers.IO) {
       try {
         val schema =
-          Schema.obj(
+          GeminiJsonSchema.obj(
             properties =
               mapOf(
-                "safe" to Schema.boolean(description = "true if friendly, respectful, and family-appropriate"),
-                "category" to Schema.string(description = "SAFE, PROFANITY, INSULT_OR_BULLYING, HATE_OR_HARASSMENT, SEXUAL_INNUENDO, THREAT, or SCAM"),
-                "reason" to Schema.string(description = "Short kind explanation if blocked"),
+                "safe" to GeminiJsonSchema.bool("true if friendly, respectful, and family-appropriate"),
+                "category" to GeminiJsonSchema.string("SAFE, PROFANITY, INSULT_OR_BULLYING, HATE_OR_HARASSMENT, SEXUAL_INNUENDO, THREAT, or SCAM"),
+                "reason" to GeminiJsonSchema.string("Short kind explanation if blocked"),
               ),
-          )
-        val config =
-          generationConfig {
-            temperature = 0.0f
-            responseMimeType = "application/json"
-            responseSchema = schema
-          }
-        val model =
-          AppCheckHealthManager.createGenerativeModel(
-            modelName = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
-            generationConfig = config,
           )
         val prompt =
           """
@@ -601,12 +580,18 @@ object FamilySafetyGuard {
           "${text.take(800)}"
           """.trimIndent()
         val response =
-          AppCheckHealthManager.runWithAppCheckRecovery("FamilySafetyGuard") {
-            withTimeout(12_000L) { model.generateContent(prompt) }
+          withTimeout(12_000L) {
+            DirectGeminiRestClient.generateText(
+              modelId = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
+              prompt = prompt,
+              temperature = 0.0f,
+              responseMimeType = "application/json",
+              responseSchema = schema,
+            )
           }
         val raw = response.text
-        if (!raw.isNullOrBlank()) {
-          val json = JSONObject(raw)
+        if (raw.isNotBlank()) {
+          val json = JSONObject(DirectGeminiRestClient.cleanJsonPayload(raw))
           val isSafe = json.optBoolean("safe", true)
           if (!isSafe) {
             recordViolation()

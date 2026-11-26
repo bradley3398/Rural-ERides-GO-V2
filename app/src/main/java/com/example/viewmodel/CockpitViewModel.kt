@@ -374,7 +374,7 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
 
   fun lookupPevSpecs(
     makeAndModel: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     onResult: (PevAutoSpecResult) -> Unit,
     onError: (String) -> Unit,
   ) {
@@ -388,7 +388,7 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
 
   fun searchPevModelCandidates(
     query: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     onResult: (List<PevAutoSpecResult>) -> Unit,
     onError: (String) -> Unit,
   ) {
@@ -414,7 +414,7 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
     activeVehicle: PevVehicle?,
     startBatteryPct: Int,
     riderWeightLbs: Double,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     onResult: (BatteryPredictionResult) -> Unit,
   ) {
     val snap = telemetry.value
@@ -485,7 +485,7 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
     uid: String,
     ride: RideSession,
     weatherSummary: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
     vehicle: PevVehicle? = null,
     batteryChemistry: String = "NMC",
   ) {
@@ -522,7 +522,7 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
   fun requestFleetLogbookDebrief(
     activeVehicle: PevVehicle?,
     batteryChemistry: String = "NMC",
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
   ) {
     val list = _rides.value
     if (list.isEmpty()) {
@@ -540,7 +540,7 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
   fun requestTelemetrySafetyBrief(
     limitMph: Int?,
     weatherSummary: String,
-    modelId: String = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+    modelId: String = GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
   ) {
     viewModelScope.launch {
       _aiSafetyBusy.value = true

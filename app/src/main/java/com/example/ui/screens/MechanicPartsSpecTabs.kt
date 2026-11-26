@@ -102,7 +102,7 @@ fun SpecEngineTab(
   cockpitVm: CockpitViewModel? = null,
   sessionVm: SessionViewModel? = null,
   socialVm: CopilotSocialViewModel? = null,
-  aiModelId: String = com.example.ai.GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+  aiModelId: String = com.example.ai.GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
 ) {
   val ctx = LocalContext.current
   val specState by mechanicVm.specState.collectAsStateWithLifecycle()
@@ -901,7 +901,7 @@ fun PartsFinderTab(
   mechanicVm: MechanicViewModel,
   cockpitVm: CockpitViewModel? = null,
   socialVm: CopilotSocialViewModel? = null,
-  aiModelId: String = com.example.ai.GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+  aiModelId: String = com.example.ai.GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
 ) {
   val ctx = LocalContext.current
   val partsState by mechanicVm.partsState.collectAsStateWithLifecycle()

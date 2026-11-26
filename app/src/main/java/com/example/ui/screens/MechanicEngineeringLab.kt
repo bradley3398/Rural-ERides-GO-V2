@@ -61,7 +61,7 @@ private data class EngBayEntry(val id: Int, val name: String, val category: Stri
 @Composable
 fun EngineeringLabTab(
   mechanicVm: MechanicViewModel,
-  aiModelId: String = com.example.ai.GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
+  aiModelId: String = com.example.ai.GeminiModelCatalog.GEMINI_3_1_FLASH_LITE,
   activeRigSummary: String = "72V 40Ah Performance PEV",
   currentOdomKm: Double = 0.0,
   distanceUnit: String = "mi",
@@ -711,7 +711,7 @@ private fun UpgradeCompatibilityAdvisorCard(
           color = MaterialTheme.colorScheme.primary,
         )
         Text(
-          "Live Firebase AI schema analysis for voltage, amps, connectors, braking & clearance",
+          "Live Cloud Console Gemini 3.1 Flash-Lite schema analysis for voltage, amps, connectors, braking & clearance",
           style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -797,7 +797,7 @@ private fun UpgradeCompatibilityAdvisorCard(
       is UiState.Loading -> {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
           CircularProgressIndicator(strokeWidth = 2.5.dp, modifier = Modifier.size(22.dp))
-          Text("Running Firebase AI electrical & fitment check...", style = MaterialTheme.typography.bodySmall)
+          Text("Running Gemini 3.1 Flash-Lite electrical & fitment check...", style = MaterialTheme.typography.bodySmall)
         }
       }
       is UiState.Error -> {

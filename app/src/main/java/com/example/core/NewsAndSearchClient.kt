@@ -4,6 +4,8 @@ import android.content.Context
 import android.location.LocationManager
 import android.util.Log
 import com.example.R
+import com.example.ai.DirectGeminiRestClient
+import com.example.ai.GeminiModelCatalog
 import com.example.data.NewsArticleItem
 import com.example.data.SupabaseAuthService
 import com.google.firebase.FirebaseApp
@@ -564,14 +566,15 @@ internal object NewsAndSearchClient {
           url = "https://electrek.co/feed/",
         )
 
-      val (appCheckOk, appCheckMs, appCheckDetail) = AppCheckHealthManager.probeLiveAppCheck(context)
+      val (geminiOk, geminiMs, geminiDetail) =
+        DirectGeminiRestClient.probeLiveCloudConsoleKey(GeminiModelCatalog.GEMINI_3_1_FLASH_LITE)
       results +=
         DiagnosticCheckResult(
-          name = "Firebase AI Logic & App Check",
+          name = "Gemini 3.1 Flash-Lite (Cloud Console)",
           category = "AI",
-          ok = appCheckOk,
-          latencyMs = appCheckMs,
-          detail = "$appCheckDetail ($firebaseProjectId)",
+          ok = geminiOk,
+          latencyMs = geminiMs,
+          detail = geminiDetail,
         )
 
       val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager

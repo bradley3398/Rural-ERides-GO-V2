@@ -2,7 +2,10 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.ai.DirectGeminiRestClient
 import com.example.ai.GeminiAiRepository
+import com.example.ai.GeminiChatTurnPayload
+import com.example.ai.GeminiJsonSchema
 import com.example.ai.GeminiModelCatalog
 import com.example.core.LiveCloudServices
 import com.example.core.MapsSpeedLimitClient
@@ -191,21 +194,52 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `gemini default model is 3_5 flash lite and fallback chain rotates cleanly`() {
+  fun `gemini default model is 3_1 flash lite and fallback chain rotates cleanly`() {
     val defaults = MasterSettings()
-    assertEquals(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE, defaults.aiModelId)
-    assertEquals("gemini-3.5-flash-lite", defaults.aiModelId)
+    assertEquals(GeminiModelCatalog.GEMINI_3_1_FLASH_LITE, defaults.aiModelId)
+    assertEquals("gemini-3.1-flash-lite", defaults.aiModelId)
     assertEquals("NMC", defaults.batteryChemistry)
     assertEquals(50, defaults.boardPostLimit)
     val chain = GeminiModelCatalog.fallbackChain(defaults.aiModelId)
     assertEquals(
       listOf(
+        "gemini-3.1-flash-lite",
         "gemini-3.5-flash-lite",
         "gemini-3.8-flash",
-        "gemini-4-argon",
       ),
       chain,
     )
+    assertEquals("gemini-3.1-flash-lite", GeminiModelCatalog.fallbackChain("gemini-4-argon").first())
+  }
+
+  @Test
+  fun `direct gemini rest client builds schema payload and cleans markdown fences`() {
+    val schema =
+      GeminiJsonSchema.obj(
+        properties =
+          mapOf(
+            "verdict" to GeminiJsonSchema.string("Result verdict"),
+            "score" to GeminiJsonSchema.integer("Score"),
+          )
+      )
+    val payload =
+      DirectGeminiRestClient.buildRequestJson(
+        turns = listOf(GeminiChatTurnPayload(role = "user", text = "Test PEV check")),
+        systemInstruction = "Stay concise",
+        temperature = 0.25f,
+        responseMimeType = "application/json",
+        responseSchema = schema,
+        useGoogleSearch = true,
+      )
+    assertTrue(payload.has("contents"))
+    assertTrue(payload.has("systemInstruction"))
+    assertTrue(payload.has("tools"))
+    val genCfg = payload.getJSONObject("generationConfig")
+    assertEquals("application/json", genCfg.getString("responseMimeType"))
+    assertEquals("OBJECT", genCfg.getJSONObject("responseSchema").getString("type"))
+
+    val cleaned = DirectGeminiRestClient.cleanJsonPayload("```json\n{\"ok\":true}\n```")
+    assertEquals("{\"ok\":true}", cleaned)
   }
 
   @Test
@@ -219,6 +253,7 @@ class ExampleRobolectricTest {
       )
     )
     assertTrue(repo.isRetryableModelFallbackError(IllegalStateException("404 model not found")))
+    assertFalse(repo.isRetryableModelFallbackError(IllegalStateException("Cloud Console API (403): API key not valid")))
     assertFalse(repo.isRetryableModelFallbackError(IllegalStateException("Socket network timeout")))
   }
 
@@ -1051,6 +1086,12 @@ class ExampleRobolectricTest {
     assertEquals(
       "https://roads.googleapis.com/v1/speedLimits?path=0,0&key=[HIDDEN]",
       com.example.core.ApiKeyRing.redactSecrets("https://roads.googleapis.com/v1/speedLimits?path=0,0&key=AIzaSecret123456"),
+    )
+    assertEquals(
+      "Failed with key [HIDDEN] and fallback [HIDDEN]",
+      com.example.core.ApiKeyRing.redactSecrets(
+        "Failed with key AQ.FakeTestToken1234567890_ABCDEF and fallback AIzaSyFakeKey1234567890_ABCDEFG"
+      ),
     )
   }
 

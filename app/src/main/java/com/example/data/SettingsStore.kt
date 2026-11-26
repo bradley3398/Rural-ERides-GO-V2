@@ -82,6 +82,7 @@ class SettingsStore(private val context: Context) {
     val CAR_MPG = doublePreferencesKey("car_mpg")
     val COPILOT_PERSONA = stringPreferencesKey("copilot_persona")
     val AI_MODEL_ID = stringPreferencesKey("ai_model_id")
+    val AI_MODEL_MIGRATED_3_1 = booleanPreferencesKey("ai_model_migrated_3_1")
     val AI_THINKING_LEVEL = stringPreferencesKey("ai_thinking_level")
     val AI_CREATIVITY = floatPreferencesKey("ai_creativity")
     val AI_DETAIL_LEVEL = stringPreferencesKey("ai_detail_level")
@@ -332,7 +333,12 @@ class SettingsStore(private val context: Context) {
         gasPriceUsd = prefs[Keys.GAS_PRICE] ?: 3.45,
         carMpg = prefs[Keys.CAR_MPG] ?: 22.0,
         copilotPersona = prefs[Keys.COPILOT_PERSONA] ?: "Tactical Coach",
-        aiModelId = prefs[Keys.AI_MODEL_ID] ?: "gemini-3.5-flash-lite",
+        aiModelId =
+          if (prefs[Keys.AI_MODEL_MIGRATED_3_1] == true) {
+            prefs[Keys.AI_MODEL_ID] ?: "gemini-3.1-flash-lite"
+          } else {
+            "gemini-3.1-flash-lite"
+          },
         aiThinkingLevel = prefs[Keys.AI_THINKING_LEVEL] ?: "medium",
         aiCreativity = prefs[Keys.AI_CREATIVITY] ?: 0.7f,
         aiDetailLevel = prefs[Keys.AI_DETAIL_LEVEL] ?: "standard",
@@ -1085,6 +1091,7 @@ class SettingsStore(private val context: Context) {
       prefs[Keys.CAR_MPG] = updated.carMpg
       prefs[Keys.COPILOT_PERSONA] = updated.copilotPersona
       prefs[Keys.AI_MODEL_ID] = updated.aiModelId
+      prefs[Keys.AI_MODEL_MIGRATED_3_1] = true
       prefs[Keys.AI_THINKING_LEVEL] = updated.aiThinkingLevel
       prefs[Keys.AI_CREATIVITY] = updated.aiCreativity
       prefs[Keys.AI_DETAIL_LEVEL] = updated.aiDetailLevel

@@ -2,6 +2,12 @@
 
 All notable changes to **Rural ERides GO** (`com.aistudio.volttrail.kqrmvx`) are documented in this file.
 
+## [65.0] (Build 65) — November 2026
+### Direct Google Cloud Console Gemini 3.1 Flash-Lite API Integration
+- **Direct Cloud Console Gemini REST Client (`DirectGeminiRestClient.kt`, `GeminiAiRepository.kt`, `GeminiStudioEngine.kt`, `FamilySafetyGuard.kt`, `VoiceAudioManager.kt`, `ApiKeyRing.kt`)**: Removed `Firebase.ai` (Firebase AI Logic) and Firebase App Check dependencies from all Gemini AI, Vision AR, Co-Pilot, Studio Hub, Family Safety, and Neural TTS requests, routing them directly to `https://generativelanguage.googleapis.com/v1beta` with Google Cloud Console API keys (`GEMINI_API_KEY`, `GEMINI_API_KEY_2`, `GOOGLE_CLOUD_API_KEY`, `GOOGLE_API_KEY`) managed via AI Studio Secrets / `BuildConfig` (with `X-Android-Package` & `X-Android-Cert` identity headers).
+- **Gemini 3.1 Flash-Lite Default (`GeminiModelCatalog`, `Models.kt`, `SettingsStore.kt`, ViewModels, UI)**: Set `gemini-3.1-flash-lite` as the default model across the entire app (including a one-time DataStore upgrade migration from older defaults) with free-tier fallback across `gemini-3.1-flash-lite`, `gemini-3.5-flash-lite`, and `gemini-3.8-flash`.
+- **Live Cloud Console Diagnostic Probe (`NewsAndSearchClient.kt`)**: Switched the About & Diagnostics AI check to verify live Cloud Console API key connectivity against `gemini-3.1-flash-lite`.
+
 ## [61.0] (Build 61) — November 2026
 ### Multi-Device & Tablet Firebase AI App Check Self-Healing & Universal Screen-Fit Layout Overhaul
 - **Tablet & Multi-Device Firebase App Check Recovery (`AppCheckConfig.kt`, `MainActivity.kt`, `GeminiAiRepository.kt`, `GeminiStudioEngine.kt`, `FamilySafetyGuard.kt`, `VoiceAudioManager.kt`)**: Added a `noBackupFilesDir` device anchor to purge restored cross-device App Check token/debug caches on fresh or restored tablet installs, guarded `installAppCheckProviderFactory` against redundant resets on tablet activity recreations, added background reCAPTCHA Enterprise token warm-up, and wrapped all Firebase AI Logic calls in automatic force-refresh & retry recovery with actionable Play Services/reCAPTCHA diagnostics.

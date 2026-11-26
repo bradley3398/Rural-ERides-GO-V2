@@ -1797,7 +1797,7 @@ fun AboutDeveloperSettingsContent(
         Text("Device: ${Build.MANUFACTURER.uppercase()} ${Build.MODEL}", style = MaterialTheme.typography.labelSmall)
         Text("System: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})", style = MaterialTheme.typography.labelSmall)
         Text("GitHub: https://github.com/bradley3398/Rural-ERides-GO-V2", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-        Text("Powered by: Kotlin • Jetpack Compose • Studio 3D PBR + OpenGL ES + WebGL 2.0 • Live GPS & GNSS • 9-DOF Sensors • Live AR Camera • Firebase AI & Cloud Sync", style = MaterialTheme.typography.labelSmall)
+        Text("Powered by: Kotlin • Jetpack Compose • Studio 3D PBR + OpenGL ES + WebGL 2.0 • Live GPS & GNSS • 9-DOF Sensors • Live AR Camera • Cloud Console Gemini AI & Cloud Sync", style = MaterialTheme.typography.labelSmall)
       }
     }
     Spacer(Modifier.height(12.dp))

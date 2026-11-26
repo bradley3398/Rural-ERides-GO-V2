@@ -20,6 +20,8 @@ object ApiKeyRing {
   private val keyCooldownUntilMs = ConcurrentHashMap<String, Long>()
   private val urlSecretParamRegex =
     Regex("""(?i)([?&](?:key|api_key|apikey|access_token|appid|token)=)([^&\s]+)""")
+  private val googleKeyPatternRegex =
+    Regex("""\b(?:AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z._-]{20,})\b""")
 
   fun isRealKey(raw: String?): Boolean {
     val v = raw?.trim().orEmpty()
@@ -121,6 +123,21 @@ object ApiKeyRing {
     }
     throw lastError ?: IllegalStateException("All configured Google CSE keys failed")
   }
+
+  private fun readOptionalBuildConfigSecret(fieldName: String): String =
+    runCatching {
+      BuildConfig::class.java.fields
+        .firstOrNull { it.name == fieldName }
+        ?.get(null) as? String
+    }.getOrNull().orEmpty()
+
+  fun geminiKeys(): List<String> =
+    collectPool(
+      readOptionalBuildConfigSecret("GEMINI_API_KEY"),
+      readOptionalBuildConfigSecret("GEMINI_API_KEY_2"),
+      BuildConfig.GOOGLE_CLOUD_API_KEY,
+      BuildConfig.GOOGLE_API_KEY,
+    )
 
   fun googleMapsKeys(): List<String> =
     collectPool(
@@ -231,8 +248,10 @@ object ApiKeyRing {
     var text = raw.orEmpty()
     if (text.isBlank()) return ""
     text = text.replace(urlSecretParamRegex, "$1[HIDDEN]")
+    text = text.replace(googleKeyPatternRegex, "[HIDDEN]")
     val allSecrets =
       buildList {
+        addAll(geminiKeys())
         addAll(googleMapsKeys())
         addAll(youtubeKeys())
         addAll(mapboxTokens())
