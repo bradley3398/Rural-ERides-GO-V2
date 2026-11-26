@@ -35,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -134,12 +135,17 @@ fun PostComposerDialog(
   val hashtagSuggestions =
     listOf("#PEV", "#EUC", "#EScooter", "#EMoto", "#VESC", "#72V", "#GroupRide", "#ChargeSpot", "#TrailReport", "#BuildLog", "#RuralERidesGO")
 
+  val draftSafetyCheck =
+    remember(title, body, pollQ, pollOpt1, pollOpt2, pollOpt3, pollOpt4, location) {
+      com.example.core.FamilySafetyGuard.checkText(title, body, pollQ, pollOpt1, pollOpt2, pollOpt3, pollOpt4, location)
+    }
+
   TacticalDialog(
     onDismissRequest = onDismiss,
     title = "Live Board Transmission",
-    subtitle = "100% Cloud Sync • ${category.replace('_', ' ')}",
+    subtitle = "Family-Friendly Cloud Sync • ${category.replace('_', ' ')}",
     icon = Icons.Default.CellTower,
-    badgeText = "LIVE",
+    badgeText = "SAFE",
     confirmButton = {
       TacticalButton(
         onClick = {
@@ -158,7 +164,7 @@ fun PostComposerDialog(
             stolenAlert,
           )
         },
-        enabled = title.isNotBlank() || body.isNotBlank(),
+        enabled = (title.isNotBlank() || body.isNotBlank()) && draftSafetyCheck.allowed,
         modifier = Modifier.testTag("composer_transmit_button"),
       ) {
         Icon(Icons.Default.Send, null, Modifier.size(16.dp))
@@ -173,6 +179,25 @@ fun PostComposerDialog(
     },
   ) {
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      Surface(
+        color =
+          if (draftSafetyCheck.allowed) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+          else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
+        shape = chrome.smallShape,
+        modifier = Modifier.fillMaxWidth(),
+      ) {
+        Text(
+          text =
+            if (draftSafetyCheck.allowed) com.example.core.FamilySafetyGuard.COMMUNITY_PROMISE_SHORT
+            else draftSafetyCheck.reason,
+          style = MaterialTheme.typography.labelSmall,
+          fontWeight = FontWeight.SemiBold,
+          color =
+            if (draftSafetyCheck.allowed) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onErrorContainer,
+          modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+        )
+      }
       Text("Category Channel", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
       LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items(LIVE_BOARD_CATEGORIES) { cat ->

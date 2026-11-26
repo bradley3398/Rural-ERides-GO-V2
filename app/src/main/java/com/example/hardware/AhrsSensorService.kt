@@ -295,6 +295,23 @@ class AhrsStreamProcessor(context: Context) : SensorEventListener {
     }
   }
 
+  fun resetCalibrationOffsets() {
+    synchronized(stateLock) {
+      pitchOffsetDeg = 0f
+      rollOffsetDeg = 0f
+      yawOffsetDeg = 0f
+      staged =
+        staged.copy(
+          pitchDeg = rawPitchDeg,
+          rollDeg = rawRollDeg,
+          yawDeg = rawYawDeg,
+          peakLeanLeftDeg = 0f,
+          peakLeanRightDeg = 0f,
+        )
+      _uiThrottledFlow.value = staged
+    }
+  }
+
   override fun onSensorChanged(event: SensorEvent) {
     when (event.sensor.type) {
       Sensor.TYPE_ROTATION_VECTOR -> {

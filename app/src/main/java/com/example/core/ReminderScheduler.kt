@@ -366,7 +366,7 @@ object ReminderScheduler {
     if (!hasNotificationPermission(context)) return false
 
     val safeRepoUrl =
-      releasePageUrl.takeIf { it.startsWith("https://github.com/bradley3398/Rural-Erides-GO") }
+      releasePageUrl.takeIf { it.startsWith("https://github.com/bradley3398/Rural-ERides-GO-V2") }
         ?: GITHUB_RELEASES_WEB_URL
 
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(safeRepoUrl)).apply {

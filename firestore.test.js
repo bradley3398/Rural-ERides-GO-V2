@@ -110,10 +110,17 @@ test("Owner-only /users/{uid} and subcollections isolate PII and reject cross-us
   await assertFails(bobDb.collection("users").doc(ALICE_UID).get());
   await assertFails(bobDb.collection("users").doc(ALICE_UID).update({ callsign: "HIJACK" }));
 
-  // Owner cannot change callsign once locked
-  await assertFails(
+  // Owner CAN change username/callsign and update rich profile info (birthdate, bio, hometown, privacy)
+  await assertSucceeds(
     aliceDb.collection("users").doc(ALICE_UID).update({
-      callsign: "NEW_CALLSIGN",
+      callsign: "OZARK_ALICE",
+      displayName: "Alice Trailblazer",
+      birthdate: "1994-05-14",
+      bio: "Rural EUC & off-road e-scooter explorer.",
+      hometown: "Springfield, MO",
+      ridingStyle: "Trail & Gravel",
+      profileVisibility: "PUBLIC",
+      allowDirectCalls: true,
       updatedAt: pastDate(1000),
     })
   );
@@ -540,4 +547,106 @@ test("WebRTC Call Signals & Owner Cloud Backups enforce participant and owner is
     })
   );
 });
+
+test("CallSession fixed-slot /streams/{streamId} enforces participant isolation, owner slot IDs, and payload limits", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const eveDb = testEnv.authenticatedContext("eve_999").firestore();
+  const ts = pastDate(10000);
+
+  await assertSucceeds(
+    aliceDb.collection("call_sessions").doc("call_stream_1").set({
+      callerUid: ALICE_UID,
+      callerCallsign: "ALICE",
+      calleeUid: BOB_UID,
+      calleeCallsign: "BOB",
+      callType: "VIDEO",
+      status: "RINGING",
+      createdAt: ts,
+      updatedAt: ts,
+    })
+  );
+
+  // Bob can attach a listener/get to Alice's video slot even before frame #1 exists
+  await assertSucceeds(
+    bobDb.collection("call_sessions").doc("call_stream_1").collection("streams").doc(`v_${ALICE_UID}`).get()
+  );
+
+  // Alice writes & overwrites her own video and audio stream slots
+  await assertSucceeds(
+    aliceDb.collection("call_sessions").doc("call_stream_1").collection("streams").doc(`v_${ALICE_UID}`).set({
+      senderId: ALICE_UID,
+      kind: "VIDEO",
+      seq: 1,
+      active: true,
+      payload: "/9j/4AAQSkZJRgABAQAAAQABAAD",
+      updatedAt: pastDate(2000),
+    })
+  );
+  await assertSucceeds(
+    aliceDb.collection("call_sessions").doc("call_stream_1").collection("streams").doc(`v_${ALICE_UID}`).set({
+      senderId: ALICE_UID,
+      kind: "VIDEO",
+      seq: 2,
+      active: true,
+      payload: "/9j/4AAQSkZJRgABAQAAAQABAAE",
+      updatedAt: pastDate(1000),
+    })
+  );
+  await assertSucceeds(
+    bobDb.collection("call_sessions").doc("call_stream_1").collection("streams").doc(`a_${BOB_UID}`).set({
+      senderId: BOB_UID,
+      kind: "AUDIO",
+      seq: 1,
+      active: true,
+      payload: "f39/f39/f38=",
+      updatedAt: pastDate(1000),
+    })
+  );
+
+  // Bob reads Alice's live video slot
+  await assertSucceeds(
+    bobDb.collection("call_sessions").doc("call_stream_1").collection("streams").doc(`v_${ALICE_UID}`).get()
+  );
+
+  // Bob CANNOT overwrite Alice's stream slot
+  await assertFails(
+    bobDb.collection("call_sessions").doc("call_stream_1").collection("streams").doc(`v_${ALICE_UID}`).set({
+      senderId: BOB_UID,
+      kind: "VIDEO",
+      seq: 99,
+      active: true,
+      payload: "hijack",
+      updatedAt: pastDate(500),
+    })
+  );
+
+  // Eve (non-participant) cannot read or write streams
+  await assertFails(
+    eveDb.collection("call_sessions").doc("call_stream_1").collection("streams").doc(`v_${ALICE_UID}`).get()
+  );
+  await assertFails(
+    eveDb.collection("call_sessions").doc("call_stream_1").collection("streams").doc("v_eve_999").set({
+      senderId: "eve_999",
+      kind: "VIDEO",
+      seq: 1,
+      active: true,
+      payload: "intruder",
+      updatedAt: pastDate(500),
+    })
+  );
+
+  // Oversized payload (> 95,000 bytes) rejected
+  await assertFails(
+    aliceDb.collection("call_sessions").doc("call_stream_1").collection("streams").doc(`v_${ALICE_UID}`).set({
+      senderId: ALICE_UID,
+      kind: "VIDEO",
+      seq: 3,
+      active: true,
+      payload: "A".repeat(96000),
+      updatedAt: pastDate(500),
+    })
+  );
+});
+
 

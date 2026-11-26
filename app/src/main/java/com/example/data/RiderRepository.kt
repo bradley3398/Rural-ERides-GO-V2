@@ -241,6 +241,110 @@ class RiderRepository(
       Result.failure(e)
     }
 
+  suspend fun updateFullRiderProfile(profile: RiderProfile): Result<Unit> =
+    try {
+      val uid = requireUid(profile.userId)
+      val cleanCallsign = profile.callsign.trim().take(32).ifBlank { "PILOT" }
+      val cleanDisplay = profile.displayName.trim().take(60).ifBlank { cleanCallsign }
+      val cleanEmail = profile.email.trim().take(120).ifBlank { auth.currentUser?.email.orEmpty().ifBlank { "pilot@ruralerides.local" } }
+      val cleanUnit = if (profile.unitSystem == "METRIC") "METRIC" else "IMPERIAL"
+      val cleanVisibility = if (profile.profileVisibility == "PRIVATE") "PRIVATE" else "PUBLIC"
+      val cleanWeight = profile.riderWeightLbs.coerceIn(0.0, 600.0)
+      val cleanAvatar = profile.avatarBase64.take(62_000)
+
+      val userRef = db.collection("users").document(uid)
+      val existing = userRef.get().await()
+      val fields =
+        mutableMapOf<String, Any>(
+          "userId" to uid,
+          "displayName" to cleanDisplay,
+          "callsign" to cleanCallsign,
+          "email" to cleanEmail,
+          "activeVehicleId" to profile.activeVehicleId.take(128),
+          "unitSystem" to cleanUnit,
+          "emergencyContactName" to profile.emergencyContactName.trim().take(60),
+          "sosContactNumber" to profile.sosContactNumber.trim().take(30),
+          "medicalProfile" to profile.medicalProfile.trim().take(200),
+          "acceptedLegal" to true,
+          "riderWeightLbs" to cleanWeight,
+          "avatarBase64" to cleanAvatar,
+          "birthdate" to profile.birthdate.trim().take(24),
+          "bio" to profile.bio.trim().take(300),
+          "hometown" to profile.hometown.trim().take(80),
+          "phoneNumber" to profile.phoneNumber.trim().take(30),
+          "ridingStyle" to profile.ridingStyle.trim().take(48).ifBlank { "Trail & Gravel" },
+          "experienceLevel" to profile.experienceLevel.trim().take(36).ifBlank { "Intermediate" },
+          "socialHandle" to profile.socialHandle.trim().take(100),
+          "bloodType" to profile.bloodType.trim().take(12),
+          "profileVisibility" to cleanVisibility,
+          "showOnlineStatus" to profile.showOnlineStatus,
+          "allowDirectCalls" to profile.allowDirectCalls,
+          "allowDirectMessages" to profile.allowDirectMessages,
+          "updatedAt" to FieldValue.serverTimestamp(),
+        )
+      if (!existing.exists()) {
+        fields["createdAt"] = FieldValue.serverTimestamp()
+        userRef.set(fields).await()
+      } else {
+        if (existing.getTimestamp("createdAt") == null) {
+          fields["createdAt"] = FieldValue.serverTimestamp()
+        }
+        userRef.update(fields).await()
+      }
+
+      // Immediately sync updated username/callsign, avatar & privacy visibility to public pilot directory
+      val pubRef = db.collection("user_profiles").document(uid)
+      val existingPub = runCatching { pubRef.get().await() }.getOrNull()
+      val nowMs = System.currentTimeMillis()
+      if (existingPub != null && existingPub.exists()) {
+        runCatching {
+          pubRef
+            .update(
+              mapOf(
+                "callsign" to cleanCallsign,
+                "avatarBase64" to cleanAvatar,
+                "visibility" to cleanVisibility,
+                "online" to profile.showOnlineStatus,
+                "lastSeenMs" to if (profile.showOnlineStatus) nowMs else 0L,
+                "updatedAt" to FieldValue.serverTimestamp(),
+              )
+            )
+            .await()
+        }
+      } else {
+        runCatching {
+          pubRef
+            .set(
+              mapOf(
+                "userId" to uid,
+                "callsign" to cleanCallsign,
+                "rankBadge" to "Rookie Pilot",
+                "xpPoints" to 0L,
+                "totalKm" to 0.0,
+                "ridesCount" to 0L,
+                "verified" to false,
+                "banned" to false,
+                "trustScore" to 100L,
+                "vehicleSummary" to "PEV Unit",
+                "visibility" to cleanVisibility,
+                "avatarBase64" to cleanAvatar,
+                "online" to profile.showOnlineStatus,
+                "lastSeenMs" to if (profile.showOnlineStatus) nowMs else 0L,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp(),
+              )
+            )
+            .await()
+        }
+      }
+      Result.success(Unit)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      handleFirestoreError(e, OperationType.UPDATE, "users/${profile.userId}")
+      Result.failure(e)
+    }
+
   suspend fun updatePublicVehicleSummary(
     userId: String,
     summary: String,

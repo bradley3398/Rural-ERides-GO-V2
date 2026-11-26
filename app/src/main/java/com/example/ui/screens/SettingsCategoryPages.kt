@@ -1796,7 +1796,7 @@ fun AboutDeveloperSettingsContent(
         Text("Package ID: ${BuildConfig.APPLICATION_ID}", style = MaterialTheme.typography.labelSmall)
         Text("Device: ${Build.MANUFACTURER.uppercase()} ${Build.MODEL}", style = MaterialTheme.typography.labelSmall)
         Text("System: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})", style = MaterialTheme.typography.labelSmall)
-        Text("GitHub: https://github.com/bradley3398/Rural-Erides-GO", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Text("GitHub: https://github.com/bradley3398/Rural-ERides-GO-V2", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         Text("Powered by: Kotlin • Jetpack Compose • Studio 3D PBR + OpenGL ES + WebGL 2.0 • Live GPS & GNSS • 9-DOF Sensors • Live AR Camera • Firebase AI & Cloud Sync", style = MaterialTheme.typography.labelSmall)
       }
     }
@@ -1804,21 +1804,21 @@ fun AboutDeveloperSettingsContent(
     TacticalOutlinedButton(
       onClick = {
         runCatching {
-          ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bradley3398/Rural-Erides-GO")))
+          ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bradley3398/Rural-ERides-GO-V2")))
         }
       },
       modifier = Modifier.fillMaxWidth().testTag("settings_open_github_repo_button"),
     ) {
       Icon(Icons.Default.Code, null, Modifier.size(16.dp))
       Spacer(Modifier.width(6.dp))
-      Text("GitHub Repository (bradley3398/Rural-Erides-GO)", maxLines = 1, overflow = TextOverflow.Ellipsis)
+      Text("GitHub Repository (bradley3398/Rural-ERides-GO-V2)", maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     Spacer(Modifier.height(10.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
       TacticalOutlinedButton(
         onClick = {
           clipboard.setText(
-            AnnotatedString("Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison — https://github.com/bradley3398/Rural-Erides-GO (${BuildConfig.APPLICATION_ID})")
+            AnnotatedString("Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison — https://github.com/bradley3398/Rural-ERides-GO-V2 (${BuildConfig.APPLICATION_ID})")
           )
           Toast.makeText(ctx, "Copied developer & GitHub info", Toast.LENGTH_SHORT).show()
         },
@@ -1836,7 +1836,7 @@ fun AboutDeveloperSettingsContent(
               putExtra(Intent.EXTRA_SUBJECT, "Rural ERides GO v${BuildConfig.VERSION_NAME}")
               putExtra(
                 Intent.EXTRA_TEXT,
-                "Rural ERides GO v${BuildConfig.VERSION_NAME} — Built by Lord Bradley Callison. Electric Ride Dashboard, Studio 3D Rig Lab, Live GPS Satellites, AR Camera, Repair Shop & AI Helper.\nhttps://github.com/bradley3398/Rural-Erides-GO",
+                "Rural ERides GO v${BuildConfig.VERSION_NAME} — Built by Lord Bradley Callison. Electric Ride Dashboard, Studio 3D Rig Lab, Live GPS Satellites, AR Camera, Repair Shop & AI Helper.\nhttps://github.com/bradley3398/Rural-ERides-GO-V2",
               )
             }
           runCatching { ctx.startActivity(Intent.createChooser(intent, "Share App Info")) }

@@ -86,6 +86,21 @@ fun AppInfoAndChangelogScreen(
   val changelog =
     remember {
       listOf(
+        "v60.0 (Build 60) — Native Video Calls, HUD Sensor Calibration, Profile Settings, Family Safety & YouTube Fix" to
+          "• Native Two-Way Video & Voice Calling: Rebuilt live calls on native Android CameraX + G.711 μ-law voice with hardware echo cancellation, fixed-slot Cloud Firestore media streaming, and a dedicated full-screen Dialog window so video calls launch reliably above DMs and every modal.\n" +
+          "• YouTube In-App Playback Black-Screen Fix: Replaced the detaching embedded YouTube container with a single fixed-slot hardware-accelerated player with strict referrer policy, visible YouTube controls, zero black-screen detachment between theater and mini-bar modes, and automatic Mobile Web Player fallback.\n" +
+          "• HUD Sensor Info & Multi-Axis Calibration: Added a dedicated Sensors button directly on the Cockpit HUD (active & locked modes) with a live 9-DOF spirit-level bubble, full hardware sensor inventory, GNSS/barometer/magnetometer readouts, and 1-tap Zero Level, 3-Axis + Yaw, Clear Peaks, and Factory Zero calibration.\n" +
+          "• Upgraded Settings, Editable Username & Rich Rider Profile: Redesigned the Settings hub with a Rider Profile Hero Card, Quick Controls strip, and a new My Profile, Username & Bio page supporting editable usernames, full name, birthdate calendar picker, bio, hometown, phone, social handle, riding style, experience level, medical/blood type ID, photo picker avatar, and privacy/call/DM controls.\n" +
+          "• Family-Friendly Community & Media Safety Shield: Automatic profanity, insult, bullying, threat, spam, and obfuscation blocking across posts, stories, comments, video comments, DMs, in-call chat, radar pins, bios, and usernames — plus real-time Gemini AI multimodal photo moderation blocking inappropriate media and auto-hiding reported posts.\n" +
+          "• Official GitHub Repository Links Updated: Synced all in-app repository, release update checker, notification, and share links to github.com/bradley3398/Rural-ERides-GO-V2 and fixed GitHub Pages deployment.",
+        "v59.0 (Build 59) — Driving-Motion Loading Screen, Live Hardware Sensor Counter & Zero-Bot Radar" to
+          "• Upgraded Pre-Login Loading Screen: Added bespoke golden-hour driving-horizon artwork, 60fps forward-driving perspective road motion, active theme & Holiday canopy sync, and a live Android SensorManager counter showing loaded hardware sensors.\n" +
+          "• Zero-Crash Hardware 3D Lab & Gravel Volt Runner 3D: Fixed high-poly 3D Lab crashes and upgraded all 88 PEV models and Gravel Volt Runner 3D to OpenGL ES Cook-Torrance GGX PBR shading with procedural mipmapped textures.\n" +
+          "• Permanent Fake/Test Pilot Cleanup: Purged stale Pre-Launch test handles from Radar, Boards, and DMs with strict live freshness.",
+        "v56.0–v58.0 — Authentic OEM 7-Segment HUDs, Real-Pilot Presence & Long-Range Optical Morse" to
+          "• Authentic Hardware 7-Segment OEM HUDs: Added true vector 7-segment LCD/LED/TFT displays (S866, QS-S4, Bafang DPC-18, Isinwheel, Ninebot, SW900, EYE3, EUC Top-Deck) synchronized app-wide with user units.\n" +
+          "• Crash-Free Navigation & Friend Request Alerts: Migrated DMs to full-screen Dialog, added unified Back navigation, live ONLINE NOW badges, persistent Firestore following, and instant Friend Request banners.\n" +
+          "• Long-Range Telephoto Optical Morse & PEV Knowledge Test: Added 1x–6x CameraX telephoto hotspot tracking for Optical Morse and an interactive AI PEV Certification Test.",
         "v52.0 (Build 52) — Android 14 Tablet Multi-Layer Google Sign-In Fix" to
           "• Android 14 Tablet Google Sign-In Recovery: Fixed silent-vs-interactive Credential Manager race conditions, upgraded androidx.credentials to 1.5.0, preserved MainActivity across tablet config/orientation changes, and added automatic fallback to the native Play Services Google Account Picker.\n" +
           "• Dedicated Google Account Picker Button: Added direct Play Services account picker login alongside hardened Google Browser Sign-In (Custom Tabs <queries> + ON_RESUME pending OAuth recovery).",
@@ -238,7 +253,7 @@ fun AppInfoAndChangelogScreen(
           }
           Spacer(Modifier.height(8.dp))
           Text(
-            "Package: ${BuildConfig.APPLICATION_ID}\nGitHub: https://github.com/bradley3398/Rural-Erides-GO\nArchitecture: Kotlin • Jetpack Compose Material 3 • Studio 3D PBR / OpenGL ES / WebGL 2.0 • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • CameraX • OSMDroid",
+            "Package: ${BuildConfig.APPLICATION_ID}\nGitHub: https://github.com/bradley3398/Rural-ERides-GO-V2\nArchitecture: Kotlin • Jetpack Compose Material 3 • Studio 3D PBR / OpenGL ES / WebGL 2.0 • 9-DOF AHRS • Firebase AI Logic • Cloud Firestore • CameraX • OSMDroid",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -246,14 +261,14 @@ fun AppInfoAndChangelogScreen(
           TacticalOutlinedButton(
             onClick = {
               runCatching {
-                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bradley3398/Rural-Erides-GO")))
+                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bradley3398/Rural-ERides-GO-V2")))
               }
             },
             modifier = Modifier.fillMaxWidth().testTag("info_open_github_repo_button"),
           ) {
             Icon(Icons.Default.Code, null, Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text("GitHub: bradley3398/Rural-Erides-GO", maxLines = 1)
+            Text("GitHub: bradley3398/Rural-ERides-GO-V2", maxLines = 1)
           }
           Spacer(Modifier.height(8.dp))
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -261,7 +276,7 @@ fun AppInfoAndChangelogScreen(
               onClick = {
                 clipboard.setText(
                   AnnotatedString(
-                    "Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison — https://github.com/bradley3398/Rural-Erides-GO (${BuildConfig.APPLICATION_ID})"
+                    "Rural ERides GO v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) — Developed by Lord Bradley Callison — https://github.com/bradley3398/Rural-ERides-GO-V2 (${BuildConfig.APPLICATION_ID})"
                   )
                 )
                 Toast.makeText(ctx, "Copied developer & GitHub info", Toast.LENGTH_SHORT).show()
@@ -280,7 +295,7 @@ fun AppInfoAndChangelogScreen(
                     putExtra(Intent.EXTRA_SUBJECT, "Rural ERides GO v${BuildConfig.VERSION_NAME}")
                     putExtra(
                       Intent.EXTRA_TEXT,
-                      "Rural ERides GO v${BuildConfig.VERSION_NAME} — Tactical PEV Telemetry, Studio 3D PBR Lab, 9-DOF AHRS, Radar, Vision AR Mechanic & AI Co-Pilot. Created by Lord Bradley Callison.\nhttps://github.com/bradley3398/Rural-Erides-GO",
+                      "Rural ERides GO v${BuildConfig.VERSION_NAME} — Tactical PEV Telemetry, Studio 3D PBR Lab, 9-DOF AHRS, Radar, Vision AR Mechanic & AI Co-Pilot. Created by Lord Bradley Callison.\nhttps://github.com/bradley3398/Rural-ERides-GO-V2",
                     )
                   }
                 runCatching { ctx.startActivity(Intent.createChooser(shareIntent, "Share Rural ERides GO")) }

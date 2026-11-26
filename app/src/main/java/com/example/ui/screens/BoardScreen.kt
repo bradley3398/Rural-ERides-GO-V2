@@ -125,6 +125,7 @@ fun BoardScreen(
   val posts by socialVm.boardPosts.collectAsStateWithLifecycle()
   val comments by socialVm.selectedPostComments.collectAsStateWithLifecycle()
   val bookmarkedIds by socialVm.bookmarkedIds.collectAsStateWithLifecycle()
+  val reportedPostIds by socialVm.reportedPostIds.collectAsStateWithLifecycle()
   val mutedPeerIds by socialVm.mutedPeerIds.collectAsStateWithLifecycle()
   val followedPilotIds by socialVm.followedPilotIds.collectAsStateWithLifecycle()
   val sosTriageMap by socialVm.sosTriageMap.collectAsStateWithLifecycle()
@@ -236,6 +237,7 @@ fun BoardScreen(
       hasPollOnly,
       withPhotoOnly,
       mutedPeerIds,
+      reportedPostIds,
       followedPilotIds,
       activeSubTab,
       bookmarkedIds,
@@ -244,6 +246,8 @@ fun BoardScreen(
       posts
         .filter { p ->
           !mutedPeerIds.contains(p.userId) &&
+            !reportedPostIds.contains(p.id) &&
+            p.flaggedCount < 3L &&
             (activeSubTab != 1 || followedPilotIds.contains(p.userId)) &&
             (activeSubTab != 3 || bookmarkedIds.contains(p.id)) &&
             (selectedCategory == "ALL" || p.category == selectedCategory) &&
@@ -1277,7 +1281,14 @@ fun BoardScreen(
             }
 
             // FULL-SIZED SPACIOUS POST FEED CARDS
-            items(filteredPosts, key = { it.id }) { post ->
+            items(filteredPosts, key = { it.id }) { rawPost ->
+              val post =
+                remember(rawPost.id, rawPost.title, rawPost.body) {
+                  rawPost.copy(
+                    title = com.example.core.FamilySafetyGuard.sanitizeForDisplay(rawPost.title),
+                    body = com.example.core.FamilySafetyGuard.sanitizeForDisplay(rawPost.body),
+                  )
+                }
               Box(modifier = Modifier.padding(horizontal = 14.dp)) {
                 BoardPostFeedCard(
                   post = post,

@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.core.FamilySafetyGuard
 import com.example.core.LiveCloudServices
 import com.example.data.ActiveNavRoute
 import com.example.data.AlertTonePreset
@@ -529,6 +530,15 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
   fun createMeetup(callsign: String, title: String, desc: String, time: String, lat: Double, lng: Double) {
     if (!cloudBound) return
     viewModelScope.launch {
+      val moderation =
+        FamilySafetyGuard.moderateSubmission(
+          fields = listOf(title, desc, time),
+          contextLabel = "meetup pin",
+        )
+      if (!moderation.allowed) {
+        _navStatusMsg.value = moderation.reason
+        return@launch
+      }
       if (firebaseBound) {
         repo.createMeetup(callsign, title, desc, time, lat, lng)
       } else {
@@ -569,6 +579,15 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
   fun createHazard(callsign: String, type: String, desc: String, lat: Double, lng: Double) {
     if (!cloudBound) return
     viewModelScope.launch {
+      val moderation =
+        FamilySafetyGuard.moderateSubmission(
+          fields = listOf(type, desc),
+          contextLabel = "hazard report",
+        )
+      if (!moderation.allowed) {
+        _navStatusMsg.value = moderation.reason
+        return@launch
+      }
       if (firebaseBound) {
         repo.createHazard(callsign, type, desc, lat, lng)
       } else {
@@ -608,6 +627,15 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
   fun createWaypoint(callsign: String, type: String, title: String, notes: String, lat: Double, lng: Double) {
     if (!cloudBound) return
     viewModelScope.launch {
+      val moderation =
+        FamilySafetyGuard.moderateSubmission(
+          fields = listOf(type, title, notes),
+          contextLabel = "shared waypoint",
+        )
+      if (!moderation.allowed) {
+        _navStatusMsg.value = moderation.reason
+        return@launch
+      }
       if (firebaseBound) {
         repo.createWaypoint(callsign, type, title, notes, lat, lng)
       } else {

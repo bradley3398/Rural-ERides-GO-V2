@@ -8,7 +8,10 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,33 +19,46 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CompassCalibration
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DataSaverOn
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -71,6 +87,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -78,15 +96,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
 import com.example.core.AppUpdateCheckState
 import com.example.core.ReminderScheduler
 import com.example.data.AuthProviderType
+import com.example.data.ColorModeOverride
 import com.example.data.LiveTelemetrySnapshot
 import com.example.data.RingtonePreset
 import com.example.data.SupabaseAuthService
+import com.example.ui.components.PilotAvatarThumb
 import com.example.ui.components.RuralPevIcons
 import com.example.ui.components.TacticalCard
 import com.example.ui.components.TacticalTopBar
@@ -103,6 +124,12 @@ private enum class AndroidSettingsCategory(
   val icon: ImageVector,
   val accentColor: Color,
 ) {
+  PROFILE_ACCOUNT(
+    title = "My Profile, Username & Bio",
+    keywords = "profile username callsign change name full name birthdate birthday bio hometown phone social handle avatar photo riding style experience blood type medical emergency sos privacy online status calls messages account controls biometric",
+    icon = Icons.Default.AccountCircle,
+    accentColor = Color(0xFF22C55E),
+  ),
   DISPLAY_THEMES(
     title = "Appearance, Themes & Windows Studio",
     keywords = "theme preview studio windows 95 2000 xp 7 10 11 fluent mica aero taskbar clock menu bar glass icon pack neon glow readiness quick bar visual style wallpaper pev startup animation logo intro splash duration replay awake spacious layout dark light hud font texture language night vision red shift sunlight opacity glow corner scale fps screen bright charts tooltip",
@@ -285,6 +312,12 @@ fun SettingsMatrixScreen(
 
   fun categorySummary(cat: AndroidSettingsCategory): String =
     when (cat) {
+      AndroidSettingsCategory.PROFILE_ACCOUNT -> {
+        val handle = profile?.callsign?.ifBlank { "Set Username" } ?: "Set Username"
+        val style = profile?.ridingStyle?.ifBlank { "Trail & Gravel" } ?: "Trail & Gravel"
+        val vis = if (profile?.profileVisibility == "PRIVATE") "Private" else "Public"
+        "@$handle • $style • $vis • Bio, Birthdate & Privacy"
+      }
       AndroidSettingsCategory.DISPLAY_THEMES ->
         "${settings.visualStyle.label} • ${if (settings.spaciousLayoutMode) "Spacious View" else "Compact"} • ${if (settings.showStartupAnimation) "Intro ${settings.splashDurationSec}s" else "Intro Off"}"
       AndroidSettingsCategory.AHRS_COCKPIT ->
@@ -328,6 +361,19 @@ fun SettingsMatrixScreen(
         sessionVm.handleLegacyGoogleSignInResult(result.resultCode, result.data, activity)
       }
     when (cat) {
+      AndroidSettingsCategory.PROFILE_ACCOUNT ->
+        SettingsProfileAccountPage(
+          profile = profile,
+          activeUser = activeUser,
+          settings = settings,
+          sessionVm = sessionVm,
+          onStatusMessage = { statusMsg = it },
+          onOpenCloudVault = { activeCategory = AndroidSettingsCategory.CLOUD_VAULT },
+          onSignOut = {
+            sessionVm.signOut()
+            onBack()
+          },
+        )
       AndroidSettingsCategory.DISPLAY_THEMES ->
         DisplayThemesSettingsContent(
           settings = settings,
@@ -395,10 +441,27 @@ fun SettingsMatrixScreen(
           }
           val activeProjectId =
             remember { runCatching { FirebaseApp.getInstance().options.projectId }.getOrNull().orEmpty().ifBlank { "Firebase" } }
-          val lockedCallsign = profile?.callsign.orEmpty()
-          if (lockedCallsign.isNotBlank()) {
+          val activeCallsign = profile?.callsign.orEmpty()
+          if (activeCallsign.isNotBlank()) {
             Spacer(Modifier.height(4.dp))
-            Text("PERMANENT CALLSIGN: $lockedCallsign", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Text(
+                "USERNAME: @$activeCallsign",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.tertiary,
+              )
+              TextButton(
+                onClick = { activeCategory = AndroidSettingsCategory.PROFILE_ACCOUNT },
+                modifier = Modifier.testTag("vault_edit_username_shortcut"),
+              ) {
+                Text("Change Username")
+              }
+            }
           }
           Text("Build v${BuildConfig.VERSION_NAME} (#${BuildConfig.VERSION_CODE}) • Cloud: $activeProjectId", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
           Spacer(Modifier.height(6.dp))
@@ -570,7 +633,7 @@ fun SettingsMatrixScreen(
               }
             }
           },
-          placeholder = { Text("Search settings (satellites, haptics, themes, startup, AI...)") },
+          placeholder = { Text("Search username, bio, profile, sensors, themes, privacy...") },
           singleLine = true,
           shape = RoundedCornerShape(28.dp),
           modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).testTag("settings_search_input"),
@@ -646,12 +709,240 @@ fun SettingsMatrixScreen(
             }
           }
         } else {
-          // GROUP 1: LOOK, FEEL & RIDE SCREEN
+          // HERO ACCOUNT PROFILE CARD
+          item(key = "settings_profile_hero_card") {
+            val cs = MaterialTheme.colorScheme
+            val displayCallsign = profile?.callsign?.ifBlank { "RIDER" } ?: "RIDER"
+            val displayFullName = profile?.displayName?.ifBlank { activeUser?.displayName.orEmpty() }.orEmpty().ifBlank { "Rider Account" }
+            val bioPreview = profile?.bio?.ifBlank { "Add your name, birthdate, hometown, bio, and custom username." } ?: "Add your name, birthdate, hometown, bio, and custom username."
+            val isPublic = profile?.profileVisibility != "PRIVATE"
+            ElevatedCard(
+              onClick = { activeCategory = AndroidSettingsCategory.PROFILE_ACCOUNT },
+              shape = RoundedCornerShape(26.dp),
+              colors = CardDefaults.elevatedCardColors(containerColor = cs.surfaceVariant.copy(alpha = 0.65f)),
+              modifier =
+                Modifier
+                  .fillMaxWidth()
+                  .border(1.2.dp, cs.primary.copy(alpha = 0.35f), RoundedCornerShape(26.dp))
+                  .testTag("settings_profile_hero_card"),
+            ) {
+              Box(
+                modifier =
+                  Modifier
+                    .fillMaxWidth()
+                    .background(
+                      Brush.linearGradient(
+                        listOf(
+                          cs.primary.copy(alpha = 0.18f),
+                          cs.tertiary.copy(alpha = 0.10f),
+                          Color.Transparent,
+                        ),
+                      ),
+                    )
+                    .padding(16.dp),
+              ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                  ) {
+                    PilotAvatarThumb(
+                      avatarSource = profile?.avatarBase64.orEmpty(),
+                      callsign = displayCallsign,
+                      size = 64.dp,
+                      borderColor = cs.primary,
+                    )
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                      Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                      ) {
+                        Text(
+                          text = displayFullName,
+                          style = MaterialTheme.typography.titleMedium,
+                          fontWeight = FontWeight.Black,
+                          maxLines = 1,
+                          overflow = TextOverflow.Ellipsis,
+                        )
+                        Surface(
+                          color = if (isPublic) cs.primary.copy(alpha = 0.18f) else cs.secondary.copy(alpha = 0.18f),
+                          shape = RoundedCornerShape(999.dp),
+                        ) {
+                          Text(
+                            text = if (isPublic) "PUBLIC" else "PRIVATE",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                            color = if (isPublic) cs.primary else cs.secondary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                          )
+                        }
+                      }
+                      Text(
+                        text = "@$displayCallsign${profile?.hometown?.takeIf { it.isNotBlank() }?.let { " • $it" }.orEmpty()}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = cs.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                      )
+                      Text(
+                        text = bioPreview,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                      )
+                    }
+                  }
+
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                  ) {
+                    Button(
+                      onClick = { activeCategory = AndroidSettingsCategory.PROFILE_ACCOUNT },
+                      shape = RoundedCornerShape(14.dp),
+                      contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                      modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("settings_hero_edit_profile_btn"),
+                    ) {
+                      Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                      Spacer(Modifier.width(6.dp))
+                      Text("Edit Profile & Username", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    OutlinedButton(
+                      onClick = { activeCategory = AndroidSettingsCategory.CLOUD_VAULT },
+                      shape = RoundedCornerShape(14.dp),
+                      contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                      modifier = Modifier.heightIn(min = 48.dp).testTag("settings_hero_cloud_btn"),
+                    ) {
+                      Icon(Icons.Default.CloudDone, contentDescription = null, modifier = Modifier.size(16.dp))
+                      Spacer(Modifier.width(4.dp))
+                      Text("Backup")
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // QUICK CONTROLS STRIP
+          item(key = "settings_quick_controls_strip") {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              AndroidSettingsGroupHeader("Quick Controls")
+              LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 2.dp),
+              ) {
+                item(key = "qc_theme_mode") {
+                  val nextMode =
+                    when (settings.colorModeOverride) {
+                      ColorModeOverride.DARK -> ColorModeOverride.LIGHT
+                      ColorModeOverride.LIGHT -> ColorModeOverride.SYSTEM
+                      ColorModeOverride.SYSTEM -> ColorModeOverride.DARK
+                    }
+                  FilterChip(
+                    selected = true,
+                    onClick = { sessionVm.updateSettings { it.copy(colorModeOverride = nextMode) } },
+                    leadingIcon = { Icon(Icons.Default.Brightness6, null, Modifier.size(16.dp)) },
+                    label = { Text("Theme: ${settings.colorModeOverride.name.lowercase().replaceFirstChar { it.uppercase() }}") },
+                    modifier = Modifier.testTag("settings_quick_theme_mode"),
+                  )
+                }
+                item(key = "qc_public_radar") {
+                  FilterChip(
+                    selected = settings.publicProfile,
+                    onClick = { sessionVm.updateSettings { it.copy(publicProfile = !it.publicProfile) } },
+                    leadingIcon = {
+                      Icon(
+                        if (settings.publicProfile) Icons.Default.Public else Icons.Default.Lock,
+                        null,
+                        Modifier.size(16.dp),
+                      )
+                    },
+                    label = { Text(if (settings.publicProfile) "Radar: Public" else "Radar: Stealth") },
+                    modifier = Modifier.testTag("settings_quick_public_radar"),
+                  )
+                }
+                item(key = "qc_haptics") {
+                  FilterChip(
+                    selected = settings.hapticFeedback,
+                    onClick = { sessionVm.updateSettings { it.copy(hapticFeedback = !it.hapticFeedback) } },
+                    leadingIcon = { Icon(Icons.Default.Vibration, null, Modifier.size(16.dp)) },
+                    label = { Text(if (settings.hapticFeedback) "Haptics On" else "Haptics Off") },
+                    modifier = Modifier.testTag("settings_quick_haptics"),
+                  )
+                }
+                item(key = "qc_wakelock") {
+                  FilterChip(
+                    selected = settings.wakeLockEnabled,
+                    onClick = { sessionVm.updateSettings { it.copy(wakeLockEnabled = !it.wakeLockEnabled) } },
+                    leadingIcon = { Icon(Icons.Default.WbSunny, null, Modifier.size(16.dp)) },
+                    label = { Text(if (settings.wakeLockEnabled) "Screen Awake" else "Auto Sleep") },
+                    modifier = Modifier.testTag("settings_quick_wakelock"),
+                  )
+                }
+                item(key = "qc_night_vision") {
+                  FilterChip(
+                    selected = settings.nightVisionMode,
+                    onClick = { sessionVm.updateSettings { it.copy(nightVisionMode = !it.nightVisionMode) } },
+                    leadingIcon = { Icon(Icons.Default.NightsStay, null, Modifier.size(16.dp)) },
+                    label = { Text("Night Red-Shift") },
+                    modifier = Modifier.testTag("settings_quick_night_vision"),
+                  )
+                }
+                item(key = "qc_data_saver") {
+                  FilterChip(
+                    selected = settings.dataSaverMode,
+                    onClick = { sessionVm.updateSettings { it.copy(dataSaverMode = !it.dataSaverMode) } },
+                    leadingIcon = { Icon(Icons.Default.DataSaverOn, null, Modifier.size(16.dp)) },
+                    label = { Text("Data Saver") },
+                    modifier = Modifier.testTag("settings_quick_data_saver"),
+                  )
+                }
+              }
+            }
+          }
+
+          // GROUP 1: ACCOUNT & RIDER IDENTITY
+          item(key = "group_account_identity") {
+            AndroidSettingsGroupHeader("Account, Profile & Cloud")
+            ElevatedCard(
+              shape = RoundedCornerShape(22.dp),
+              colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.54f)),
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              val groupAccount =
+                listOf(
+                  AndroidSettingsCategory.PROFILE_ACCOUNT,
+                  AndroidSettingsCategory.CLOUD_VAULT,
+                )
+              Column(Modifier.fillMaxWidth()) {
+                groupAccount.forEachIndexed { idx, cat ->
+                  AndroidSettingsCategoryRow(
+                    icon = cat.icon,
+                    iconTint = cat.accentColor,
+                    iconBg = cat.accentColor.copy(alpha = 0.16f),
+                    title = cat.title,
+                    summary = categorySummary(cat),
+                    testTagName = "settings_cat_${cat.name.lowercase()}",
+                    onClick = { activeCategory = cat },
+                  )
+                  if (idx < groupAccount.lastIndex) {
+                    HorizontalDivider(modifier = Modifier.padding(start = 72.dp, end = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                  }
+                }
+              }
+            }
+          }
+
+          // GROUP 2: LOOK, FEEL & RIDE SCREEN
           item(key = "group_personalization") {
             AndroidSettingsGroupHeader("Look, Feel & Ride Screen")
             ElevatedCard(
               shape = RoundedCornerShape(22.dp),
-              colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)),
+              colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.54f)),
               modifier = Modifier.fillMaxWidth(),
             ) {
               val group1 =
@@ -679,12 +970,12 @@ fun SettingsMatrixScreen(
             }
           }
 
-          // GROUP 2: SOUND, MAPS & SAFETY
+          // GROUP 3: SOUND, MAPS & SAFETY
           item(key = "group_riding_safety") {
             AndroidSettingsGroupHeader("Sound, Maps & Safety")
             ElevatedCard(
               shape = RoundedCornerShape(22.dp),
-              colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)),
+              colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.54f)),
               modifier = Modifier.fillMaxWidth(),
             ) {
               val group2 =
@@ -712,18 +1003,18 @@ fun SettingsMatrixScreen(
             }
           }
 
-          // GROUP 3: ACCOUNT, DEVICE HEALTH & ABOUT
+          // GROUP 4: DEVICE HEALTH, UPDATES & ABOUT
           item(key = "group_system_about") {
-            AndroidSettingsGroupHeader("Account, Device Health & About")
+            AndroidSettingsGroupHeader("Device Health, Updates & About")
             ElevatedCard(
               shape = RoundedCornerShape(22.dp),
-              colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)),
+              colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.54f)),
               modifier = Modifier.fillMaxWidth(),
             ) {
               val group3 =
                 listOf(
-                  AndroidSettingsCategory.CLOUD_VAULT,
                   AndroidSettingsCategory.DIAGNOSTICS,
+                  AndroidSettingsCategory.APP_UPDATES,
                   AndroidSettingsCategory.ABOUT_DEV,
                 )
               Column(Modifier.fillMaxWidth()) {

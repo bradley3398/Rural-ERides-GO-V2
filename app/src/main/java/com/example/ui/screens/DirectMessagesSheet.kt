@@ -143,6 +143,7 @@ fun DirectMessagesSheet(
   val mutedPeerIds by socialVm.mutedPeerIds.collectAsStateWithLifecycle()
   val pinnedThreadIds by socialVm.pinnedDmThreadIds.collectAsStateWithLifecycle()
   val callHistory by socialVm.callHistory.collectAsStateWithLifecycle()
+  val dmModerationNotice by socialVm.socialNotice.collectAsStateWithLifecycle()
 
   val myUid = activeUser?.uid.orEmpty()
   val cloudSyncReady = activeUser != null
@@ -321,6 +322,30 @@ fun DirectMessagesSheet(
           .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
+        if (dmModerationNotice.isNotBlank()) {
+          Surface(
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.88f),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().testTag("dm_moderation_notice_banner"),
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+              Text(
+                text = dmModerationNotice,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f),
+              )
+              IconButton(onClick = { socialVm.clearNotice() }) {
+                Icon(Icons.Default.Close, contentDescription = "Dismiss safety notice", tint = MaterialTheme.colorScheme.onErrorContainer)
+              }
+            }
+          }
+        }
         // TOP HEADER WITH ALWAYS-VISIBLE 48DP BACK BUTTON
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {

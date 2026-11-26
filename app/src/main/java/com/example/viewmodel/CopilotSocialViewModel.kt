@@ -9,12 +9,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.ai.GeminiAiRepository
 import com.example.ai.GeminiModelCatalog
 import com.example.ai.PreRideFlightCheckResult
+import com.example.core.FamilySafetyGuard
 import com.example.core.LiveCloudServices
 import com.example.data.AppDatabase
 import com.example.data.BoardComment
 import com.example.data.BoardPost
 import com.example.data.CallSession
 import com.example.data.CallSignal
+import com.example.data.CallStreamFrame
 import com.example.data.CommunityRepository
 import com.example.data.CopilotMessage
 import com.example.data.CopilotMessageEntity
@@ -154,6 +156,9 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   private val _bookmarkedIds = MutableStateFlow<Set<String>>(emptySet())
   val bookmarkedIds: StateFlow<Set<String>> = _bookmarkedIds.asStateFlow()
 
+  private val _reportedPostIds = MutableStateFlow<Set<String>>(emptySet())
+  val reportedPostIds: StateFlow<Set<String>> = _reportedPostIds.asStateFlow()
+
   private val _sosTriageMap = MutableStateFlow<Map<String, String>>(emptyMap())
   val sosTriageMap: StateFlow<Map<String, String>> = _sosTriageMap.asStateFlow()
 
@@ -198,6 +203,15 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   private val _callSignals = MutableStateFlow<List<CallSignal>>(emptyList())
   val callSignals: StateFlow<List<CallSignal>> = _callSignals.asStateFlow()
 
+  private val _remoteVideoStream = MutableStateFlow<CallStreamFrame?>(null)
+  val remoteVideoStream: StateFlow<CallStreamFrame?> = _remoteVideoStream.asStateFlow()
+
+  private val _remoteAudioStream = MutableStateFlow<CallStreamFrame?>(null)
+  val remoteAudioStream: StateFlow<CallStreamFrame?> = _remoteAudioStream.asStateFlow()
+
+  private var pendingCallGraceId: String = ""
+  private var pendingCallGraceUntilMs: Long = 0L
+
   private val _socialNotice = MutableStateFlow("")
   val socialNotice: StateFlow<String> = _socialNotice.asStateFlow()
 
@@ -224,6 +238,8 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   private var ytWatchJob: Job? = null
   private var dmMsgJob: Job? = null
   private var callSignalJob: Job? = null
+  private var callStreamJob: Job? = null
+  private var callSessionDocJob: Job? = null
   private var sleepTimerJob: Job? = null
 
   private val cloudSyncReady: Boolean
@@ -508,22 +524,36 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   }
 
   private fun reconcileCallSessions(uid: String, liveCalls: List<CallSession>) {
-    _callSessions.value = liveCalls
+    val nowMs = System.currentTimeMillis()
+    val freshLiveCalls =
+      liveCalls.filter { s ->
+        val tsSec = s.updatedAt?.seconds ?: s.createdAt?.seconds ?: 0L
+        val ageMs = if (tsSec > 0L) (nowMs - tsSec * 1000L).coerceAtLeast(0L) else 0L
+        // Ignore stale unanswered RINGING calls older than 4 minutes so old sessions never ghost-ring
+        if (s.status == "RINGING" && ageMs > 240_000L) false else true
+      }
+    _callSessions.value = freshLiveCalls
     val curActive = _activeCallSession.value
     if (curActive != null) {
       val refreshed = liveCalls.firstOrNull { it.id == curActive.id }
+      val inGraceWindow = curActive.id == pendingCallGraceId && nowMs < pendingCallGraceUntilMs
       if (refreshed == null) {
-        _activeCallSession.value = null
-        _callSignals.value = emptyList()
-        callSignalJob?.cancel()
-        audio.resetCallAudioMode()
-      } else if (refreshed != curActive) {
-        _activeCallSession.value = refreshed
+        if (!inGraceWindow) {
+          clearActiveCallResources()
+        }
+      } else {
+        if (curActive.id == pendingCallGraceId) {
+          pendingCallGraceId = ""
+          pendingCallGraceUntilMs = 0L
+        }
+        if (refreshed != curActive) {
+          _activeCallSession.value = refreshed
+        }
       }
     }
     val prevIncomingId = _incomingCallSession.value?.id
     val incoming =
-      liveCalls.firstOrNull {
+      freshLiveCalls.firstOrNull {
         it.calleeUid == uid &&
           it.callerUid != uid &&
           it.status == "RINGING" &&
@@ -534,10 +564,23 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
       ReminderScheduler.postSocialNotification(
         context = ctx,
         title = "Incoming ${incoming.callType} Call • ${incoming.callerCallsign.ifBlank { "Pilot" }}",
-        body = "Tap to answer live P2P ${incoming.callType.lowercase()} call from ${incoming.callerCallsign.ifBlank { "Pilot" }}",
+        body = "Tap to answer live ${incoming.callType.lowercase()} call from ${incoming.callerCallsign.ifBlank { "Pilot" }}",
         targetTab = "RADAR",
       )
     }
+  }
+
+  private fun clearActiveCallResources() {
+    _activeCallSession.value = null
+    _callSignals.value = emptyList()
+    _remoteVideoStream.value = null
+    _remoteAudioStream.value = null
+    pendingCallGraceId = ""
+    pendingCallGraceUntilMs = 0L
+    callSignalJob?.cancel()
+    callStreamJob?.cancel()
+    callSessionDocJob?.cancel()
+    audio.resetCallAudioMode()
   }
 
   fun refreshSupabaseBoard() {
@@ -1150,6 +1193,15 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
       return
     }
     viewModelScope.launch {
+      val moderation =
+        FamilySafetyGuard.moderateSubmission(
+          fields = listOf(text),
+          contextLabel = "video comment",
+        )
+      if (!moderation.allowed) {
+        _socialNotice.value = moderation.reason
+        return@launch
+      }
       if (boundFirebaseAuth) {
         communityRepo.commentYoutubeVideo(videoId, callsign, text)
       } else {
@@ -1454,6 +1506,17 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     onDone: () -> Unit,
   ) {
     viewModelScope.launch {
+      val moderation =
+        FamilySafetyGuard.moderateSubmission(
+          fields = listOf(title, body, pollQuestion, location) + pollOptions,
+          bitmap = bitmap,
+          externalUrl = externalImageUrl,
+          contextLabel = "community post",
+        )
+      if (!moderation.allowed) {
+        _socialNotice.value = moderation.reason
+        return@launch
+      }
       var uploadedUrl = externalImageUrl.trim().takeIf { it.startsWith("http://") || it.startsWith("https://") }.orEmpty()
       if (bitmap != null) {
         uploadedUrl = bitmapToCloudBase64DataUri(bitmap, maxDimension = 560, initialQuality = 65, maxChars = 155_000)
@@ -1575,7 +1638,17 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   }
 
   fun commentOnPost(postId: String, callsign: String, body: String) {
+    if (body.isBlank()) return
     viewModelScope.launch {
+      val moderation =
+        FamilySafetyGuard.moderateSubmission(
+          fields = listOf(body),
+          contextLabel = "comment",
+        )
+      if (!moderation.allowed) {
+        _socialNotice.value = moderation.reason
+        return@launch
+      }
       if (boundFirebaseAuth) {
         communityRepo.addPostComment(postId, callsign, body)
       } else if (boundSupabaseToken.isNotBlank()) {
@@ -1597,9 +1670,11 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
 
   fun flagPost(postId: String) {
     if (!cloudSyncReady) return
+    _reportedPostIds.value = _reportedPostIds.value + postId
     viewModelScope.launch {
       if (boundFirebaseAuth) {
         communityRepo.flagPost(postId)
+        _socialNotice.value = "Post reported & hidden from your feed. Thank you for keeping Rural ERides GO family-friendly!"
       } else {
         val cur = _boardPosts.value.firstOrNull { it.id == postId } ?: return@launch
         val next = cur.flaggedCount + 1L
@@ -1607,7 +1682,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
           .onSuccess {
             _boardPosts.value =
               _boardPosts.value.map { if (it.id == postId) it.copy(flaggedCount = next) else it }
-            _socialNotice.value = "Post flagged for review."
+            _socialNotice.value = "Post reported & hidden from your feed. Thank you for keeping Rural ERides GO family-friendly!"
           }
       }
     }
@@ -1691,6 +1766,17 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
   ) {
     if (!cloudSyncReady) return
     viewModelScope.launch {
+      val moderation =
+        FamilySafetyGuard.moderateSubmission(
+          fields = listOf(text),
+          bitmap = bitmap,
+          contextLabel = "direct message",
+          runDeepAiTextCheck = text.trim().length >= 16,
+        )
+      if (!moderation.allowed) {
+        _socialNotice.value = moderation.reason
+        return@launch
+      }
       var imgUrl = ""
       if (bitmap != null) {
         imgUrl = bitmapToCloudBase64DataUri(bitmap, maxDimension = 560, initialQuality = 65, maxChars = 155_000)
@@ -1753,6 +1839,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
       return
     }
     val cleanType = if (callType == "VIDEO") "VIDEO" else "AUDIO"
+    _callMinimized.value = false
     viewModelScope.launch {
       if (boundFirebaseAuth) {
         communityRepo
@@ -1768,8 +1855,11 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
                 callType = cleanType,
                 status = "RINGING",
               )
+            pendingCallGraceId = sid
+            pendingCallGraceUntilMs = System.currentTimeMillis() + 8_000L
             _activeCallSession.value = localSession
             observeSignalsForSession(sid)
+            observeStreamsForSession(sid, peerUid)
           }
           .onFailure { _socialNotice.value = it.message ?: "Unable to initiate call." }
       } else {
@@ -1786,6 +1876,8 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
           )
         LiveCloudServices.insertSupabaseCallSession(boundSupabaseToken, localSession)
           .onSuccess {
+            pendingCallGraceId = sid
+            pendingCallGraceUntilMs = System.currentTimeMillis() + 8_000L
             _activeCallSession.value = localSession
             observeSignalsForSession(sid)
           }
@@ -1798,8 +1890,14 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     if (!cloudSyncReady) return
     _incomingCallSession.value = null
     _callMinimized.value = false
+    pendingCallGraceId = session.id
+    pendingCallGraceUntilMs = System.currentTimeMillis() + 8_000L
     _activeCallSession.value = session.copy(status = "ACTIVE")
     observeSignalsForSession(session.id)
+    val peerUid = if (session.callerUid == boundUid) session.calleeUid else session.callerUid
+    if (peerUid.isNotBlank()) {
+      observeStreamsForSession(session.id, peerUid)
+    }
     viewModelScope.launch {
       if (boundFirebaseAuth) {
         communityRepo.updateCallStatus(session.id, "ACTIVE")
@@ -1829,6 +1927,11 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
 
   fun sendInCallChat(sessionId: String, senderCallsign: String, message: String) {
     if (!cloudSyncReady || sessionId.isBlank() || message.isBlank()) return
+    val textCheck = FamilySafetyGuard.checkText(message)
+    if (!textCheck.allowed) {
+      _socialNotice.value = textCheck.reason
+      return
+    }
     val payload = "${senderCallsign.take(24)}|${message.trim().take(400)}"
     viewModelScope.launch {
       if (boundFirebaseAuth) {
@@ -1877,11 +1980,10 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     _incomingCallSession.value = null
     _callMinimized.value = false
     if (_activeCallSession.value?.id == target.id) {
-      _activeCallSession.value = null
-      _callSignals.value = emptyList()
-      callSignalJob?.cancel()
+      clearActiveCallResources()
+    } else {
+      audio.resetCallAudioMode()
     }
-    audio.resetCallAudioMode()
     if (!cloudSyncReady) return
     viewModelScope.launch {
       if (boundFirebaseAuth) {
@@ -1907,6 +2009,97 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
     }
   }
 
+  suspend fun publishCallVideoFrame(
+    sessionId: String,
+    seq: Long,
+    active: Boolean,
+    jpegBase64: String,
+  ): Boolean {
+    if (!cloudSyncReady || sessionId.isBlank()) return false
+    return if (boundFirebaseAuth) {
+      communityRepo.publishCallStreamFrame(sessionId, "VIDEO", seq, active, jpegBase64).isSuccess
+    } else {
+      if (!active || jpegBase64.isBlank()) return true
+      val payload = """{"__relayVideo":"data:image/jpeg;base64,$jpegBase64"}"""
+      LiveCloudServices.insertSupabaseCallSignal(
+        boundSupabaseToken,
+        sessionId,
+        CallSignal(id = "sig_${UUID.randomUUID().toString().take(10)}", senderId = boundUid, signalType = "ICE", payload = payload),
+      ).isSuccess
+    }
+  }
+
+  suspend fun publishCallAudioChunk(
+    sessionId: String,
+    seq: Long,
+    active: Boolean,
+    ulawBase64: String,
+  ): Boolean {
+    if (!cloudSyncReady || sessionId.isBlank()) return false
+    return if (boundFirebaseAuth) {
+      communityRepo.publishCallStreamFrame(sessionId, "AUDIO", seq, active, ulawBase64).isSuccess
+    } else {
+      if (!active || ulawBase64.isBlank()) return true
+      val payload = """{"__relayMuLaw":"$ulawBase64"}"""
+      LiveCloudServices.insertSupabaseCallSignal(
+        boundSupabaseToken,
+        sessionId,
+        CallSignal(id = "sig_${UUID.randomUUID().toString().take(10)}", senderId = boundUid, signalType = "ICE", payload = payload),
+      ).isSuccess
+    }
+  }
+
+  private fun observeStreamsForSession(sessionId: String, peerUid: String) {
+    callStreamJob?.cancel()
+    callSessionDocJob?.cancel()
+    _remoteVideoStream.value = null
+    _remoteAudioStream.value = null
+    if (!boundFirebaseAuth || sessionId.isBlank() || peerUid.isBlank()) return
+
+    // Direct doc observer on call_sessions/{sessionId} for instant RINGING -> ACTIVE -> ENDED & AUDIO <-> VIDEO sync
+    callSessionDocJob =
+      viewModelScope.launch {
+        communityRepo
+          .observeCallSession(sessionId)
+          .catch { e ->
+            if (e is CancellationException) throw e
+            Log.w(TAG, "Call session doc observer error: ${e.message}")
+          }
+          .collect { latest ->
+            if (latest == null) return@collect
+            if (latest.status == "ENDED") {
+              if (_activeCallSession.value?.id == sessionId) {
+                clearActiveCallResources()
+              }
+            } else if (_activeCallSession.value?.id == sessionId && latest != _activeCallSession.value) {
+              _activeCallSession.value = latest
+            }
+          }
+      }
+
+    callStreamJob =
+      viewModelScope.launch {
+        launch {
+          communityRepo
+            .observePeerCallStream(sessionId, peerUid, "VIDEO")
+            .catch { e ->
+              if (e is CancellationException) throw e
+              Log.w(TAG, "Peer video stream error: ${e.message}")
+            }
+            .collect { frame -> _remoteVideoStream.value = frame }
+        }
+        launch {
+          communityRepo
+            .observePeerCallStream(sessionId, peerUid, "AUDIO")
+            .catch { e ->
+              if (e is CancellationException) throw e
+              Log.w(TAG, "Peer audio stream error: ${e.message}")
+            }
+            .collect { frame -> _remoteAudioStream.value = frame }
+        }
+      }
+  }
+
   private fun observeSignalsForSession(sessionId: String) {
     callSignalJob?.cancel()
     _callSignals.value = emptyList()
@@ -1928,7 +2121,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
           while (isActive) {
             LiveCloudServices.fetchSupabaseCallSignals(token, sessionId)
               .onSuccess { _callSignals.value = it }
-            delay(2_000L)
+            delay(1_200L)
           }
         }
     }

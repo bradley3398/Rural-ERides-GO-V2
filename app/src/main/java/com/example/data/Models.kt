@@ -1,9 +1,11 @@
 package com.example.data
 
 import android.content.Context
+import androidx.annotation.Keep
 import com.example.BuildConfig
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.IgnoreExtraProperties
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
@@ -843,6 +845,18 @@ data class RiderProfile(
   val acceptedLegal: Boolean = false,
   val riderWeightLbs: Double = 175.0,
   val avatarBase64: String = "",
+  val birthdate: String = "",
+  val bio: String = "",
+  val hometown: String = "",
+  val phoneNumber: String = "",
+  val ridingStyle: String = "Trail & Gravel",
+  val experienceLevel: String = "Intermediate",
+  val socialHandle: String = "",
+  val bloodType: String = "",
+  val profileVisibility: String = "PUBLIC",
+  val showOnlineStatus: Boolean = true,
+  val allowDirectCalls: Boolean = true,
+  val allowDirectMessages: Boolean = true,
   val createdAt: Timestamp? = null,
   val updatedAt: Timestamp? = null,
 )
@@ -1146,6 +1160,18 @@ data class CallSignal(
   val signalType: String = "ICE",
   val payload: String = "",
   val createdAt: Timestamp? = null,
+  val updatedAt: Timestamp? = null,
+)
+
+@Keep
+@IgnoreExtraProperties
+data class CallStreamFrame(
+  @DocumentId val id: String = "",
+  val senderId: String = "",
+  val kind: String = "VIDEO",
+  val seq: Long = 0L,
+  val active: Boolean = false,
+  val payload: String = "",
   val updatedAt: Timestamp? = null,
 )
 

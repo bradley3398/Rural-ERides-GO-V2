@@ -15,6 +15,20 @@
         "sosContactNumber": { "type": "string" },
         "medicalProfile": { "type": "string" },
         "acceptedLegal": { "type": "boolean" },
+        "riderWeightLbs": { "type": "number" },
+        "avatarBase64": { "type": "string" },
+        "birthdate": { "type": "string" },
+        "bio": { "type": "string" },
+        "hometown": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "ridingStyle": { "type": "string" },
+        "experienceLevel": { "type": "string" },
+        "socialHandle": { "type": "string" },
+        "bloodType": { "type": "string" },
+        "profileVisibility": { "type": "string", "enum": ["PUBLIC", "PRIVATE"] },
+        "showOnlineStatus": { "type": "boolean" },
+        "allowDirectCalls": { "type": "boolean" },
+        "allowDirectMessages": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -371,16 +385,30 @@
     },
     "CallSignal": {
       "title": "CallSignal",
-      "description": "WebRTC SDP/ICE signaling packet inside a direct call session.",
+      "description": "In-call chat, ping, and signaling packet inside a direct call session.",
       "type": "object",
       "properties": {
         "senderId": { "type": "string" },
-        "signalType": { "type": "string", "enum": ["OFFER", "ANSWER", "ICE"] },
+        "signalType": { "type": "string", "enum": ["OFFER", "ANSWER", "ICE", "CHAT", "PING"] },
         "payload": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["senderId", "signalType", "payload", "createdAt", "updatedAt"]
+    },
+    "CallStream": {
+      "title": "CallStream",
+      "description": "Fixed-slot real-time native video/audio frame document per participant (v_{uid}, a_{uid}).",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "kind": { "type": "string", "enum": ["VIDEO", "AUDIO"] },
+        "seq": { "type": "integer" },
+        "active": { "type": "boolean" },
+        "payload": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "kind", "seq", "active", "payload", "updatedAt"]
     },
     "CloudBackup": {
       "title": "CloudBackup",
@@ -543,7 +571,11 @@
     },
     "/call_sessions/{sessionId}/signals/{signalId}": {
       "schema": { "$ref": "#/entities/CallSignal" },
-      "description": "WebRTC SDP offer/answer and ICE candidates for an active call session."
+      "description": "In-call chat, ping, and signaling packets for an active call session."
+    },
+    "/call_sessions/{sessionId}/streams/{streamId}": {
+      "schema": { "$ref": "#/entities/CallStream" },
+      "description": "Fixed-slot real-time native video and audio media streams (v_{uid}, a_{uid}) per call participant."
     },
     "/broadcasts/{broadcastId}": {
       "schema": { "$ref": "#/entities/EmergencyBroadcast" },

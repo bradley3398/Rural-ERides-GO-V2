@@ -494,6 +494,20 @@ class TelemetryEngine(context: Context) {
     _telemetry.update { it.copy(peakLeanLeftDeg = 0f, peakLeanRightDeg = 0f) }
   }
 
+  fun resetCalibrationOffsets() {
+    activeProcessor().resetCalibrationOffsets()
+    val fresh = activeProcessor().uiThrottledFlow.value
+    _telemetry.update {
+      it.copy(
+        pitchDeg = fresh.pitchDeg,
+        rollDeg = fresh.rollDeg,
+        yawDeg = fresh.yawDeg,
+        peakLeanLeftDeg = 0f,
+        peakLeanRightDeg = 0f,
+      )
+    }
+  }
+
   fun startRideRecording() {
     val nowMs = System.currentTimeMillis()
     rideStartTimeMs = nowMs

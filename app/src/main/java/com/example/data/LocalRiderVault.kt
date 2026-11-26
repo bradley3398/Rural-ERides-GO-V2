@@ -47,8 +47,20 @@ class LocalRiderVault(private val context: Context) {
         sosContactNumber = o.optString("sosContactNumber"),
         medicalProfile = o.optString("medicalProfile"),
         acceptedLegal = o.optBoolean("acceptedLegal", false),
-        riderWeightLbs = o.optDouble("riderWeightLbs", 0.0),
+        riderWeightLbs = o.optDouble("riderWeightLbs", 175.0),
         avatarBase64 = o.optString("avatarBase64"),
+        birthdate = o.optString("birthdate"),
+        bio = o.optString("bio"),
+        hometown = o.optString("hometown"),
+        phoneNumber = o.optString("phoneNumber"),
+        ridingStyle = o.optString("ridingStyle", "Trail & Gravel"),
+        experienceLevel = o.optString("experienceLevel", "Intermediate"),
+        socialHandle = o.optString("socialHandle"),
+        bloodType = o.optString("bloodType"),
+        profileVisibility = o.optString("profileVisibility", "PUBLIC"),
+        showOnlineStatus = o.optBoolean("showOnlineStatus", true),
+        allowDirectCalls = o.optBoolean("allowDirectCalls", true),
+        allowDirectMessages = o.optBoolean("allowDirectMessages", true),
       )
     }.getOrNull()
   }
@@ -71,6 +83,18 @@ class LocalRiderVault(private val context: Context) {
         put("acceptedLegal", profile.acceptedLegal)
         put("riderWeightLbs", profile.riderWeightLbs)
         put("avatarBase64", profile.avatarBase64)
+        put("birthdate", profile.birthdate)
+        put("bio", profile.bio)
+        put("hometown", profile.hometown)
+        put("phoneNumber", profile.phoneNumber)
+        put("ridingStyle", profile.ridingStyle)
+        put("experienceLevel", profile.experienceLevel)
+        put("socialHandle", profile.socialHandle)
+        put("bloodType", profile.bloodType)
+        put("profileVisibility", profile.profileVisibility)
+        put("showOnlineStatus", profile.showOnlineStatus)
+        put("allowDirectCalls", profile.allowDirectCalls)
+        put("allowDirectMessages", profile.allowDirectMessages)
       }
     context.localVaultStore.edit { it[profileKey(uid)] = json.toString() }
   }

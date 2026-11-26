@@ -27,13 +27,13 @@ private const val UPDATE_TAG = "AppUpdateChecker"
 private const val UPDATE_WORK_NAME = "rural_erides_app_update_check"
 
 const val GITHUB_RELEASES_API_LATEST =
-  "https://api.github.com/repos/bradley3398/Rural-Erides-GO/releases/latest"
+  "https://api.github.com/repos/bradley3398/Rural-ERides-GO-V2/releases/latest"
 const val GITHUB_RELEASES_API_ALL =
-  "https://api.github.com/repos/bradley3398/Rural-Erides-GO/releases?per_page=10"
+  "https://api.github.com/repos/bradley3398/Rural-ERides-GO-V2/releases?per_page=10"
 const val GITHUB_REPO_URL =
-  "https://github.com/bradley3398/Rural-Erides-GO"
+  "https://github.com/bradley3398/Rural-ERides-GO-V2"
 const val GITHUB_RELEASES_WEB_URL =
-  "https://github.com/bradley3398/Rural-Erides-GO/releases"
+  "https://github.com/bradley3398/Rural-ERides-GO-V2/releases"
 
 data class AppReleaseInfo(
   val tagName: String,
@@ -316,7 +316,7 @@ object AppUpdateChecker {
    */
   fun openGitHubReleaseInBrowser(context: Context, releaseUrl: String = GITHUB_RELEASES_WEB_URL): Boolean {
     val safeUrl =
-      releaseUrl.takeIf { it.startsWith("https://github.com/bradley3398/Rural-Erides-GO") }
+      releaseUrl.takeIf { it.startsWith("https://github.com/bradley3398/Rural-ERides-GO-V2") }
         ?: GITHUB_RELEASES_WEB_URL
     val intent =
       Intent(Intent.ACTION_VIEW, Uri.parse(safeUrl)).apply {

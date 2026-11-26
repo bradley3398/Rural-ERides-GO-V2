@@ -1176,6 +1176,68 @@ class CommunityRepository(
           .sortedBy { (it.createdAt?.seconds ?: 0L) * 1000L + ((it.createdAt?.nanoseconds ?: 0) / 1_000_000L) }
       }
 
+  fun observeCallSession(sessionId: String): Flow<CallSession?> =
+    db.collection("call_sessions")
+      .document(sessionId)
+      .snapshots()
+      .map { snap ->
+        if (!snap.exists()) null
+        else snap.toObject(CallSession::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+      }
+
+  suspend fun publishCallStreamFrame(
+    sessionId: String,
+    kind: String,
+    seq: Long,
+    active: Boolean,
+    payload: String,
+  ): Result<Unit> =
+    try {
+      val uid = requireUid()
+      val cleanKind = if (kind == "AUDIO") "AUDIO" else "VIDEO"
+      val streamId = if (cleanKind == "AUDIO") "a_$uid" else "v_$uid"
+      val safePayload = payload.take(94_500)
+      db.collection("call_sessions")
+        .document(sessionId)
+        .collection("streams")
+        .document(streamId)
+        .set(
+          mapOf(
+            "senderId" to uid,
+            "kind" to cleanKind,
+            "seq" to seq.coerceIn(0L, 100_000_000L),
+            "active" to active,
+            "payload" to safePayload,
+            "updatedAt" to FieldValue.serverTimestamp(),
+          )
+        )
+        .await()
+      Result.success(Unit)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      handleFirestoreError(e, OperationType.WRITE, "call_sessions/$sessionId/streams")
+      Result.failure(e)
+    }
+
+  fun observePeerCallStream(
+    sessionId: String,
+    peerUid: String,
+    kind: String,
+  ): Flow<CallStreamFrame?> {
+    val cleanKind = if (kind == "AUDIO") "AUDIO" else "VIDEO"
+    val streamId = if (cleanKind == "AUDIO") "a_$peerUid" else "v_$peerUid"
+    return db.collection("call_sessions")
+      .document(sessionId)
+      .collection("streams")
+      .document(streamId)
+      .snapshots()
+      .map { snap ->
+        if (!snap.exists()) null
+        else snap.toObject(CallStreamFrame::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+      }
+  }
+
   // --------------------------------------------------------------------------
   // EMERGENCY BROADCASTS (READ-ONLY) & YOUTUBE COMMUNITY ENGAGEMENT
   // --------------------------------------------------------------------------

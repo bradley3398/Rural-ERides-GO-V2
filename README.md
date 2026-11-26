@@ -5,16 +5,16 @@
   <p><em>"KEEP IT RURAL YALL" — Created &amp; Architected by Lord Bradley Callison</em></p>
 
   <p>
-    <a href="https://bradley3398.github.io/Rural-Erides-GO/"><img src="https://img.shields.io/badge/GitHub%20Pages-Live%20Site-10B981?style=for-the-badge&logo=githubpages&logoColor=white" alt="GitHub Pages" /></a>
-    <a href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest"><img src="https://img.shields.io/badge/Release-v59.0%20(Build%2059)-6366F1?style=for-the-badge&logo=android&logoColor=white" alt="Release v59.0" /></a>
+    <a href="https://bradley3398.github.io/Rural-ERides-GO-V2/"><img src="https://img.shields.io/badge/GitHub%20Pages-Live%20Site-10B981?style=for-the-badge&logo=githubpages&logoColor=white" alt="GitHub Pages" /></a>
+    <a href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases/latest"><img src="https://img.shields.io/badge/Release-v60.0%20(Build%2060)-6366F1?style=for-the-badge&logo=android&logoColor=white" alt="Release v60.0" /></a>
     <img src="https://img.shields.io/badge/Kotlin-Jetpack%20Compose%20M3-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin & Jetpack Compose" />
-    <img src="https://img.shields.io/badge/3D%20Engine-Studio%203D%20PBR%20%2B%20OpenGL%20ES%20%2B%20WebGL%202.0-06B6D4?style=for-the-badge" alt="Studio 3D PBR, OpenGL ES, and WebGL 2.0" />
+    <img src="https://img.shields.io/badge/3D%20Engine-Hardware%20OpenGL%20ES%20GGX%20PBR-06B6D4?style=for-the-badge" alt="Hardware OpenGL ES GGX PBR" />
     <img src="https://img.shields.io/badge/Backend-Firebase%20%26%20Gemini%20AI-F59E0B?style=for-the-badge&logo=firebase&logoColor=white" alt="Firebase & Gemini AI" />
   </p>
 
   <p>
-    <a href="https://bradley3398.github.io/Rural-Erides-GO/">🌐 User Website (GitHub Pages)</a> •
-    <a href="https://github.com/bradley3398/Rural-Erides-GO/releases/latest">📦 Download Latest APK</a> •
+    <a href="https://bradley3398.github.io/Rural-ERides-GO-V2/">🌐 User Website (GitHub Pages)</a> •
+    <a href="https://github.com/bradley3398/Rural-ERides-GO-V2/releases/latest">📦 Download Latest APK</a> •
     <a href="#-core-features">⚡ Features</a> •
     <a href="#-building-from-source">🛠️ Build Guide</a> •
     <a href="#-release-history">📜 Changelog</a>
@@ -103,7 +103,7 @@ gradle :app:testDebugUnitTest
 
 ### Automated GitHub Actions Releases & GitHub Pages
 - **Publish a New Release (`.github/workflows/android-release-sign.yml`)**: Open **Actions → Build, Sign & Publish Release → Run workflow** (or push a tag like `git tag v59.0 && git push origin v59.0`) to build, sign, and verify the Release AAB & APK and publish a GitHub Release with SHA-256 checksums.
-- **Deploy User Website (`.github/workflows/deploy-github-pages.yml`)**: Automatically deploys `./public` to `https://bradley3398.github.io/Rural-Erides-GO/` on pushes to `main` or manual dispatch.
+- **Deploy User Website (`.github/workflows/deploy-github-pages.yml`)**: Automatically deploys `./public` to `https://bradley3398.github.io/Rural-ERides-GO-V2/` on pushes to `main` or manual dispatch.
 
 > **Note:** Configure optional CI signing & cloud secrets (`KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_PASSWORD`, `GOOGLE_SERVICES_JSON_BASE64`, `ENV_FILE_BASE64`) in GitHub **Settings → Secrets and variables → Actions**. Never commit credentials or modify keystore files.
 
@@ -129,6 +129,6 @@ gradle :app:testDebugUnitTest
 ## 👑 Creator & Credits
 
 **Lord Bradley Callison** — Founder, Lead Architect & Principal Engineer  
-- **GitHub Repository:** [github.com/bradley3398/Rural-Erides-GO](https://github.com/bradley3398/Rural-Erides-GO)  
-- **GitHub Pages Site:** [bradley3398.github.io/Rural-Erides-GO](https://bradley3398.github.io/Rural-Erides-GO/)  
-- **Issues & Feedback:** [github.com/bradley3398/Rural-Erides-GO/issues](https://github.com/bradley3398/Rural-Erides-GO/issues)
+- **GitHub Repository:** [github.com/bradley3398/Rural-ERides-GO-V2](https://github.com/bradley3398/Rural-ERides-GO-V2)  
+- **GitHub Pages Site:** [bradley3398.github.io/Rural-ERides-GO-V2](https://bradley3398.github.io/Rural-ERides-GO-V2/)  
+- **Issues & Feedback:** [github.com/bradley3398/Rural-ERides-GO-V2/issues](https://github.com/bradley3398/Rural-ERides-GO-V2/issues)

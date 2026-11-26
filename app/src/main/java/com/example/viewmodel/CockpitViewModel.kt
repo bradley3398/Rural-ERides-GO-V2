@@ -261,14 +261,21 @@ class CockpitViewModel(application: Application) : AndroidViewModel(application)
     _statusBanner.value = "9-DOF AHRS pitch & roll horizon zeroed."
   }
 
-  fun calibrateAhrsAllAxes() {
-    telemetryEngine.calibrateAhrsAllAxes()
-    _statusBanner.value = "9-DOF AHRS Pitch, Roll & Yaw zeroed."
+  fun calibrateAhrsAllAxes(includeYaw: Boolean = true) {
+    telemetryEngine.calibrateAhrsAllAxes(includeYaw = includeYaw)
+    _statusBanner.value =
+      if (includeYaw) "9-DOF AHRS Pitch, Roll & Heading zeroed."
+      else "9-DOF AHRS Pitch & Roll zeroed."
   }
 
   fun resetPeakLeanAngles() {
     telemetryEngine.resetPeakLeanAngles()
     _statusBanner.value = "Peak lean markers cleared."
+  }
+
+  fun resetCalibrationOffsets() {
+    telemetryEngine.resetCalibrationOffsets()
+    _statusBanner.value = "Hardware sensor calibration restored to factory zero."
   }
 
   fun startRide(

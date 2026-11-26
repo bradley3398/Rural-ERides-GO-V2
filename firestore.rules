@@ -62,7 +62,19 @@ service cloud.firestore {
              data.medicalProfile is string && data.medicalProfile.size() <= 200 &&
              data.acceptedLegal is bool &&
              (!('riderWeightLbs' in data) || (data.riderWeightLbs is number && data.riderWeightLbs >= 0.0 && data.riderWeightLbs <= 600.0)) &&
-             (!('avatarBase64' in data) || (data.avatarBase64 is string && data.avatarBase64.size() <= 65000));
+             (!('avatarBase64' in data) || (data.avatarBase64 is string && data.avatarBase64.size() <= 65000)) &&
+             (!('birthdate' in data) || (data.birthdate is string && data.birthdate.size() <= 24)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 320)) &&
+             (!('hometown' in data) || (data.hometown is string && data.hometown.size() <= 80)) &&
+             (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 32)) &&
+             (!('ridingStyle' in data) || (data.ridingStyle is string && data.ridingStyle.size() <= 48)) &&
+             (!('experienceLevel' in data) || (data.experienceLevel is string && data.experienceLevel.size() <= 36)) &&
+             (!('socialHandle' in data) || (data.socialHandle is string && data.socialHandle.size() <= 100)) &&
+             (!('bloodType' in data) || (data.bloodType is string && data.bloodType.size() <= 12)) &&
+             (!('profileVisibility' in data) || (data.profileVisibility in ['PUBLIC', 'PRIVATE'])) &&
+             (!('showOnlineStatus' in data) || data.showOnlineStatus is bool) &&
+             (!('allowDirectCalls' in data) || data.allowDirectCalls is bool) &&
+             (!('allowDirectMessages' in data) || data.allowDirectMessages is bool);
     }
 
     function isValidPevVehicle(data, userId) {
@@ -305,6 +317,16 @@ service cloud.firestore {
              data.payload is string && data.payload.size() >= 1 && data.payload.size() <= 20000;
     }
 
+    function isValidCallStream(data, streamId) {
+      return data.senderId is string && data.senderId == request.auth.uid &&
+             (streamId == ('v_' + request.auth.uid) || streamId == ('a_' + request.auth.uid)) &&
+             data.kind in ['VIDEO', 'AUDIO'] &&
+             data.seq is int && data.seq >= 0 && data.seq <= 100000000 &&
+             data.active is bool &&
+             data.payload is string && data.payload.size() <= 95000 &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
     function isValidCloudBackup(data, userId) {
       return data.userId == userId &&
              data.provider is string && data.provider.size() >= 1 && data.provider.size() <= 40 &&
@@ -347,7 +369,7 @@ service cloud.firestore {
       allow create: if isOwner(userId) &&
                        isValidId(userId) &&
                        incoming().keys().hasAll(['userId', 'displayName', 'callsign', 'email', 'activeVehicleId', 'unitSystem', 'emergencyContactName', 'sosContactNumber', 'medicalProfile', 'acceptedLegal', 'createdAt', 'updatedAt']) &&
-                       incoming().keys().hasOnly(['userId', 'displayName', 'callsign', 'email', 'activeVehicleId', 'unitSystem', 'emergencyContactName', 'sosContactNumber', 'medicalProfile', 'acceptedLegal', 'riderWeightLbs', 'avatarBase64', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'callsign', 'email', 'activeVehicleId', 'unitSystem', 'emergencyContactName', 'sosContactNumber', 'medicalProfile', 'acceptedLegal', 'riderWeightLbs', 'avatarBase64', 'birthdate', 'bio', 'hometown', 'phoneNumber', 'ridingStyle', 'experienceLevel', 'socialHandle', 'bloodType', 'profileVisibility', 'showOnlineStatus', 'allowDirectCalls', 'allowDirectMessages', 'createdAt', 'updatedAt']) &&
                        isValidRiderProfile(incoming(), userId) &&
                        isValidCreateTimestamps(incoming());
 
@@ -355,9 +377,8 @@ service cloud.firestore {
                        isValidId(userId) &&
                        isValidRiderProfile(incoming(), userId) &&
                        (!('userId' in existing()) || incoming().userId == existing().userId) &&
-                       (!('callsign' in existing()) || existing().callsign == '' || existing().callsign.matches('^[Pp][Ii][Ll][Oo][Tt][_\\-].*') || incoming().callsign == existing().callsign) &&
                        (!('createdAt' in existing()) || isValidUpdateTimestamps(incoming())) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['userId', 'callsign', 'displayName', 'email', 'activeVehicleId', 'unitSystem', 'emergencyContactName', 'sosContactNumber', 'medicalProfile', 'acceptedLegal', 'riderWeightLbs', 'avatarBase64', 'createdAt', 'updatedAt']);
+                       incoming().diff(existing()).affectedKeys().hasOnly(['userId', 'callsign', 'displayName', 'email', 'activeVehicleId', 'unitSystem', 'emergencyContactName', 'sosContactNumber', 'medicalProfile', 'acceptedLegal', 'riderWeightLbs', 'avatarBase64', 'birthdate', 'bio', 'hometown', 'phoneNumber', 'ridingStyle', 'experienceLevel', 'socialHandle', 'bloodType', 'profileVisibility', 'showOnlineStatus', 'allowDirectCalls', 'allowDirectMessages', 'createdAt', 'updatedAt']);
 
       allow delete: if isOwner(userId) && isValidId(userId);
 
@@ -918,6 +939,46 @@ service cloud.firestore {
         allow delete: if isSignedIn() &&
                          isValidId(sessionId) &&
                          isValidId(signalId) &&
+                         exists(/databases/$(database)/documents/call_sessions/$(sessionId)) &&
+                         (
+                           get(/databases/$(database)/documents/call_sessions/$(sessionId)).data.callerUid == request.auth.uid ||
+                           get(/databases/$(database)/documents/call_sessions/$(sessionId)).data.calleeUid == request.auth.uid
+                         );
+      }
+
+      match /streams/{streamId} {
+        allow get: if isSignedIn() &&
+                      isValidId(sessionId) &&
+                      isValidId(streamId) &&
+                      exists(/databases/$(database)/documents/call_sessions/$(sessionId)) &&
+                      (
+                        get(/databases/$(database)/documents/call_sessions/$(sessionId)).data.callerUid == request.auth.uid ||
+                        get(/databases/$(database)/documents/call_sessions/$(sessionId)).data.calleeUid == request.auth.uid
+                      );
+
+        allow list: if isSignedIn() &&
+                       isValidId(sessionId) &&
+                       exists(/databases/$(database)/documents/call_sessions/$(sessionId)) &&
+                       (
+                         get(/databases/$(database)/documents/call_sessions/$(sessionId)).data.callerUid == request.auth.uid ||
+                         get(/databases/$(database)/documents/call_sessions/$(sessionId)).data.calleeUid == request.auth.uid
+                       );
+
+        allow create, update: if isSignedIn() &&
+                                 isValidId(sessionId) &&
+                                 isValidId(streamId) &&
+                                 incoming().keys().hasAll(['senderId', 'kind', 'seq', 'active', 'payload', 'updatedAt']) &&
+                                 incoming().keys().hasOnly(['senderId', 'kind', 'seq', 'active', 'payload', 'updatedAt']) &&
+                                 isValidCallStream(incoming(), streamId) &&
+                                 exists(/databases/$(database)/documents/call_sessions/$(sessionId)) &&
+                                 (
+                                   get(/databases/$(database)/documents/call_sessions/$(sessionId)).data.callerUid == request.auth.uid ||
+                                   get(/databases/$(database)/documents/call_sessions/$(sessionId)).data.calleeUid == request.auth.uid
+                                 );
+
+        allow delete: if isSignedIn() &&
+                         isValidId(sessionId) &&
+                         isValidId(streamId) &&
                          exists(/databases/$(database)/documents/call_sessions/$(sessionId)) &&
                          (
                            get(/databases/$(database)/documents/call_sessions/$(sessionId)).data.callerUid == request.auth.uid ||

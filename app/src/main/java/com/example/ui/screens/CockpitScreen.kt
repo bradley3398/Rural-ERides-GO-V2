@@ -211,6 +211,7 @@ fun CockpitScreen(
   var showPevProSuite by remember { mutableStateOf(false) }
   var showLiveArHud by remember { mutableStateOf(false) }
   var showMissionMusicDialog by remember { mutableStateOf(false) }
+  var showSensorCalibrationDialog by remember { mutableStateOf(false) }
   var preferredArMode by remember { mutableStateOf(ArHudMode.TELEMETRY_HUD) }
   val activeNavRoute by radarVm.activeNavRoute.collectAsStateWithLifecycle()
   val navStepIndex by radarVm.navCurrentStepIndex.collectAsStateWithLifecycle()
@@ -719,12 +720,14 @@ fun CockpitScreen(
           TacticalOutlinedButton(
             onClick = {
               sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
-              cockpitVm.calibrateZeroPitchRoll()
+              showSensorCalibrationDialog = true
             },
             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-            modifier = Modifier.height(50.dp).testTag("calibrate_imu_button"),
+            modifier = Modifier.height(50.dp).testTag("hud_sensor_info_calibrate_button"),
           ) {
-            Icon(Icons.Default.CompassCalibration, contentDescription = "Zero Tilt Level")
+            Icon(Icons.Default.Sensors, contentDescription = "Sensor Info & Calibration", tint = cs.primary)
+            Spacer(Modifier.width(4.dp))
+            Text("Sensors", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
           }
           TacticalOutlinedButton(
             onClick = {
@@ -1469,12 +1472,14 @@ fun CockpitScreen(
             TacticalOutlinedButton(
               onClick = {
                 sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
-                cockpitVm.calibrateZeroPitchRoll()
+                showSensorCalibrationDialog = true
               },
               contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-              modifier = Modifier.height(50.dp).testTag("calibrate_imu_button"),
+              modifier = Modifier.height(50.dp).testTag("hud_sensor_info_calibrate_button"),
             ) {
-              Icon(Icons.Default.CompassCalibration, contentDescription = "Zero Tilt Level")
+              Icon(Icons.Default.Sensors, contentDescription = "Sensor Info & Calibration", tint = MaterialTheme.colorScheme.primary)
+              Spacer(Modifier.width(5.dp))
+              Text("Sensors", maxLines = 1, softWrap = false)
             }
             TacticalOutlinedButton(
               onClick = {
@@ -1582,17 +1587,30 @@ fun CockpitScreen(
             }
 
             Spacer(Modifier.height(10.dp))
-            TacticalOutlinedButton(
-              onClick = {
-                sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
-                preferredArMode = ArHudMode.SATELLITE_SKY
-                showLiveArHud = true
-              },
-              modifier = Modifier.fillMaxWidth().testTag("open_ar_satellites_button"),
-            ) {
-              Icon(Icons.Default.ViewInAr, null, Modifier.size(16.dp))
-              Spacer(Modifier.width(4.dp))
-              Text("Satellites AR", maxLines = 1, softWrap = false)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              TacticalOutlinedButton(
+                onClick = {
+                  sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
+                  showSensorCalibrationDialog = true
+                },
+                modifier = Modifier.weight(1f).testTag("open_sensor_calibration_from_card_button"),
+              ) {
+                Icon(Icons.Default.CompassCalibration, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Sensor Info & Calibrate", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+              }
+              TacticalOutlinedButton(
+                onClick = {
+                  sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
+                  preferredArMode = ArHudMode.SATELLITE_SKY
+                  showLiveArHud = true
+                },
+                modifier = Modifier.weight(1f).testTag("open_ar_satellites_button"),
+              ) {
+                Icon(Icons.Default.ViewInAr, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Satellites AR", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+              }
             }
           }
         }
@@ -2198,6 +2216,33 @@ fun CockpitScreen(
           )
         },
         onDismiss = { showLiveArHud = false },
+      )
+    }
+
+    if (showSensorCalibrationDialog) {
+      HudSensorCalibrationDialog(
+        telemetry = telemetry,
+        onZeroPitchRoll = {
+          sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.SUCCESS_DOUBLE)
+          cockpitVm.calibrateZeroPitchRoll()
+        },
+        onZeroAllAxes = {
+          sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.SUCCESS_DOUBLE)
+          cockpitVm.calibrateAhrsAllAxes(includeYaw = true)
+        },
+        onResetPeakLean = {
+          sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.LIGHT_TICK)
+          cockpitVm.resetPeakLeanAngles()
+        },
+        onFactoryResetOffsets = {
+          sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.MEDIUM_CLICK)
+          cockpitVm.resetCalibrationOffsets()
+        },
+        onRefreshGps = {
+          sessionVm.voiceAudio.triggerHapticCue(settings.hapticFeedback, VoiceAudioManager.HapticCue.LIGHT_TICK)
+          cockpitVm.refreshGpsFix(settings)
+        },
+        onDismiss = { showSensorCalibrationDialog = false },
       )
     }
   }

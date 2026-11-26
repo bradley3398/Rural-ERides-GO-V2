@@ -15,8 +15,8 @@ android {
     applicationId = "com.aistudio.volttrail.kqrmvx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 59
-    versionName = "59.0"
+    versionCode = 60
+    versionName = "60.0"
 
     buildConfigField("Boolean", "LEGAL_COMPLIANCE_MODE", "true")
 
@@ -143,7 +143,7 @@ dependencies {
   // implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
   implementation(libs.osmdroid.android)
-  implementation(libs.android.youtube.player)
+  // implementation(libs.android.youtube.player)
   implementation(libs.play.services.location)
   // implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
