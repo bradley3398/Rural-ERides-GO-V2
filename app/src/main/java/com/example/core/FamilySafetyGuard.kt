@@ -426,7 +426,7 @@ object FamilySafetyGuard {
         var lastError: Throwable? = null
         for (modelId in listOf(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE, GeminiModelCatalog.GEMINI_3_8_FLASH)) {
           try {
-            val model = Firebase.ai.generativeModel(modelName = modelId, generationConfig = config)
+            val model = AppCheckHealthManager.createGenerativeModel(modelName = modelId, generationConfig = config)
             val response =
               AppCheckHealthManager.runWithAppCheckRecovery("FamilySafetyGuard") {
                 withTimeout(22_000L) {
@@ -588,7 +588,7 @@ object FamilySafetyGuard {
             responseSchema = schema
           }
         val model =
-          Firebase.ai.generativeModel(
+          AppCheckHealthManager.createGenerativeModel(
             modelName = GeminiModelCatalog.GEMINI_3_5_FLASH_LITE,
             generationConfig = config,
           )

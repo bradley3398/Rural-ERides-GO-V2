@@ -104,7 +104,7 @@ class GeminiStudioEngine {
     for (imageModelId in GeminiModelCatalog.imageFallbackChain) {
       try {
         val model =
-          Firebase.ai.generativeModel(
+          AppCheckHealthManager.createGenerativeModel(
             modelName = imageModelId,
             generationConfig = config,
           )
@@ -171,7 +171,7 @@ class GeminiStudioEngine {
     for (modelId in listOf(GeminiModelCatalog.GEMINI_3_8_FLASH, GeminiModelCatalog.GEMINI_3_5_FLASH_LITE)) {
       try {
         val model =
-          Firebase.ai.generativeModel(
+          AppCheckHealthManager.createGenerativeModel(
             modelName = modelId,
             generationConfig =
               generationConfig {
@@ -247,7 +247,7 @@ class GeminiStudioEngine {
     for (activeModel in chain) {
       try {
         val model =
-          Firebase.ai.generativeModel(
+          AppCheckHealthManager.createGenerativeModel(
             modelName = activeModel,
             systemInstruction = sysInstruction,
             generationConfig = generationConfig { temperature = 0.7f },
@@ -338,7 +338,7 @@ class GeminiStudioEngine {
             if (useGoogleSearch) {
               try {
                 usedSearch = true
-                Firebase.ai.generativeModel(
+                AppCheckHealthManager.createGenerativeModel(
                   modelName = GeminiModelCatalog.GEMINI_3_8_FLASH,
                   tools = listOf(Tool.googleSearch()),
                 ).generateContent(prompt)
@@ -349,16 +349,16 @@ class GeminiStudioEngine {
                 Log.w(STUDIO_TAG, "Google Search tool fallback: ${toolErr.message}")
                 usedSearch = false
                 runCatching {
-                  Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
+                  AppCheckHealthManager.createGenerativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
                 }.getOrElse {
-                  Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
+                  AppCheckHealthManager.createGenerativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
                 }
               }
             } else {
               runCatching {
-                Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
+                AppCheckHealthManager.createGenerativeModel(GeminiModelCatalog.GEMINI_3_8_FLASH).generateContent(prompt)
               }.getOrElse {
-                Firebase.ai.generativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
+                AppCheckHealthManager.createGenerativeModel(GeminiModelCatalog.GEMINI_3_5_FLASH_LITE).generateContent(prompt)
               }
             }
           }
@@ -424,7 +424,7 @@ class GeminiStudioEngine {
     for (modelId in listOf(GeminiModelCatalog.GEMINI_3_8_FLASH, GeminiModelCatalog.GEMINI_3_5_FLASH_LITE)) {
       try {
         val model =
-          Firebase.ai.generativeModel(
+          AppCheckHealthManager.createGenerativeModel(
             modelName = modelId,
             generationConfig =
               generationConfig {

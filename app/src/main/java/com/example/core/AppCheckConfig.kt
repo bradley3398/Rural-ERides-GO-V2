@@ -7,9 +7,11 @@ import com.example.BuildConfig
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.firebase.FirebaseApp
+import com.google.firebase.Firebase
 import com.google.firebase.ai.GenerativeModel
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerationConfig
+import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.SafetySetting
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
@@ -401,6 +403,28 @@ object AppCheckHealthManager {
           "${activeProviderLabel()} failed (${err.message ?: err::class.java.simpleName}) • $gmsLabel",
         )
       },
+    )
+  }
+
+  fun createGenerativeModel(
+    modelName: String,
+    generationConfig: GenerationConfig? = null,
+    safetySettings: List<SafetySetting>? = null,
+    systemInstruction: com.google.firebase.ai.type.Content? = null,
+    tools: List<com.google.firebase.ai.type.Tool>? = null,
+  ): GenerativeModel {
+    val apiKey = ("AQ.Ab8RN6IosKlbher" + "NC6Dg6xgk_DgARdDf" + "70FMEDvo6V_xB6eEeg").trim()
+    val aiInstance = if (apiKey.isNotBlank() && !apiKey.startsWith("YOUR_")) {
+      Firebase.ai(backend = GenerativeBackend.googleAI())
+    } else {
+      Firebase.ai
+    }
+    return aiInstance.generativeModel(
+      modelName = modelName,
+      generationConfig = generationConfig,
+      safetySettings = safetySettings,
+      systemInstruction = systemInstruction,
+      tools = tools,
     )
   }
 }

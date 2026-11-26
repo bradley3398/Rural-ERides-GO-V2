@@ -219,7 +219,7 @@ class GeminiAiRepository {
             "safetyTip" to Schema.string("Practical pre-ride mechanical or trail safety tip"),
           )
       )
-    return Firebase.ai.generativeModel(
+    return AppCheckHealthManager.createGenerativeModel(
       modelName = modelId,
       generationConfig =
         generationConfig {
@@ -262,7 +262,7 @@ class GeminiAiRepository {
           ),
         optionalProperties = listOf("anomalies", "wiringPins"),
       )
-    return Firebase.ai.generativeModel(
+    return AppCheckHealthManager.createGenerativeModel(
       modelName = modelId,
       generationConfig =
         generationConfig {
@@ -286,7 +286,7 @@ class GeminiAiRepository {
             "sourceUrl" to Schema.string("Real documentation URL if available, else empty string"),
           )
       )
-    return Firebase.ai.generativeModel(
+    return AppCheckHealthManager.createGenerativeModel(
       modelName = modelId,
       generationConfig =
         generationConfig {
@@ -327,7 +327,7 @@ class GeminiAiRepository {
       Schema.obj(
         properties = mapOf("specs" to Schema.array(specSchema, "Matching real PEV specification records"))
       )
-    return Firebase.ai.generativeModel(
+    return AppCheckHealthManager.createGenerativeModel(
       modelName = modelId,
       generationConfig =
         generationConfig {
@@ -361,7 +361,7 @@ class GeminiAiRepository {
       Schema.obj(
         properties = mapOf("parts" to Schema.array(partSchema, "Verified PEV hardware & aftermarket components"))
       )
-    return Firebase.ai.generativeModel(
+    return AppCheckHealthManager.createGenerativeModel(
       modelName = modelId,
       generationConfig =
         generationConfig {
@@ -389,7 +389,7 @@ class GeminiAiRepository {
             "vehicleWeightLbs" to Schema.double("Vehicle curb weight in lbs"),
           )
       )
-    return Firebase.ai.generativeModel(
+    return AppCheckHealthManager.createGenerativeModel(
       modelName = modelId,
       generationConfig =
         generationConfig {
@@ -411,7 +411,7 @@ class GeminiAiRepository {
             "reasoning" to Schema.string("Concise 1-2 sentence explanation referencing past ride efficiency, elevation, speed, and rider weight"),
           )
       )
-    return Firebase.ai.generativeModel(
+    return AppCheckHealthManager.createGenerativeModel(
       modelName = modelId,
       generationConfig =
         generationConfig {
@@ -758,7 +758,7 @@ class GeminiAiRepository {
       val response =
         withModelFallback(modelId) { activeModel ->
           withTimeout(50_000L) {
-            Firebase.ai.generativeModel(
+            AppCheckHealthManager.createGenerativeModel(
               modelName = activeModel,
               generationConfig =
                 generationConfig {
@@ -1076,7 +1076,7 @@ class GeminiAiRepository {
           sb.clear()
           withTimeout(60_000L) {
             val model =
-              Firebase.ai.generativeModel(
+              AppCheckHealthManager.createGenerativeModel(
                 modelName = activeModel,
                 generationConfig =
                   generationConfig {
@@ -1166,7 +1166,7 @@ class GeminiAiRepository {
           .trimIndent()
       val res =
         withModelFallback(modelId) { activeModel ->
-          withTimeout(45_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+          withTimeout(45_000L) { AppCheckHealthManager.createGenerativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty().ifBlank { "Trailhead debrief completed." })
     } catch (e: CancellationException) {
@@ -1209,7 +1209,7 @@ class GeminiAiRepository {
           .trimIndent()
       val res =
         withModelFallback(modelId) { activeModel ->
-          withTimeout(45_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+          withTimeout(45_000L) { AppCheckHealthManager.createGenerativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty().ifBlank { "Fleet logbook briefing completed." })
     } catch (e: CancellationException) {
@@ -1237,7 +1237,7 @@ class GeminiAiRepository {
           .trimIndent()
       val res =
         withModelFallback(modelId) { activeModel ->
-          withTimeout(30_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+          withTimeout(30_000L) { AppCheckHealthManager.createGenerativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty().ifBlank { "All telemetry rails nominal." })
     } catch (e: CancellationException) {
@@ -1255,7 +1255,7 @@ class GeminiAiRepository {
       val prompt = "Rewrite this rider community transmission in a $tone tone. Return ONLY the rewritten text:\n\n$draft"
       val res =
         withModelFallback(modelId) { activeModel ->
-          withTimeout(30_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+          withTimeout(30_000L) { AppCheckHealthManager.createGenerativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty().ifBlank { draft })
     } catch (e: CancellationException) {
@@ -1273,7 +1273,7 @@ class GeminiAiRepository {
       val prompt = "$instruction:\n\n$text"
       val res =
         withModelFallback(modelId) { activeModel ->
-          withTimeout(30_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+          withTimeout(30_000L) { AppCheckHealthManager.createGenerativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty())
     } catch (e: CancellationException) {
@@ -1302,7 +1302,7 @@ class GeminiAiRepository {
           .trimIndent()
       val res =
         withModelFallback(modelId) { activeModel ->
-          withTimeout(45_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+          withTimeout(45_000L) { AppCheckHealthManager.createGenerativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty())
     } catch (e: CancellationException) {
@@ -1335,7 +1335,7 @@ class GeminiAiRepository {
           .trimIndent()
       val res =
         withModelFallback(modelId) { activeModel ->
-          withTimeout(35_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+          withTimeout(35_000L) { AppCheckHealthManager.createGenerativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty().ifBlank { "Check XT60/XT90 main lead, hall sensor plug, and brake cutoff switch." })
     } catch (e: CancellationException) {
@@ -1378,7 +1378,7 @@ class GeminiAiRepository {
       val res =
         withModelFallback(modelId) { activeModel ->
           val m =
-            Firebase.ai.generativeModel(
+            AppCheckHealthManager.createGenerativeModel(
               modelName = activeModel,
               generationConfig =
                 generationConfig {
@@ -1447,7 +1447,7 @@ class GeminiAiRepository {
       val res =
         withModelFallback(modelId) { activeModel ->
           val m =
-            Firebase.ai.generativeModel(
+            AppCheckHealthManager.createGenerativeModel(
               modelName = activeModel,
               generationConfig =
                 generationConfig {
@@ -1516,7 +1516,7 @@ class GeminiAiRepository {
           .trimIndent()
       val res =
         withModelFallback(modelId) { activeModel ->
-          withTimeout(30_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+          withTimeout(30_000L) { AppCheckHealthManager.createGenerativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty().ifBlank { "No engineering notes returned." })
     } catch (e: CancellationException) {
@@ -1554,7 +1554,7 @@ class GeminiAiRepository {
           .trimIndent()
       val res =
         withModelFallback(modelId) { activeModel ->
-          withTimeout(30_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+          withTimeout(30_000L) { AppCheckHealthManager.createGenerativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty().ifBlank { "Telemetry analysis complete." })
     } catch (e: CancellationException) {
@@ -1583,7 +1583,7 @@ class GeminiAiRepository {
         """.trimIndent()
       val res =
         withModelFallback(modelId) { activeModel ->
-          withTimeout(30_000L) { Firebase.ai.generativeModel(activeModel).generateContent(prompt) }
+          withTimeout(30_000L) { AppCheckHealthManager.createGenerativeModel(activeModel).generateContent(prompt) }
         }
       Result.success(res.text?.trim().orEmpty())
     } catch (e: CancellationException) {
