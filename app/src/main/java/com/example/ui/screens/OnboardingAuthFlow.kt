@@ -216,11 +216,6 @@ fun AuthLoginScreen(
       s
     }
 
-  val callsignSuggestions =
-    remember {
-      listOf("TRAIL_VOLT", "PINE_GLIDE", "SUNRISE_72V", "APEX_RIDER", "MEADOW_EUC", "RURAL_TORQUE", "RIDGE_SCOOT", "VALLEY_AMP")
-    }
-
   val isCertOrPlayIssue =
     remember(statusMessage) {
       statusMessage.contains("ERROR_INVALID_CERT_HASH", ignoreCase = true) ||
@@ -581,17 +576,6 @@ fun AuthLoginScreen(
                 label = { Text("Permanent Rider Callsign (One-Time)") },
                 supportingText = { Text("Choose carefully — once created, your callsign is locked to your profile.") },
                 leadingIcon = { Icon(Icons.Default.Lock, null, modifier = Modifier.size(18.dp)) },
-                trailingIcon = {
-                  IconButton(
-                    onClick = {
-                      val base = callsignSuggestions.random()
-                      callsign = "${base}_${(10..99).random()}"
-                    },
-                    modifier = Modifier.testTag("suggest_callsign_button"),
-                  ) {
-                    Icon(Icons.Default.Casino, contentDescription = "Suggest Callsign")
-                  }
-                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().testTag("supabase_callsign_input"),
               )

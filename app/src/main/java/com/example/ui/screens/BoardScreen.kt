@@ -555,7 +555,13 @@ fun BoardScreen(
       val activeCrew =
         remember(pilots, myUid) {
           pilots
-            .filter { p -> p.userId.isNotBlank() }
+            .filter { p ->
+              p.userId.isNotBlank() &&
+                com.example.data.PilotAuthenticityGuard.isDisplayablePilotProfile(
+                  p = p,
+                  currentUid = myUid.takeIf { it.isNotBlank() },
+                )
+            }
             .distinctBy { it.userId }
             .sortedWith(compareByDescending<PublicPilotProfile> { it.userId != myUid }.thenByDescending { it.totalKm })
             .take(25)
@@ -650,7 +656,13 @@ fun BoardScreen(
           val activeRealPilots =
             remember(pilots, myUid) {
               pilots
-                .filter { p -> p.userId.isNotBlank() }
+                .filter { p ->
+                  p.userId.isNotBlank() &&
+                    com.example.data.PilotAuthenticityGuard.isDisplayablePilotProfile(
+                      p = p,
+                      currentUid = myUid.takeIf { it.isNotBlank() },
+                    )
+                }
                 .distinctBy { it.userId }
             }
           BoardStandingsTab(

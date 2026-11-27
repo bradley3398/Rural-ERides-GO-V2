@@ -379,7 +379,7 @@ class CopilotSocialViewModel(application: Application) : AndroidViewModel(applic
                         userId = cleanUid,
                         myCallsign = "",
                         targetUid = targetUid,
-                        targetCallsign = "PILOT",
+                        targetCallsign = "",
                       )
                     }
                   }

@@ -1434,20 +1434,24 @@ fun CopilotScreen(
   }
 
   if (showApiKeyDialog) {
-    var keyInput by remember { mutableStateOf(ApiKeyRing.getRuntimeGeminiKey().ifBlank { ApiKeyRing.geminiKeys().firstOrNull().orEmpty() }) }
+    var keyInput by remember { mutableStateOf(ApiKeyRing.getRuntimeGeminiKey()) }
     var probeStatus by remember { mutableStateOf<String?>(null) }
     var probing by remember { mutableStateOf(false) }
     TacticalDialog(
       onDismissRequest = { showApiKeyDialog = false },
       title = "Cloud Console / Gemini API Key",
-      subtitle = "Save a Gemini API key (AIza... or AQ...) directly on this device",
+      subtitle = "Optional device override — uses your compiled Secrets key automatically when blank",
       icon = Icons.Default.Key,
       confirmButton = {
         TacticalButton(
           onClick = {
             tapCue(VoiceAudioManager.TouchCue.ACTION_CONFIRM)
             ApiKeyRing.setRuntimeGeminiKey(ctx, keyInput)
-            Toast.makeText(ctx, "Gemini API key saved & activated!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+              ctx,
+              if (keyInput.isBlank()) "Runtime override cleared — using compiled key" else "Gemini API key saved & activated!",
+              Toast.LENGTH_SHORT,
+            ).show()
             showApiKeyDialog = false
           },
         ) { Text("Save & Apply") }
@@ -1471,8 +1475,8 @@ fun CopilotScreen(
         OutlinedTextField(
           value = keyInput,
           onValueChange = { keyInput = it.trim() },
-          label = { Text("Gemini API Key (AIza... or AQ...)") },
-          placeholder = { Text("Paste key here...") },
+          label = { Text("Override Gemini API Key (optional)") },
+          placeholder = { Text("Leave blank to use compiled key, or paste key...") },
           colors = tacticalOutlinedTextFieldColors(),
           shape = chrome.buttonShape,
           modifier = Modifier.fillMaxWidth().testTag("runtime_api_key_input"),
@@ -1495,11 +1499,13 @@ fun CopilotScreen(
           }
           TacticalButton(
             onClick = {
-              if (keyInput.isBlank()) {
+              if (keyInput.isNotBlank()) {
+                ApiKeyRing.setRuntimeGeminiKey(ctx, keyInput)
+              }
+              if (ApiKeyRing.geminiKeys().isEmpty()) {
                 Toast.makeText(ctx, "Enter a key first", Toast.LENGTH_SHORT).show()
                 return@TacticalButton
               }
-              ApiKeyRing.setRuntimeGeminiKey(ctx, keyInput)
               probing = true
               probeStatus = "Testing key with gemini-3.1-flash-lite..."
               coroutineScope.launch {

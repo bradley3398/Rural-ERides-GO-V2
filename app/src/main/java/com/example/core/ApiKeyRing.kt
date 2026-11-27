@@ -43,8 +43,20 @@ object ApiKeyRing {
     }
   }
 
+  fun sanitizeKeyInput(raw: String): String {
+    var v = raw.trim().trim('"', '\'')
+    val prefixes = listOf("GEMINI_API_KEY_2=", "GEMINI_API_KEY=", "GOOGLE_CLOUD_API_KEY=", "GOOGLE_API_KEY=")
+    for (p in prefixes) {
+      if (v.startsWith(p, ignoreCase = true)) {
+        v = v.substring(p.length).trim().trim('"', '\'')
+        break
+      }
+    }
+    return v
+  }
+
   fun setRuntimeGeminiKey(context: Context?, key: String) {
-    val clean = key.trim()
+    val clean = sanitizeKeyInput(key)
     runtimeGeminiKey = clean
     context?.let { ctx ->
       runCatching {
@@ -168,18 +180,11 @@ object ApiKeyRing {
     throw lastError ?: IllegalStateException("All configured Google CSE keys failed")
   }
 
-  private fun readOptionalBuildConfigSecret(fieldName: String): String =
-    runCatching {
-      BuildConfig::class.java.fields
-        .firstOrNull { it.name == fieldName }
-        ?.get(null) as? String
-    }.getOrNull().orEmpty()
-
   fun geminiKeys(): List<String> =
     collectPool(
       runtimeGeminiKey,
-      readOptionalBuildConfigSecret("GEMINI_API_KEY_2"),
-      readOptionalBuildConfigSecret("GEMINI_API_KEY"),
+      BuildConfig.GEMINI_API_KEY_2,
+      BuildConfig.GEMINI_API_KEY,
       BuildConfig.GOOGLE_CLOUD_API_KEY,
       BuildConfig.GOOGLE_API_KEY,
     )
